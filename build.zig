@@ -7,9 +7,11 @@ pub fn build(b: *std.build.Builder) void {
 
     const lib = b.addStaticLibrary("ztap", "src/main.zig");
     lib.setBuildMode(mode);
+    lib.addPackagePath("zbor", "libs/zbor/src/main.zig");
     lib.install();
 
     const main_tests = b.addTest("src/main.zig");
+    main_tests.addPackagePath("zbor", "libs/zbor/src/main.zig");
     main_tests.setBuildMode(mode);
 
     const test_step = b.step("test", "Run library tests");
