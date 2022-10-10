@@ -1,12 +1,13 @@
 /// Client to Authenticator (CTAP) library
 const std = @import("std");
 const cbor = @import("zbor");
+const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
 
 /// CTAP status codes.
-const StatusCodes = enum(u8) {
+pub const StatusCodes = enum(u8) {
     /// Indicates successful response.
     ctap1_err_success = 0x00,
     /// The command is not a valid CTAP command.
@@ -112,7 +113,7 @@ const StatusCodes = enum(u8) {
     }
 };
 
-const ErrorCodes = error{
+pub const ErrorCodes = error{
     /// The command is not a valid CTAP command.
     invalid_command,
     /// Invalid message or item length.
@@ -120,7 +121,7 @@ const ErrorCodes = error{
 };
 
 /// Commands supported by the CTAP protocol.
-const Commands = enum(u8) {
+pub const Commands = enum(u8) {
     /// Request generation of a new credential in the authenticator.
     authenticator_make_credential = 0x01,
     /// Request cryptographic proof of user authentication as well as user consent to a given
@@ -162,7 +163,7 @@ const Commands = enum(u8) {
 };
 
 /// Supported version of the authenticator.
-const Versions = enum {
+pub const Versions = enum {
     /// For CTAP2/FIDO2/Web Authentication authenticators.
     fido_2_0,
     /// For CTAP1/U2F authenticators.
@@ -176,19 +177,26 @@ const Versions = enum {
     }
 };
 
-const Extensions = enum {};
+pub const Extensions = enum {
+    unknown,
+    pub fn toString(self: @This()) []const u8 {
+        return switch (self) {
+            .unknown => "unknown",
+        };
+    }
+};
 
 /// Authenticator options.
 ///
 /// When an option is not present, the default is applied.
-const Options = struct {
+pub const Options = struct {
     /// Platform device: Indicates that the device is attached to the client
     /// and therefore can't be removed and used on another client.
-    plat: ?bool,
+    plat: bool,
     /// Resident key: Indicates that the device is capable of storing keys on
     /// the device itself and therefore can satisfy the `authenticatorGetAssertion`
     /// request with `allowList` parameter not specified or empty.
-    rk: ?bool,
+    rk: bool,
     /// present + true: device is capable of accepting a PIN from the client and
     ///                 PIN has been set
     /// present + false: device is capable of accepting a PIN from the client and
@@ -197,7 +205,7 @@ const Options = struct {
     client_pin: ?bool,
     /// User presence.
     /// true: indicates that the device is capable of testing user presence.
-    up: ?bool,
+    up: bool,
     /// User verification: Device is capable of verifiying the user within itself.
     /// present + true: device is capable of user verification within itself and
     ///                 has been configured.
@@ -220,7 +228,7 @@ const Options = struct {
 };
 
 /// Available PIN protocol versions.
-const PinProtocols = enum(u8) {
+pub const PinProtocols = enum(u8) {
     /// PIN Protocol Version 1.
     v1 = 1,
 };
@@ -235,20 +243,20 @@ fn getCommand(data: []const u8) ErrorCodes!Commands {
 }
 
 /// Abstract representation of a CTAP authenticator.
-const Authenticator = struct {
+pub const Authenticator = struct {
     /// List of supported versions.
     versions: []Versions,
     /// List of supported extensions.
-    extensions: []Extensions,
+    extensions: ?[]Extensions,
     /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
     /// indicating the type of the authenticator. Authenticators with the
     /// same capabilities and firmware, can share the same AAGUID.
     aaguid: [16]u8,
     /// Supported options.
-    options: Options,
+    options: ?Options,
     /// Maximum message size supported by the authenticator.
     /// null = unlimited.
-    max_msg_size: ?usize,
+    max_msg_size: ?u64,
     /// List of supported PIN Protocol versions.
     pin_protocols: ?[]u8,
 
@@ -256,7 +264,7 @@ const Authenticator = struct {
     pub fn initDefault(versions: []Versions, aaguid: [16]u8) @This() {
         return @This(){
             .versions = versions,
-            .extensions = &.{},
+            .extensions = null,
             .aaguid = aaguid,
             .options = Options.default(),
             .max_msg_size = null,
@@ -265,26 +273,87 @@ const Authenticator = struct {
     }
 
     /// Main handler function, that takes a command and returns a response.
-    pub fn handle(self: *const @This(), command: []const u8, response: anytype) !void {
+    pub fn handle(self: *const @This(), allocator: Allocator, command: []const u8) ![]u8 {
+        // The response message.
+        // For encodings see: https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html#responses
+        var res = std.ArrayList(u8).init(allocator);
+        var response = res.writer();
+
         const cmdnr = getCommand(command) catch |err| {
             // On error, respond with a error code and return.
             try response.writeByte(@enumToInt(StatusCodes.fromError(err)));
-            return;
+            return res.toOwnedSlice();
         };
 
         switch (cmdnr) {
             .authenticator_make_credential => {},
             .authenticator_get_assertion => {},
             .authenticator_get_info => {
-                // One can't reclaim allocated memory of an fba but it gets
-                // dropped at the end of this block anyway, so fuck it...
-                // no need to deinit the (nested) data item.
-                var buffer: [2048]u8 = undefined;
-                var fba = std.heap.FixedBufferAllocator.init(&buffer);
-                const allocator = fba.allocator();
+                // There is a maximum of 6 supported members (including optional ones).
+                var members = std.ArrayList(Pair).init(allocator);
+                var i: usize = 0;
 
-                var di = try DataItem.map(allocator, &.{Pair.new(try DataItem.text(allocator, "aaguid"), try DataItem.bytes(allocator, &self.aaguid))});
+                // versions (0x01)
+                var versions = try allocator.alloc(DataItem, self.versions.len);
+                for (self.versions) |vers| {
+                    versions[i] = try DataItem.text(allocator, vers.toString());
+                    i += 1;
+                }
+                try members.append(Pair.new(DataItem.int(0x01), DataItem{ .array = versions }));
 
+                // extensions (0x02)
+                if (self.extensions != null) {
+                    var extensions = try allocator.alloc(DataItem, self.extensions.?.len);
+
+                    i = 0;
+                    for (self.extensions.?) |ext| {
+                        extensions[i] = try DataItem.text(allocator, ext.toString());
+                        i += 1;
+                    }
+                    try members.append(Pair.new(DataItem.int(0x02), DataItem{ .array = extensions }));
+                }
+
+                // aaguid (0x03)
+                try members.append(Pair.new(DataItem.int(0x03), try DataItem.bytes(allocator, &self.aaguid)));
+
+                // options (0x04)
+                if (self.options != null) {
+                    var options = std.ArrayList(Pair).init(allocator);
+
+                    try options.append(Pair.new(try DataItem.text(allocator, "plat"), if (self.options.?.plat) DataItem.True() else DataItem.False()));
+                    try options.append(Pair.new(try DataItem.text(allocator, "rk"), if (self.options.?.rk) DataItem.True() else DataItem.False()));
+                    if (self.options.?.client_pin != null) {
+                        try options.append(Pair.new(try DataItem.text(allocator, "clienPin"), if (self.options.?.client_pin.?) DataItem.True() else DataItem.False()));
+                    }
+                    try options.append(Pair.new(try DataItem.text(allocator, "up"), if (self.options.?.up) DataItem.True() else DataItem.False()));
+                    if (self.options.?.uv != null) {
+                        try options.append(Pair.new(try DataItem.text(allocator, "uv"), if (self.options.?.uv.?) DataItem.True() else DataItem.False()));
+                    }
+
+                    try members.append(Pair.new(DataItem.int(0x04), DataItem{ .map = options.toOwnedSlice() }));
+                }
+
+                // maxMsgSize (0x05)
+                if (self.max_msg_size != null) {
+                    try members.append(Pair.new(DataItem.int(0x05), DataItem.int(self.max_msg_size.?)));
+                }
+
+                // pinProtocols (0x06)
+                if (self.pin_protocols != null) {
+                    var protocols = try allocator.alloc(DataItem, self.extensions.?.len);
+
+                    i = 0;
+                    for (self.pin_protocols.?) |prot| {
+                        protocols[i] = DataItem.int(prot);
+                        i += 1;
+                    }
+                    try members.append(Pair.new(DataItem.int(0x06), DataItem{ .array = protocols }));
+                }
+
+                var di = DataItem{ .map = members.toOwnedSlice() };
+                defer di.deinit(allocator);
+
+                try response.writeByte(0x00);
                 try cbor.encode(response, &di);
             },
             .authenticator_client_pin => {},
@@ -293,12 +362,10 @@ const Authenticator = struct {
             .authenticator_vendor_first => {},
             .authenticator_vendor_last => {},
         }
+
+        return res.toOwnedSlice();
     }
 };
-
-export fn add(a: i32, b: i32) i32 {
-    return a + b;
-}
 
 test "fetch command from data" {
     try std.testing.expectError(ErrorCodes.invalid_length, getCommand(""));
@@ -326,31 +393,27 @@ test "default Authenticator initialization" {
     defer allocator.free(v);
     v[0] = .fido_2_0;
 
-    const auth = Authenticator.initDefault(v, [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+    const auth = Authenticator.initDefault(v, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
     try std.testing.expectEqual(Versions.fido_2_0, auth.versions[0]);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, &auth.aaguid);
-    try std.testing.expectEqual(false, auth.options.plat.?);
-    try std.testing.expectEqual(false, auth.options.rk.?);
-    try std.testing.expectEqual(null, auth.options.client_pin);
-    try std.testing.expectEqual(true, auth.options.up.?);
-    try std.testing.expectEqual(null, auth.options.uv);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.aaguid);
+    try std.testing.expectEqual(false, auth.options.?.plat);
+    try std.testing.expectEqual(false, auth.options.?.rk);
+    try std.testing.expectEqual(null, auth.options.?.client_pin);
+    try std.testing.expectEqual(true, auth.options.?.up);
+    try std.testing.expectEqual(null, auth.options.?.uv);
     try std.testing.expectEqual(null, auth.max_msg_size);
     try std.testing.expectEqual(null, auth.pin_protocols);
 }
 
-test "get info from authenticator" {
+test "get info from 'default' authenticator" {
     var allocator = std.testing.allocator;
 
-    var arr = std.ArrayList(u8).init(allocator);
-    arr.deinit();
+    var v = [_]Versions{Versions.fido_2_0};
+    const auth = Authenticator.initDefault(&v, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
-    var v = try allocator.alloc(Versions, 1);
-    defer allocator.free(v);
-    v[0] = .fido_2_0;
-    const auth = Authenticator.initDefault(v, [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+    const response = try auth.handle(allocator, "\x04");
+    defer allocator.free(response);
 
-    try auth.handle("\x04", arr.writer());
-
-    try std.testing.expectEqualStrings("", arr.items);
+    try std.testing.expectEqualStrings("\x00\xa3\x01\x81\x68\x46\x49\x44\x4f\x5f\x32\x5f\x30\x03\x50\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x04\xa3\x64\x70\x6c\x61\x74\xf4\x62\x72\x6b\xf4\x62\x75\x70\xf5", response);
 }
