@@ -245,9 +245,9 @@ fn getCommand(data: []const u8) ErrorCodes!Commands {
 /// Abstract representation of a CTAP authenticator.
 pub const Authenticator = struct {
     /// List of supported versions.
-    versions: []Versions,
+    versions: []const Versions,
     /// List of supported extensions.
-    extensions: ?[]Extensions,
+    extensions: ?[]const Extensions,
     /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
     /// indicating the type of the authenticator. Authenticators with the
     /// same capabilities and firmware, can share the same AAGUID.
@@ -258,10 +258,10 @@ pub const Authenticator = struct {
     /// null = unlimited.
     max_msg_size: ?u64,
     /// List of supported PIN Protocol versions.
-    pin_protocols: ?[]u8,
+    pin_protocols: ?[]const u8,
 
     /// Default initialization without extensions.
-    pub fn initDefault(versions: []Versions, aaguid: [16]u8) @This() {
+    pub fn initDefault(versions: []const Versions, aaguid: [16]u8) @This() {
         return @This(){
             .versions = versions,
             .extensions = null,
@@ -320,14 +320,14 @@ pub const Authenticator = struct {
                 if (self.options != null) {
                     var options = std.ArrayList(Pair).init(allocator);
 
-                    try options.append(Pair.new(try DataItem.text(allocator, "plat"), if (self.options.?.plat) DataItem.True() else DataItem.False()));
                     try options.append(Pair.new(try DataItem.text(allocator, "rk"), if (self.options.?.rk) DataItem.True() else DataItem.False()));
-                    if (self.options.?.client_pin != null) {
-                        try options.append(Pair.new(try DataItem.text(allocator, "clienPin"), if (self.options.?.client_pin.?) DataItem.True() else DataItem.False()));
-                    }
                     try options.append(Pair.new(try DataItem.text(allocator, "up"), if (self.options.?.up) DataItem.True() else DataItem.False()));
                     if (self.options.?.uv != null) {
                         try options.append(Pair.new(try DataItem.text(allocator, "uv"), if (self.options.?.uv.?) DataItem.True() else DataItem.False()));
+                    }
+                    try options.append(Pair.new(try DataItem.text(allocator, "plat"), if (self.options.?.plat) DataItem.True() else DataItem.False()));
+                    if (self.options.?.client_pin != null) {
+                        try options.append(Pair.new(try DataItem.text(allocator, "clienPin"), if (self.options.?.client_pin.?) DataItem.True() else DataItem.False()));
                     }
 
                     try members.append(Pair.new(DataItem.int(0x04), DataItem{ .map = options.toOwnedSlice() }));
@@ -387,13 +387,7 @@ test "version enum to string" {
 }
 
 test "default Authenticator initialization" {
-    var allocator = std.testing.allocator;
-
-    var v = try allocator.alloc(Versions, 1);
-    defer allocator.free(v);
-    v[0] = .fido_2_0;
-
-    const auth = Authenticator.initDefault(v, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = Authenticator.initDefault(&[_]Versions{.fido_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
     try std.testing.expectEqual(Versions.fido_2_0, auth.versions[0]);
     try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.aaguid);
@@ -407,13 +401,12 @@ test "default Authenticator initialization" {
 }
 
 test "get info from 'default' authenticator" {
-    var allocator = std.testing.allocator;
+    const allocator = std.testing.allocator;
 
-    var v = [_]Versions{Versions.fido_2_0};
-    const auth = Authenticator.initDefault(&v, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = Authenticator.initDefault(&[_]Versions{.fido_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
     const response = try auth.handle(allocator, "\x04");
     defer allocator.free(response);
 
-    try std.testing.expectEqualStrings("\x00\xa3\x01\x81\x68\x46\x49\x44\x4f\x5f\x32\x5f\x30\x03\x50\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x04\xa3\x64\x70\x6c\x61\x74\xf4\x62\x72\x6b\xf4\x62\x75\x70\xf5", response);
+    try std.testing.expectEqualStrings("\x00\xa3\x01\x81\x68\x46\x49\x44\x4f\x5f\x32\x5f\x30\x03\x50\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x04\xa3\x62\x72\x6b\xf4\x62\x75\x70\xf5\x64\x70\x6c\x61\x74\xf4", response);
 }
