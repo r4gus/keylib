@@ -33,6 +33,7 @@ const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
+const Ecdsa = std.crypto.sign.ecdsa.EcdsaP256Sha256;
 
 pub const Flags = packed struct(u8) {
     /// User Present (UP) result.
@@ -67,8 +68,20 @@ pub const AttestedCredentialData = struct {
     credential_length: u16,
     /// Credential ID.
     credential_id: []const u8,
-    /// The credential public key encoded in COSE_Key format.
-    credential_public_key: []const u8,
+    /// The credential public key.
+    credential_public_key: Ecdsa.PublicKey,
+
+    pub fn encode(self: *const @This(), out: anytype) !void {
+        try out.writeAll(self.aaguid[0..]);
+        // length is encoded in big-endian format
+        try out.writeByte(@intCast(u8, self.credential_length >> 8));
+        try out.writeByte(@intCast(u8, self.credential_length & 0xff));
+        try out.writeAll(self.credential_id[0..]);
+
+        // Example key encoding
+        // A5010203262001215820D9F4C2A352136F19C9A95DA8824AB5CDC4D5631EBCFD5BDBB0BFFF253609129E225820EF404B880765576007888A3ED6ABFFB4257B7123553325D450613CB5BC9A3A52
+        // {1: 2, 3: -7, -1: 1, -2: h'D9F4C2A352136F19C9A95DA8824AB5CDC4D5631EBCFD5BDBB0BFFF253609129E', -3: h'EF404B880765576007888A3ED6ABFFB4257B7123553325D450613CB5BC9A3A52'}
+    }
 };
 
 /// The authenticator data structure encodes contextual bindings
@@ -89,9 +102,9 @@ pub const AuthData = struct {
 };
 
 pub const AttestationObject = struct {
-    auth_data: AuthData,
     fmt: []const u8,
-    att_stmt: []const u8,
+    att_stmt: AttStmt,
+    auth_data: AuthData,
 };
 
 // see: https://www.w3.org/TR/webauthn/#sctn-defined-attestation-formats
