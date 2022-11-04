@@ -26,6 +26,7 @@ const option = @import("options.zig");
 const Options = option.Options;
 const pinprot = @import("pinprot.zig");
 const PinProtocols = pinprot.PinProtocols;
+const attestation_object = @import("attestation_object.zig");
 
 pub const ms_length = Hmac.mac_length;
 
@@ -62,10 +63,13 @@ pub fn Auth(comptime impl: type) type {
         }
 
         pub const crypto = struct {
+            const key_len: usize = 32;
+            const ctx_len: usize = 32;
+
             pub const KeyContext = struct {
                 /// Context which serves as KEYID and is stored
                 /// by the RP.
-                ctx: [32]u8,
+                ctx: [ctx_len]u8,
                 /// Key-Pair derived from the context and the
                 /// master secret. The private key must be kept
                 /// secret. The public key is stored by the
@@ -116,11 +120,11 @@ pub fn Auth(comptime impl: type) type {
 
             pub fn createKeyPair() !KeyContext {
                 // Get new random context for new key pair
-                var ctx: [32]u8 = undefined;
+                var ctx: [ctx_len]u8 = undefined;
                 getBlock(ctx[0..]);
 
                 // Derive subkey (seed) from master secret and ctx
-                var seed: [32]u8 = undefined;
+                var seed: [key_len]u8 = undefined;
                 Hkdf.expand(seed[0..], ctx[0..], getMs());
 
                 // Create a new (deterministic) key pair
@@ -132,8 +136,8 @@ pub fn Auth(comptime impl: type) type {
                 return kc;
             }
 
-            pub fn deriveKeyPair(ctx: [32]u8) !KeyPair {
-                var seed: [32]u8 = undefined;
+            pub fn deriveKeyPair(ctx: [ctx_len]u8) !KeyPair {
+                var seed: [key_len]u8 = undefined;
                 Hkdf.expand(seed[0..], ctx[0..], getMs());
                 return try KeyPair.create(seed);
             }
@@ -244,4 +248,5 @@ const tests = @import("tests.zig");
 
 test "main" {
     _ = tests;
+    _ = attestation_object;
 }
