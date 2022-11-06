@@ -54,11 +54,11 @@ test "default Authenticator initialization" {
     try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.aaguid);
     try std.testing.expectEqual(false, auth.options.?.plat);
     try std.testing.expectEqual(false, auth.options.?.rk);
-    try std.testing.expectEqual(null, auth.options.?.client_pin);
+    try std.testing.expectEqual(auth.options.?.client_pin, null);
     try std.testing.expectEqual(true, auth.options.?.up);
-    try std.testing.expectEqual(null, auth.options.?.uv);
-    try std.testing.expectEqual(null, auth.max_msg_size);
-    try std.testing.expectEqual(null, auth.pin_protocols);
+    try std.testing.expectEqual(auth.options.?.uv, null);
+    try std.testing.expectEqual(auth.max_msg_size, null);
+    try std.testing.expectEqual(auth.pin_protocols, null);
 }
 
 test "get info from 'default' authenticator" {
@@ -99,6 +99,8 @@ test "test random function call" {
 test "key pair generation" {
     const a = Auth(test_impl);
     const kc = try a.crypto.createKeyPair();
+
+    //std.log.err("{any}\n", .{kc.key_pair.public_key.toUncompressedSec1()});
 
     const kp = try a.crypto.deriveKeyPair(kc.ctx);
 
