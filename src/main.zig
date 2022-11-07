@@ -12,20 +12,20 @@ const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
 
 const status = @import("status.zig");
-const StatusCodes = status.StatusCodes;
+pub const StatusCodes = status.StatusCodes;
 const errors = @import("error.zig");
-const ErrorCodes = errors.ErrorCodes;
+pub const ErrorCodes = errors.ErrorCodes;
 const commands = @import("commands.zig");
-const Commands = commands.Commands;
+pub const Commands = commands.Commands;
 const getCommand = commands.getCommand;
 const version = @import("version.zig");
-const Versions = version.Versions;
+pub const Versions = version.Versions;
 const extension = @import("extensions.zig");
-const Extensions = extension.Extensions;
+pub const Extensions = extension.Extensions;
 const option = @import("options.zig");
-const Options = option.Options;
+pub const Options = option.Options;
 const pinprot = @import("pinprot.zig");
-const PinProtocols = pinprot.PinProtocols;
+pub const PinProtocols = pinprot.PinProtocols;
 const attestation_object = @import("attestation_object.zig");
 
 pub const ms_length = Hmac.mac_length;
