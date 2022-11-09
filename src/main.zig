@@ -67,9 +67,9 @@ pub fn Auth(comptime impl: type) type {
         ///
         /// It returns `true` if permission has been granted, `false`
         /// otherwise (e.g. timeout).
-        pub fn awaitPermission() bool {
-            return impl.awaitPermission();
-        }
+        //pub fn awaitPermission() bool {
+        //    return impl.awaitPermission();
+        //}
 
         pub const crypto = struct {
             const key_len: usize = 32;
@@ -227,7 +227,7 @@ pub fn Auth(comptime impl: type) type {
                         return res.toOwnedSlice();
                     }
 
-                    awaitPermission();
+                    //_ = awaitPermission();
 
                     const di = DataItem.int(@intCast(i65, crypto.rand()));
 
@@ -320,4 +320,5 @@ const tests = @import("tests.zig");
 test "main" {
     _ = tests;
     _ = attestation_object;
+    _ = commands;
 }

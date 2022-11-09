@@ -1,5 +1,7 @@
 const ErrorCodes = @import("error.zig").ErrorCodes;
 
+const make_credential = @import("commands/make_credential.zig");
+
 /// Commands supported by the CTAP protocol.
 pub const Commands = enum(u8) {
     /// Request generation of a new credential in the authenticator.
@@ -49,4 +51,8 @@ pub fn getCommand(data: []const u8) ErrorCodes!Commands {
     }
 
     return Commands.fromRaw(data[0]);
+}
+
+test "command tests" {
+    _ = make_credential;
 }
