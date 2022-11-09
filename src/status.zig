@@ -1,4 +1,4 @@
-const ErrorCodes = @import("error.zig").ErrorCodes;
+const Errors = @import("error.zig").Errors;
 
 /// CTAP status codes.
 pub const StatusCodes = enum(u8) {
@@ -99,10 +99,16 @@ pub const StatusCodes = enum(u8) {
     /// Vendor specific error.
     ctap2_err_vendor_last = 0xff,
 
-    pub fn fromError(err: ErrorCodes) @This() {
+    pub fn fromError(err: Errors) @This() {
         return switch (err) {
-            ErrorCodes.invalid_command => .ctap1_err_invalid_command,
-            ErrorCodes.invalid_length => .ctap1_err_invalid_length,
+            Errors.invalid_command => .ctap1_err_invalid_command,
+            Errors.invalid_length => .ctap1_err_invalid_length,
+            Errors.ReservedAdditionalInformation => .ctap2_err_invalid_cbor,
+            Errors.ReservedSimpleValue => .ctap2_err_invalid_cbor,
+            Errors.IndefiniteLength => .ctap2_err_invalid_cbor,
+            Errors.Malformed => .ctap2_err_invalid_cbor,
+            Errors.Unassigned => .ctap2_err_invalid_cbor,
+            else => .ctap1_err_other,
         };
     }
 };

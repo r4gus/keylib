@@ -14,7 +14,7 @@ const Pair = cbor.Pair;
 const status = @import("status.zig");
 pub const StatusCodes = status.StatusCodes;
 const errors = @import("error.zig");
-pub const ErrorCodes = errors.ErrorCodes;
+pub const Errors = errors.ErrorCodes;
 const commands = @import("commands.zig");
 pub const Commands = commands.Commands;
 const getCommand = commands.getCommand;
@@ -60,6 +60,15 @@ pub fn Auth(comptime impl: type) type {
                 .max_msg_size = null,
                 .pin_protocols = null,
             };
+        }
+
+        /// This function asks the user in some way for permission,
+        /// e.g. button press, touch, key press.
+        ///
+        /// It returns `true` if permission has been granted, `false`
+        /// otherwise (e.g. timeout).
+        pub fn awaitPermission() bool {
+            return impl.awaitPermission();
         }
 
         pub const crypto = struct {
@@ -158,6 +167,68 @@ pub fn Auth(comptime impl: type) type {
 
             switch (cmdnr) {
                 .authenticator_make_credential => {
+                    // TODO: Check exclude list... just ignore it for now
+                    // {1: h'C03991AC3DFF02BA1E520FC59B2D34774A641A4C425ABD313D931061FFBD1A5C', 2: {"id": "localhost", "name": "sweet home localhost"}, 3: {"id": h'781C7860AD88D26332622AF1745DEDB2E7A42B44892939C5566401270DBBC449', "name": "john smith", "displayName": "jsmith"}, 4: [{"alg": -7, "type": "public-key"}]}
+
+                    // Decode command message
+                    const cmd = cbor.decode(allocator, command[1..]) catch |err| {
+                        // On error, respond with a error code and return
+                        try response.writeByte(@enumToInt(StatusCodes.fromError(err)));
+                        return res.toOwnedSlice();
+                    };
+                    defer cmd.deinit(allocator);
+
+                    // Check if pubKeyCredParams (4) does contain the
+                    // ECDSA COSEAlgorithmIdentifier (-7).
+                    const cose_ids = cmd.getValue(&DataItem.int(4));
+
+                    if (cose_ids == null or !cose_ids.?.isArray()) {
+                        try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
+                        return res.toOwnedSlice();
+                    }
+
+                    var found: bool = false;
+                    for (cose_ids.?.array) |*id| {
+                        const alg = id.getValueByString("alg");
+
+                        if (alg != null and alg.?.isInt() and alg.?.int == -7) {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        try response.writeByte(@enumToInt(StatusCodes.ctap2_err_unsupported_algorithm));
+                        return res.toOwnedSlice();
+                    }
+
+                    // Check that all options are valid
+                    const opt = cmd.getValue(&DataItem.int(7));
+                    _ = opt;
+                    // TODO: handle options
+
+                    // Procoess extensions
+                    const ext = cmd.getValue(&DataItem.int(6));
+                    _ = ext;
+                    // TODO: handle extensions
+
+                    // Handle pinAuth if required
+                    const pin_auth = cmd.getValue(&DataItem.int(8));
+                    _ = pin_auth;
+                    // TODO: handle pinAuth
+
+                    // Request permission and show info to user if
+                    // display present
+                    const rp = cmd.getValue(&DataItem.int(2));
+                    const user = cmd.getValue(&DataItem.int(3));
+
+                    if (rp == null or user == null) {
+                        try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
+                        return res.toOwnedSlice();
+                    }
+
+                    awaitPermission();
+
                     const di = DataItem.int(@intCast(i65, crypto.rand()));
 
                     try response.writeByte(0x00);
