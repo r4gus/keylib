@@ -27,6 +27,7 @@ pub const Options = option.Options;
 const pinprot = @import("pinprot.zig");
 pub const PinProtocols = pinprot.PinProtocols;
 const attestation_object = @import("attestation_object.zig");
+pub const crypt = @import("crypto.zig");
 
 pub const ms_length = Hmac.mac_length;
 
@@ -34,31 +35,31 @@ pub fn Auth(comptime impl: type) type {
     return struct {
         const Self = @This();
 
-        /// List of supported versions.
-        versions: []const Versions,
-        /// List of supported extensions.
-        extensions: ?[]const Extensions,
-        /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
+        /// versions: List of supported versions.
+        @"1_t": []const Versions,
+        /// extensions: List of supported extensions.
+        @"2_t": ?[]const Extensions,
+        /// aaguid: The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
         /// indicating the type of the authenticator. Authenticators with the
         /// same capabilities and firmware, can share the same AAGUID.
-        aaguid: [16]u8,
-        /// Supported options.
-        options: ?Options,
-        /// Maximum message size supported by the authenticator.
+        @"3_b": [16]u8,
+        /// optoins: Supported options.
+        @"4": ?Options,
+        /// maxMsgSize: Maximum message size supported by the authenticator.
         /// null = unlimited.
-        max_msg_size: ?u64,
-        /// List of supported PIN Protocol versions.
-        pin_protocols: ?[]const u8,
+        @"5": ?u64,
+        /// pinProtocols: List of supported PIN Protocol versions.
+        @"6": ?[]const u8, // TODO: add _a option to enforce array
 
         /// Default initialization without extensions.
         pub fn initDefault(versions: []const Versions, aaguid: [16]u8) Self {
             return @This(){
-                .versions = versions,
-                .extensions = null,
-                .aaguid = aaguid,
-                .options = Options.default(),
-                .max_msg_size = null,
-                .pin_protocols = null,
+                .@"1_t" = versions,
+                .@"2_t" = null,
+                .@"3_b" = aaguid,
+                .@"4" = Options.default(),
+                .@"5" = null,
+                .@"6" = null,
             };
         }
 
@@ -158,6 +159,7 @@ pub fn Auth(comptime impl: type) type {
             // For encodings see: https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html#responses
             var res = std.ArrayList(u8).init(allocator);
             var response = res.writer();
+            try response.writeByte(0x00); // just overwrite if neccessary
 
             const cmdnr = getCommand(command) catch |err| {
                 // On error, respond with a error code and return.
@@ -170,138 +172,139 @@ pub fn Auth(comptime impl: type) type {
                     // TODO: Check exclude list... just ignore it for now
                     // {1: h'C03991AC3DFF02BA1E520FC59B2D34774A641A4C425ABD313D931061FFBD1A5C', 2: {"id": "localhost", "name": "sweet home localhost"}, 3: {"id": h'781C7860AD88D26332622AF1745DEDB2E7A42B44892939C5566401270DBBC449', "name": "john smith", "displayName": "jsmith"}, 4: [{"alg": -7, "type": "public-key"}]}
 
-                    // Decode command message
-                    const cmd = cbor.decode(allocator, command[1..]) catch |err| {
-                        // On error, respond with a error code and return
-                        try response.writeByte(@enumToInt(StatusCodes.fromError(err)));
-                        return res.toOwnedSlice();
-                    };
-                    defer cmd.deinit(allocator);
+                    //// Decode command message
+                    //const cmd = cbor.decode(allocator, command[1..]) catch |err| {
+                    //    // On error, respond with a error code and return
+                    //    try response.writeByte(@enumToInt(StatusCodes.fromError(err)));
+                    //    return res.toOwnedSlice();
+                    //};
+                    //defer cmd.deinit(allocator);
 
-                    // Check if pubKeyCredParams (4) does contain the
-                    // ECDSA COSEAlgorithmIdentifier (-7).
-                    const cose_ids = cmd.getValue(&DataItem.int(4));
+                    //// Check if pubKeyCredParams (4) does contain the
+                    //// ECDSA COSEAlgorithmIdentifier (-7).
+                    //const cose_ids = cmd.getValue(&DataItem.int(4));
 
-                    if (cose_ids == null or !cose_ids.?.isArray()) {
-                        try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
-                        return res.toOwnedSlice();
-                    }
+                    //if (cose_ids == null or !cose_ids.?.isArray()) {
+                    //    try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
+                    //    return res.toOwnedSlice();
+                    //}
 
-                    var found: bool = false;
-                    for (cose_ids.?.array) |*id| {
-                        const alg = id.getValueByString("alg");
+                    //var found: bool = false;
+                    //for (cose_ids.?.array) |*id| {
+                    //    const alg = id.getValueByString("alg");
 
-                        if (alg != null and alg.?.isInt() and alg.?.int == -7) {
-                            found = true;
-                            break;
-                        }
-                    }
+                    //    if (alg != null and alg.?.isInt() and alg.?.int == -7) {
+                    //        found = true;
+                    //        break;
+                    //    }
+                    //}
 
-                    if (!found) {
-                        try response.writeByte(@enumToInt(StatusCodes.ctap2_err_unsupported_algorithm));
-                        return res.toOwnedSlice();
-                    }
+                    //if (!found) {
+                    //    try response.writeByte(@enumToInt(StatusCodes.ctap2_err_unsupported_algorithm));
+                    //    return res.toOwnedSlice();
+                    //}
 
-                    // Check that all options are valid
-                    const opt = cmd.getValue(&DataItem.int(7));
-                    _ = opt;
-                    // TODO: handle options
+                    //// Check that all options are valid
+                    //const opt = cmd.getValue(&DataItem.int(7));
+                    //_ = opt;
+                    //// TODO: handle options
 
-                    // Procoess extensions
-                    const ext = cmd.getValue(&DataItem.int(6));
-                    _ = ext;
-                    // TODO: handle extensions
+                    //// Procoess extensions
+                    //const ext = cmd.getValue(&DataItem.int(6));
+                    //_ = ext;
+                    //// TODO: handle extensions
 
-                    // Handle pinAuth if required
-                    const pin_auth = cmd.getValue(&DataItem.int(8));
-                    _ = pin_auth;
-                    // TODO: handle pinAuth
+                    //// Handle pinAuth if required
+                    //const pin_auth = cmd.getValue(&DataItem.int(8));
+                    //_ = pin_auth;
+                    //// TODO: handle pinAuth
 
-                    // Request permission and show info to user if
-                    // display present
-                    const rp = cmd.getValue(&DataItem.int(2));
-                    const user = cmd.getValue(&DataItem.int(3));
+                    //// Request permission and show info to user if
+                    //// display present
+                    //const rp = cmd.getValue(&DataItem.int(2));
+                    //const user = cmd.getValue(&DataItem.int(3));
 
-                    if (rp == null or user == null) {
-                        try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
-                        return res.toOwnedSlice();
-                    }
+                    //if (rp == null or user == null) {
+                    //    try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
+                    //    return res.toOwnedSlice();
+                    //}
 
-                    //_ = awaitPermission();
+                    ////_ = awaitPermission();
 
-                    const di = DataItem.int(@intCast(i65, crypto.rand()));
+                    //const di = DataItem.int(@intCast(i65, crypto.rand()));
 
                     try response.writeByte(0x00);
-                    try cbor.encode(response, &di);
+                    //try cbor.encode(response, &di);
                 },
                 .authenticator_get_assertion => {},
                 .authenticator_get_info => {
+                    try cbor.stringify(self, .{}, response);
                     // There is a maximum of 6 supported members (including optional ones).
-                    var members = std.ArrayList(Pair).init(allocator);
-                    var i: usize = 0;
+                    //var members = std.ArrayList(Pair).init(allocator);
+                    //var i: usize = 0;
 
-                    // versions (0x01)
-                    var versions = try allocator.alloc(DataItem, self.versions.len);
-                    for (self.versions) |vers| {
-                        versions[i] = try DataItem.text(allocator, vers.toString());
-                        i += 1;
-                    }
-                    try members.append(Pair.new(DataItem.int(0x01), DataItem{ .array = versions }));
+                    //// versions (0x01)
+                    //var versions = try allocator.alloc(DataItem, self.versions.len);
+                    //for (self.versions) |vers| {
+                    //    versions[i] = try DataItem.text(vers.toString(), o);
+                    //    i += 1;
+                    //}
+                    //try members.append(Pair.new(DataItem.int(0x01), DataItem{ .array = versions }));
 
-                    // extensions (0x02)
-                    if (self.extensions != null) {
-                        var extensions = try allocator.alloc(DataItem, self.extensions.?.len);
+                    //// extensions (0x02)
+                    //if (self.extensions != null) {
+                    //    var extensions = try allocator.alloc(DataItem, self.extensions.?.len);
 
-                        i = 0;
-                        for (self.extensions.?) |ext| {
-                            extensions[i] = try DataItem.text(allocator, ext.toString());
-                            i += 1;
-                        }
-                        try members.append(Pair.new(DataItem.int(0x02), DataItem{ .array = extensions }));
-                    }
+                    //    i = 0;
+                    //    for (self.extensions.?) |ext| {
+                    //        extensions[i] = try DataItem.text(ext.toString(), o);
+                    //        i += 1;
+                    //    }
+                    //    try members.append(Pair.new(DataItem.int(0x02), DataItem{ .array = extensions }));
+                    //}
 
-                    // aaguid (0x03)
-                    try members.append(Pair.new(DataItem.int(0x03), try DataItem.bytes(allocator, &self.aaguid)));
+                    //// aaguid (0x03)
+                    //try members.append(Pair.new(DataItem.int(0x03), try DataItem.bytes(&self.aaguid, o)));
 
-                    // options (0x04)
-                    if (self.options != null) {
-                        var options = std.ArrayList(Pair).init(allocator);
+                    //// options (0x04)
+                    //if (self.options != null) {
+                    //    var options = std.ArrayList(Pair).init(allocator);
 
-                        try options.append(Pair.new(try DataItem.text(allocator, "rk"), if (self.options.?.rk) DataItem.True() else DataItem.False()));
-                        try options.append(Pair.new(try DataItem.text(allocator, "up"), if (self.options.?.up) DataItem.True() else DataItem.False()));
-                        if (self.options.?.uv != null) {
-                            try options.append(Pair.new(try DataItem.text(allocator, "uv"), if (self.options.?.uv.?) DataItem.True() else DataItem.False()));
-                        }
-                        try options.append(Pair.new(try DataItem.text(allocator, "plat"), if (self.options.?.plat) DataItem.True() else DataItem.False()));
-                        if (self.options.?.client_pin != null) {
-                            try options.append(Pair.new(try DataItem.text(allocator, "clienPin"), if (self.options.?.client_pin.?) DataItem.True() else DataItem.False()));
-                        }
+                    //    try options.append(Pair.new(try DataItem.text("rk", o), if (self.options.?.rk) DataItem.True() else DataItem.False()));
+                    //    try options.append(Pair.new(try DataItem.text("up", o), if (self.options.?.up) DataItem.True() else DataItem.False()));
+                    //    if (self.options.?.uv != null) {
+                    //        try options.append(Pair.new(try DataItem.text("uv", o), if (self.options.?.uv.?) DataItem.True() else DataItem.False()));
+                    //    }
+                    //    try options.append(Pair.new(try DataItem.text("plat", o), if (self.options.?.plat) DataItem.True() else DataItem.False()));
+                    //    if (self.options.?.client_pin != null) {
+                    //        try options.append(Pair.new(try DataItem.text("clienPin", o), if (self.options.?.client_pin.?) DataItem.True() else DataItem.False()));
+                    //    }
 
-                        try members.append(Pair.new(DataItem.int(0x04), DataItem{ .map = options.toOwnedSlice() }));
-                    }
+                    //    try members.append(Pair.new(DataItem.int(0x04), DataItem{ .map = options.toOwnedSlice() }));
+                    //}
 
-                    // maxMsgSize (0x05)
-                    if (self.max_msg_size != null) {
-                        try members.append(Pair.new(DataItem.int(0x05), DataItem.int(self.max_msg_size.?)));
-                    }
+                    //// maxMsgSize (0x05)
+                    //if (self.max_msg_size != null) {
+                    //    try members.append(Pair.new(DataItem.int(0x05), DataItem.int(self.max_msg_size.?)));
+                    //}
 
-                    // pinProtocols (0x06)
-                    if (self.pin_protocols != null) {
-                        var protocols = try allocator.alloc(DataItem, self.extensions.?.len);
+                    //// pinProtocols (0x06)
+                    //if (self.pin_protocols != null) {
+                    //    var protocols = try allocator.alloc(DataItem, self.extensions.?.len);
 
-                        i = 0;
-                        for (self.pin_protocols.?) |prot| {
-                            protocols[i] = DataItem.int(prot);
-                            i += 1;
-                        }
-                        try members.append(Pair.new(DataItem.int(0x06), DataItem{ .array = protocols }));
-                    }
+                    //    i = 0;
+                    //    for (self.pin_protocols.?) |prot| {
+                    //        protocols[i] = DataItem.int(prot);
+                    //        i += 1;
+                    //    }
+                    //    try members.append(Pair.new(DataItem.int(0x06), DataItem{ .array = protocols }));
+                    //}
 
-                    var di = DataItem{ .map = members.toOwnedSlice() };
-                    defer di.deinit(allocator);
+                    //var di = DataItem{ .map = members.toOwnedSlice() };
+                    //defer di.deinit(allocator);
 
-                    try response.writeByte(0x00);
-                    try cbor.encode(response, &di);
+                    //try response.writeByte(0x00);
+                    //try cbor.encode(response, &di);
                 },
                 .authenticator_client_pin => {},
                 .authenticator_reset => {},
@@ -320,5 +323,6 @@ const tests = @import("tests.zig");
 test "main" {
     _ = tests;
     _ = attestation_object;
+    _ = crypt;
     _ = commands;
 }

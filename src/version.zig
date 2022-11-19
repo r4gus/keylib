@@ -1,14 +1,14 @@
 /// Supported version of the authenticator.
 pub const Versions = enum {
     /// For CTAP2/FIDO2/Web Authentication authenticators.
-    fido_2_0,
+    FIDO_2_0,
     /// For CTAP1/U2F authenticators.
-    u2f_v2,
+    U2F_V2,
 
     pub fn toString(self: @This()) []const u8 {
         return switch (self) {
-            .fido_2_0 => "FIDO_2_0",
-            .u2f_v2 => "U2F_V2",
+            .FIDO_2_0 => "FIDO_2_0",
+            .U2F_V2 => "U2F_V2",
         };
     }
 };

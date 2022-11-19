@@ -42,30 +42,30 @@ test "fetch command from data" {
 }
 
 test "version enum to string" {
-    try std.testing.expectEqualStrings("FIDO_2_0", Versions.fido_2_0.toString());
-    try std.testing.expectEqualStrings("U2F_V2", Versions.u2f_v2.toString());
+    try std.testing.expectEqualStrings("FIDO_2_0", Versions.FIDO_2_0.toString());
+    try std.testing.expectEqualStrings("U2F_V2", Versions.U2F_V2.toString());
 }
 
 test "default Authenticator initialization" {
     const a = Auth(test_impl);
-    const auth = a.initDefault(&[_]Versions{.fido_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
-    try std.testing.expectEqual(Versions.fido_2_0, auth.versions[0]);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.aaguid);
-    try std.testing.expectEqual(false, auth.options.?.plat);
-    try std.testing.expectEqual(false, auth.options.?.rk);
-    try std.testing.expectEqual(auth.options.?.client_pin, null);
-    try std.testing.expectEqual(true, auth.options.?.up);
-    try std.testing.expectEqual(auth.options.?.uv, null);
-    try std.testing.expectEqual(auth.max_msg_size, null);
-    try std.testing.expectEqual(auth.pin_protocols, null);
+    try std.testing.expectEqual(Versions.FIDO_2_0, auth.@"1_t"[0]);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.@"3_b");
+    try std.testing.expectEqual(false, auth.@"4".?.plat);
+    try std.testing.expectEqual(false, auth.@"4".?.rk);
+    try std.testing.expectEqual(auth.@"4".?.clientPin, null);
+    try std.testing.expectEqual(true, auth.@"4".?.up);
+    try std.testing.expectEqual(auth.@"4".?.uv, null);
+    try std.testing.expectEqual(auth.@"5", null);
+    try std.testing.expectEqual(auth.@"6", null);
 }
 
 test "get info from 'default' authenticator" {
     const allocator = std.testing.allocator;
 
     const a = Auth(test_impl);
-    const auth = a.initDefault(&[_]Versions{.fido_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
     const response = try auth.handle(allocator, "\x04");
     defer allocator.free(response);
