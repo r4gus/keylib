@@ -2,6 +2,8 @@ const std = @import("std");
 const cbor = @import("zbor");
 const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
 const AuthenticatorOptions = @import("auth_options.zig").AuthenticatorOptions;
+const User = @import("user.zig");
+const RelyingParty = @import("rp.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -21,16 +23,9 @@ pub const MakeCredentialParam = struct {
     ///
     /// id: valid domain string identifying the Relying Party
     /// name: user friendly name
-    @"2": struct {
-        id: []const u8,
-        name: ?[]const u8,
-    },
+    @"2": RelyingParty,
     /// user: PublicKeyCredentialUserEntity
-    @"3": struct {
-        id: []const u8,
-        name: ?[]const u8,
-        displayName: ?[]const u8,
-    },
+    @"3": User,
     /// pubKeyCredParams: A sequence of CBOR maps
     @"4": []const CredParam,
     /// excludeList: A sequence of PublicKeyCredentialDescriptor structures.

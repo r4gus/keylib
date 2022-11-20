@@ -1,6 +1,6 @@
 const ErrorCodes = @import("error.zig").ErrorCodes;
 
-pub const make_credential = @import("commands/make_credential.zig");
+pub const make_credential = @import("make_credential.zig");
 
 /// Commands supported by the CTAP protocol.
 pub const Commands = enum(u8) {

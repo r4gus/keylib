@@ -7,9 +7,17 @@ const getCommand = commands.getCommand;
 const Versions = @import("version.zig").Versions;
 const authenticator = @import("main.zig");
 const Auth = authenticator.Auth;
+const User = @import("user.zig");
+const RelyingParty = @import("rp.zig");
 
 // Just for tests
 const test_impl = struct {
+    pub fn requestPermission(user: *const User, rp: *const RelyingParty) bool {
+        _ = user;
+        _ = rp;
+        return true;
+    }
+
     pub fn rand() u32 {
         const S = struct {
             var i: u32 = 0;

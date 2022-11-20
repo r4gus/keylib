@@ -29,7 +29,16 @@ pub const Options = option.Options;
 const pinprot = @import("pinprot.zig");
 pub const PinProtocols = pinprot.PinProtocols;
 const attestation_object = @import("attestation_object.zig");
+const AttestedCredentialData = attestation_object.AttestedCredentialData;
+const AuthData = attestation_object.AuthData;
+const Flags = attestation_object.Flags;
+const AttestationObject = attestation_object.AttestationObject;
+const Fmt = attestation_object.Fmt;
+const AttStmt = attestation_object.AttStmt;
 pub const crypt = @import("crypto.zig");
+const EcdsaPubKey = crypt.EcdsaPubKey;
+pub const User = @import("user.zig");
+pub const RelyingParty = @import("rp.zig");
 
 pub fn Auth(comptime impl: type) type {
     return struct {
@@ -68,9 +77,9 @@ pub fn Auth(comptime impl: type) type {
         ///
         /// It returns `true` if permission has been granted, `false`
         /// otherwise (e.g. timeout).
-        //pub fn requestPermission() bool {
-        //    return impl.requestPermission();
-        //}
+        pub fn requestPermission(user: *const User, rp: *const RelyingParty) bool {
+            return impl.requestPermission(user, rp);
+        }
 
         pub const crypto = struct {
             const key_len: usize = 32;
@@ -252,52 +261,71 @@ pub fn Auth(comptime impl: type) type {
                     // supported, return CTAP2_ERR_PIN_AUTH_INVALID.
                     // TODO: implement
 
-                    //var found: bool = false;
-                    //for (cose_ids.?.array) |*id| {
-                    //    const alg = id.getValueByString("alg");
+                    // 8. If the authenticator has a display, show the items contained
+                    // within the user and rp parameter structures to the user.
+                    // Alternatively, request user interaction in an
+                    // authenticator-specific way (e.g., flash the LED light).
+                    // Request permission to create a credential. If the user declines
+                    // permission, return the CTAP2_ERR_OPERATION_DENIED error.
+                    if (!requestPermission(&mcp.@"3", &mcp.@"2")) {
+                        res.items[0] = @enumToInt(StatusCodes.ctap2_err_operation_denied);
+                        return res.toOwnedSlice();
+                    }
 
-                    //    if (alg != null and alg.?.isInt() and alg.?.int == -7) {
-                    //        found = true;
-                    //        break;
-                    //    }
-                    //}
+                    // 9. Generate a new credential key pair for the algorithm specified.
+                    const context = crypto.createKeyPair() catch {
+                        res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                        return res.toOwnedSlice();
+                    };
 
-                    //if (!found) {
-                    //    try response.writeByte(@enumToInt(StatusCodes.ctap2_err_unsupported_algorithm));
-                    //    return res.toOwnedSlice();
-                    //}
+                    // 10. If "rk" in options parameter is set to true.
+                    //     * If a credential for the same RP ID and account ID already
+                    //       exists on the authenticator, overwrite that credential.
+                    //     * Store the user parameter along the newly-created key pair.
+                    //     * If authenticator does not have enough internal storage to
+                    //       persist the new credential, return CTAP2_ERR_KEY_STORE_FULL.
+                    // TODO: Resident key support currently not planned
 
-                    //// Check that all options are valid
-                    //const opt = cmd.getValue(&DataItem.int(7));
-                    //_ = opt;
-                    //// TODO: handle options
+                    // 11. Generate an attestation statement for the newly-created
+                    // key using clientDataHash.
+                    const acd = AttestedCredentialData{
+                        .aaguid = self.@"3_b",
+                        .credential_length = crypto.ctx_len,
+                        // context is used as id to later retrieve actual key using
+                        // the master secret.
+                        .credential_id = &context.ctx,
+                        .credential_public_key = EcdsaPubKey.new(context.key_pair.public_key),
+                    };
 
-                    //// Procoess extensions
-                    //const ext = cmd.getValue(&DataItem.int(6));
-                    //_ = ext;
-                    //// TODO: handle extensions
+                    var ad = AuthData{
+                        .rp_id_hash = undefined,
+                        .flags = Flags{
+                            .up = 1,
+                            .rfu1 = 0,
+                            .uv = 0,
+                            .rfu2 = 0,
+                            .at = 1,
+                            .ed = 0,
+                        },
+                        .sign_count = 0, // TODO: replace with function call
+                        .attested_credential_data = acd,
+                        .extensions = "",
+                    };
+                    std.crypto.hash.sha2.Sha256.hash(mcp.@"2".id, &ad.rp_id_hash, .{});
+                    var authData = std.ArrayList(u8).init(allocator);
+                    defer authData.deinit();
+                    try ad.encode(authData.writer());
 
-                    //// Handle pinAuth if required
-                    //const pin_auth = cmd.getValue(&DataItem.int(8));
-                    //_ = pin_auth;
-                    //// TODO: handle pinAuth
+                    const ao = AttestationObject{
+                        .@"1" = Fmt.@"packed",
+                        .@"2_b" = authData.items,
+                        .@"3" = AttStmt{ .none = .{} },
+                    };
 
-                    //// Request permission and show info to user if
-                    //// display present
-                    //const rp = cmd.getValue(&DataItem.int(2));
-                    //const user = cmd.getValue(&DataItem.int(3));
-
-                    //if (rp == null or user == null) {
-                    //    try response.writeByte(@enumToInt(StatusCodes.ctap2_err_invalid_cbor));
-                    //    return res.toOwnedSlice();
-                    //}
-
-                    ////_ = awaitPermission();
-
-                    //const di = DataItem.int(@intCast(i65, crypto.rand()));
-
-                    //try response.writeByte(0x00);
-                    //try cbor.encode(response, &di);
+                    cbor.stringify(ao, .{}, response) catch |err| {
+                        res.items[0] = @enumToInt(StatusCodes.fromError(err));
+                        return res.toOwnedSlice();
+                    };
                 },
                 .authenticator_get_assertion => {},
                 .authenticator_get_info => {
