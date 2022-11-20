@@ -1,5 +1,7 @@
 const std = @import("std");
 const cbor = @import("zbor");
+const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
+const AuthenticatorOptions = @import("auth_options.zig").AuthenticatorOptions;
 
 const Allocator = std.mem.Allocator;
 
@@ -13,26 +15,36 @@ pub const CredParam = struct {
 };
 
 pub const MakeCredentialParam = struct {
-    // clientDataHash: Hash of the ClientData contextual binding
+    /// clientDataHash: Hash of the ClientData contextual binding
     @"1": []const u8,
-    // rp: PublicKeyCredentialRpEntity
-    //
-    // id: valid domain string identifying the Relying Party
-    // name: user friendly name
+    /// rp: PublicKeyCredentialRpEntity
+    ///
+    /// id: valid domain string identifying the Relying Party
+    /// name: user friendly name
     @"2": struct {
         id: []const u8,
         name: ?[]const u8,
     },
-    // user: PublicKeyCredentialUserEntity
+    /// user: PublicKeyCredentialUserEntity
     @"3": struct {
         id: []const u8,
         name: ?[]const u8,
         displayName: ?[]const u8,
     },
-    // pubKeyCredParams: A sequence of CBOR maps
+    /// pubKeyCredParams: A sequence of CBOR maps
     @"4": []const CredParam,
-
+    /// excludeList: A sequence of PublicKeyCredentialDescriptor structures.
+    /// The authenticator returns an error if the authenticator already contains
+    /// one of the credentials enumerated in this sequence.
+    @"5": ?[]const PublicKeyCredentialDescriptor,
     // TODO: add remaining fields
+    /// authenticator options: Parameters to influence authenticator operation.
+    @"7": ?AuthenticatorOptions,
+    /// pinAuth: First 16 bytes of HMAC-SHA-256 of clientDataHash using pinToken
+    /// which platform got from the authenticator: HMAC-SHA-256(pinToken, clientDataHash).
+    @"8": ?[16]u8,
+    /// pinProtocol: PIN protocol version chosen by the client.
+    @"9": ?u8,
 
     pub fn deinit(self: *const @This(), allocator: Allocator) void {
         allocator.free(self.@"1");
@@ -52,6 +64,13 @@ pub const MakeCredentialParam = struct {
             cp.deinit(allocator);
         }
         allocator.free(self.@"4");
+
+        if (self.@"5") |excludes| {
+            for (excludes) |pkcd| {
+                pkcd.deinit(allocator);
+            }
+            allocator.free(excludes);
+        }
     }
 };
 

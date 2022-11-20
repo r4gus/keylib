@@ -9,4 +9,4 @@ pub const ErrorCodes = error{
     invalid_cbor,
 };
 
-pub const Errors = ErrorCodes || cbor.Error;
+pub const Errors = ErrorCodes || cbor.Error || cbor.StringifyError;
