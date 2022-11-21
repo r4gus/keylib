@@ -26,8 +26,8 @@ jobs:
         with:
           version: master
       - run: |
-          git pull --recurse-submodules
-          git submodule update --remote --recursive
+          git submodule update --init --recursive
+          git submodule update --recursive --remote
           zig build test
   lint:
     runs-on: ubuntu-latest
