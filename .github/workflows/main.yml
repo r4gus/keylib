@@ -25,7 +25,10 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
-      - run: zig build test
+      - run: |
+          git pull --recurse-submodules
+          git submodule update --remote --recursive
+          zig build test
   lint:
     runs-on: ubuntu-latest
     steps:
