@@ -33,8 +33,9 @@ const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
-const EcdsaPubKey = @import("crypto.zig").EcdsaPubKey;
-const Ecdsa = std.crypto.sign.ecdsa.EcdsaP256Sha256;
+const crypto = @import("crypto.zig");
+const EcdsaPubKey = crypto.EcdsaPubKey;
+const Ecdsa = crypto.ecdsa.EcdsaP256Sha256;
 
 pub const Flags = packed struct(u8) {
     /// User Present (UP) result.

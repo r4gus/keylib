@@ -1,8 +1,12 @@
 /// Client to Authenticator (CTAP) library
 const std = @import("std");
+
+pub const crypt = @import("crypto.zig");
+const EcdsaPubKey = crypt.EcdsaPubKey;
 pub const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
+/// Master secret length
 pub const ms_length = Hmac.mac_length;
-pub const Ecdsa = std.crypto.sign.ecdsa.EcdsaP256Sha256;
+pub const Ecdsa = crypt.ecdsa.EcdsaP256Sha256;
 pub const KeyPair = Ecdsa.KeyPair;
 pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 
@@ -35,8 +39,6 @@ const Flags = attestation_object.Flags;
 const AttestationObject = attestation_object.AttestationObject;
 const Fmt = attestation_object.Fmt;
 const AttStmt = attestation_object.AttStmt;
-pub const crypt = @import("crypto.zig");
-const EcdsaPubKey = crypt.EcdsaPubKey;
 pub const User = @import("user.zig");
 pub const RelyingParty = @import("rp.zig");
 
@@ -317,7 +319,7 @@ pub fn Auth(comptime impl: type) type {
                     try ad.encode(authData.writer());
 
                     const ao = AttestationObject{
-                        .@"1" = Fmt.@"packed",
+                        .@"1" = Fmt.none,
                         .@"2_b" = authData.items,
                         .@"3" = AttStmt{ .none = .{} },
                     };
