@@ -79,7 +79,7 @@ pub const AttestedCredentialData = struct {
         try out.writeByte(@intCast(u8, self.credential_length >> 8));
         try out.writeByte(@intCast(u8, self.credential_length & 0xff));
         try out.writeAll(self.credential_id[0..]);
-        try cbor.stringify(self.credential_public_key, .{}, out);
+        try cbor.stringify(self.credential_public_key, .{ .enum_as_text = false }, out);
     }
 };
 
@@ -147,12 +147,32 @@ pub const AttestationObject = struct {
 };
 
 // see: https://www.w3.org/TR/webauthn/#sctn-defined-attestation-formats
-
-pub const AttStmtTag = enum { none };
+pub const AttStmtTag = enum { none, @"packed" };
 
 pub const AttStmt = union(AttStmtTag) {
-    none: struct {}, // empty map
+    /// The none attestation statement format is used to replace any authenticator-provided
+    /// attestation statement when a WebAuthn Relying Party indicates it does not wish to
+    /// receive attestation information, see § 5.4.7 Attestation Conveyance Preference
+    /// Enumeration (enum AttestationConveyancePreference).
+    none: struct {}, // no attestation
+    /// This is a WebAuthn optimized attestation statement format. It uses a very compact
+    /// but still extensible encoding method. It is implementable by authenticators with
+    /// limited resources (e.g., secure elements).
+    @"packed": struct { // basic, self, AttCA
+        /// A COSEAlgorithmIdentifier containing the identifier of the algorithm used
+        /// to generate the attestation signature.
+        alg_b: crypto.CoseId,
+        /// A byte string containing the attestation signature.
+        sig_b: []const u8,
+        /// The elements of this array contain attestnCert and its certificate chain (if any),
+        /// each encoded in X.509 format. The attestation certificate attestnCert MUST be
+        /// the first element in the array.
+        x5c: ?[]const Cert = null,
+    },
 };
+
+// TODO: implement Cert (see §8.2 https://www.w3.org/TR/webauthn/#sctn-packed-attestation)
+pub const Cert = struct {};
 
 test "attestation credential data" {
     const allocator = std.testing.allocator;

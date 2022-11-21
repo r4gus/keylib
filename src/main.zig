@@ -318,10 +318,18 @@ pub fn Auth(comptime impl: type) type {
                     defer authData.deinit();
                     try ad.encode(authData.writer());
 
+                    const sig = context.key_pair.sign("", null) catch {
+                        res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                        return res.toOwnedSlice();
+                    };
+
                     const ao = AttestationObject{
                         .@"1" = Fmt.none,
                         .@"2_b" = authData.items,
-                        .@"3" = AttStmt{ .none = .{} },
+                        .@"3" = AttStmt{ .@"packed" = .{
+                            .alg_b = crypt.CoseId.ES256,
+                            .sig_b = &sig.toBytes(),
+                        } },
                     };
 
                     cbor.stringify(ao, .{}, response) catch |err| {

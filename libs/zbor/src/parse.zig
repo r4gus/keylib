@@ -345,14 +345,16 @@ pub fn stringify(
         },
         .Enum => |enumInfo| {
             if (options.enum_as_text) {
-                const tmp = @intCast(usize, @enumToInt(value));
+                const tmp = @enumToInt(value);
                 inline for (enumInfo.fields) |field| {
                     if (field.value == tmp) {
                         v = @intCast(u64, field.name.len);
                     }
                 }
             } else {
-                v = @intCast(u64, @enumToInt(value));
+                const tmp = @enumToInt(value);
+                if (tmp < 0) head = 0x20;
+                v = @intCast(u64, if (tmp < 0) -(tmp + 1) else tmp);
             }
         },
         .Pointer => |ptr_info| v = switch (ptr_info.size) {
@@ -403,9 +405,11 @@ pub fn stringify(
                             if (Field.name[l - 1] == 'b') {
                                 l -= 2;
                                 child_options.slice_as_text = false;
+                                child_options.enum_as_text = false;
                             } else if (Field.name[l - 1] == 't') {
                                 l -= 2;
                                 child_options.slice_as_text = true;
+                                child_options.enum_as_text = true;
                             }
                         }
                     }
@@ -887,6 +891,32 @@ test "parse enum: 2" {
 
     try std.testing.expectEqual(Level.high, x1);
     try std.testing.expectEqual(Level.low, x2);
+}
+
+test "parse enum: 3" {
+    const Level = enum(i8) {
+        high = -7,
+        low = -11,
+    };
+
+    const di1 = DataItem.new("\x26");
+    const di2 = DataItem.new("\x2a");
+
+    const x1 = try parse(Level, di1, .{});
+    const x2 = try parse(Level, di2, .{});
+
+    try std.testing.expectEqual(Level.high, x1);
+    try std.testing.expectEqual(Level.low, x2);
+}
+
+test "stringify enum: 3" {
+    const Level = enum(i8) {
+        high = -7,
+        low = -11,
+    };
+
+    try testStringify("\x26", Level.high, .{ .enum_as_text = false });
+    try testStringify("\x2a", Level.low, .{ .enum_as_text = false });
 }
 
 test "serialize EcdsaP256Key" {
