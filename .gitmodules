@@ -1,4 +1,0 @@
-[submodule "libs/zbor"]
-	path = libs/zbor
-	url = https://github.com/r4gus/zbor.git
-	branch = master
