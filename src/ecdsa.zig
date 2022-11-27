@@ -1,6 +1,7 @@
 const std = @import("std");
 const crypto = std.crypto;
 const mem = std.mem;
+const io = std.io;
 
 const EncodingError = crypto.errors.EncodingError;
 const IdentityElementError = crypto.errors.IdentityElementError;
@@ -100,6 +101,65 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
                     .r = bytes[0 .. encoded_length / 2].*,
                     .s = bytes[encoded_length / 2 ..].*,
                 };
+            }
+
+            /// Encode the signature using the DER format.
+            /// The maximum length of the DER encoding is der_encoded_max_length.
+            /// The function returns a slice, that can be shorter than der_encoded_max_length.
+            pub fn toDer(self: Signature, buf: *[der_encoded_max_length]u8) []u8 {
+                var fb = io.fixedBufferStream(buf);
+                const w = fb.writer();
+                const r_len = @intCast(u8, self.r.len + (self.r[0] >> 7));
+                const s_len = @intCast(u8, self.s.len + (self.s[0] >> 7));
+                const seq_len = @intCast(u8, 2 + r_len + 2 + s_len);
+                w.writeAll(&[_]u8{ 0x30, seq_len }) catch unreachable;
+                w.writeAll(&[_]u8{ 0x02, r_len }) catch unreachable;
+                if (self.r[0] >> 7 != 0) {
+                    w.writeByte(0x00) catch unreachable;
+                }
+                w.writeAll(&self.r) catch unreachable;
+                w.writeAll(&[_]u8{ 0x02, s_len }) catch unreachable;
+                if (self.s[0] >> 7 != 0) {
+                    w.writeByte(0x00) catch unreachable;
+                }
+                w.writeAll(&self.s) catch unreachable;
+                return fb.getWritten();
+            }
+
+            // Read a DER-encoded integer.
+            fn readDerInt(out: []u8, reader: anytype) EncodingError!void {
+                var buf: [2]u8 = undefined;
+                _ = reader.readNoEof(&buf) catch return error.InvalidEncoding;
+                if (buf[0] != 0x02) return error.InvalidEncoding;
+                var expected_len = @as(usize, buf[1]);
+                if (expected_len == 0 or expected_len > 1 + out.len) return error.InvalidEncoding;
+                var has_top_bit = false;
+                if (expected_len == 1 + out.len) {
+                    if ((reader.readByte() catch return error.InvalidEncoding) != 0) return error.InvalidEncoding;
+                    expected_len -= 1;
+                    has_top_bit = true;
+                }
+                const out_slice = out[out.len - expected_len ..];
+                reader.readNoEof(out_slice) catch return error.InvalidEncoding;
+                if (has_top_bit and out[0] >> 7 == 0) return error.InvalidEncoding;
+            }
+
+            /// Create a signature from a DER representation.
+            /// Returns InvalidEncoding if the DER encoding is invalid.
+            pub fn fromDer(der: []const u8) EncodingError!Signature {
+                var sig: Signature = mem.zeroInit(Signature, .{});
+                var fb = io.fixedBufferStream(der);
+                const reader = fb.reader();
+                var buf: [2]u8 = undefined;
+                _ = reader.readNoEof(&buf) catch return error.InvalidEncoding;
+                if (buf[0] != 0x30 or @as(usize, buf[1]) + 2 != der.len) {
+                    return error.InvalidEncoding;
+                }
+                try readDerInt(&sig.r, reader);
+                try readDerInt(&sig.s, reader);
+                if (fb.getPos() catch unreachable != der.len) return error.InvalidEncoding;
+
+                return sig;
             }
         };
 

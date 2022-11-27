@@ -95,11 +95,11 @@ pub const AuthData = struct {
     /// Signature counter, 32-bit unsigned big-endian integer.
     sign_count: u32,
     /// Attested credential data.
-    attested_credential_data: AttestedCredentialData,
+    attested_credential_data: ?AttestedCredentialData = null,
     /// Extensions-defined authenticator data.
     /// This is a CBOR map with extension identifiers as keys,
     /// and authenticator extension outputs as values.
-    extensions: []const u8,
+    extensions: ?[]const u8 = null,
 
     pub fn encode(self: *const @This(), out: anytype) !void {
         try out.writeAll(self.rp_id_hash[0..]);
@@ -111,7 +111,9 @@ pub const AuthData = struct {
         try out.writeByte(@intCast(u8, (self.sign_count >> 8) & 0xff));
         try out.writeByte(@intCast(u8, self.sign_count & 0xff));
 
-        try self.attested_credential_data.encode(out);
+        if (self.attested_credential_data) |acd| {
+            try acd.encode(out);
+        }
 
         // TODO: also encode extensions
     }

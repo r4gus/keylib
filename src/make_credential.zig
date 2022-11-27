@@ -32,7 +32,7 @@ pub const MakeCredentialParam = struct {
     /// The authenticator returns an error if the authenticator already contains
     /// one of the credentials enumerated in this sequence.
     @"5": ?[]const PublicKeyCredentialDescriptor,
-    // TODO: add remaining fields
+    // TODO: add remaining fields (extensions 0x6)
     /// authenticator options: Parameters to influence authenticator operation.
     @"7": ?AuthenticatorOptions,
     /// pinAuth: First 16 bytes of HMAC-SHA-256 of clientDataHash using pinToken
