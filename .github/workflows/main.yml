@@ -25,7 +25,9 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v1
         with:
           version: master
-      - run: zig build test
+      - run: |
+          sh pull-deps.sh
+          zig build test
   lint:
     runs-on: ubuntu-latest
     steps:
