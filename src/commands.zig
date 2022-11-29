@@ -2,6 +2,7 @@ const ErrorCodes = @import("error.zig").ErrorCodes;
 
 pub const make_credential = @import("make_credential.zig");
 pub const get_assertion = @import("get_assertion.zig");
+pub const client_pin = @import("client_pin.zig");
 
 /// Commands supported by the CTAP protocol.
 pub const Commands = enum(u8) {
@@ -57,4 +58,5 @@ pub fn getCommand(data: []const u8) ErrorCodes!Commands {
 test "command tests" {
     _ = make_credential;
     _ = get_assertion;
+    _ = client_pin;
 }

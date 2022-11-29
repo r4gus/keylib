@@ -44,6 +44,24 @@ const test_impl = struct {
         S.i += 1;
         return x;
     }
+
+    fn retries(s: i8) u8 {
+        const S = struct {
+            var i: u8 = 8;
+        };
+
+        if (s > 0) {
+            S.i = 8;
+        } else if (s < 0 and S.i > 0) {
+            S.i -= 1;
+        }
+
+        return S.i;
+    }
+
+    pub fn getRetries() u8 {
+        return retries(0);
+    }
 };
 
 test "fetch command from data" {
@@ -126,3 +144,22 @@ test "key pair generation" {
     try std.testing.expectEqual(kc.key_pair.public_key.p, kp.public_key.p);
     try std.testing.expectEqual(kc.key_pair.secret_key.bytes, kp.secret_key.bytes);
 }
+
+test "getting retries from authenticator" {
+    // Retries count is the number of attempts remaining before lockout.
+    // When the device is nearing authenticator lockout, the platform
+    // can optionally warn the user to be careful while entering the PIN.
+    const allocator = std.testing.allocator;
+
+    const req = "\x06\xA2\x01\x01\x02\x01";
+
+    const a = Auth(test_impl);
+    const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+
+    const response = try auth.handle(allocator, req);
+    defer allocator.free(response);
+
+    try std.testing.expectEqualStrings("\x00\xA1\x03\x08", response);
+}
+
+test "getting shared secret from authenticator" {}

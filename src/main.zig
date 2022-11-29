@@ -9,6 +9,7 @@ pub const ms_length = Hmac.mac_length;
 pub const Ecdsa = crypt.ecdsa.EcdsaP256Sha256;
 pub const KeyPair = Ecdsa.KeyPair;
 pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
+pub const ECDH = std.crypto.dh.X25519;
 
 const cbor = @import("zbor");
 const Allocator = std.mem.Allocator;
@@ -43,6 +44,9 @@ const Fmt = attestation_object.Fmt;
 const AttStmt = attestation_object.AttStmt;
 pub const User = @import("user.zig");
 pub const RelyingParty = @import("rp.zig");
+const client_pin = @import("client_pin.zig");
+const ClientPinParam = client_pin.ClientPinParam;
+const ClientPinResponse = client_pin.ClientPinResponse;
 
 /// General properties of a given authenticator.
 pub const Info = struct {
@@ -77,6 +81,16 @@ pub const AttestationType = struct {
     att_type: AttType = AttType.self,
 };
 
+const PinConf = struct {
+    /// A ECDH X25519 key denoted by (a, aG) where "a" denotes
+    /// the private key and "aG" denotes the public key. A new
+    /// key is generated on each powerup.
+    authenticator_key_agreement_key: ECDH.KeyPair,
+    /// A random integer of length which is multiple of 16 bytes
+    /// (AES block length).
+    pin_token: [32]u8,
+};
+
 pub fn Auth(comptime impl: type) type {
     return struct {
         const Self = @This();
@@ -85,9 +99,16 @@ pub fn Auth(comptime impl: type) type {
         info: Info,
         /// Attestation type to be used for attestation.
         attestation_type: AttestationType,
+        /// PIN configuration generated during initialization.
+        pin_conf: PinConf,
 
         /// Default initialization without extensions.
         pub fn initDefault(versions: []const Versions, aaguid: [16]u8) Self {
+            var seed: [ECDH.seed_length]u8 = undefined;
+            var token: [32]u8 = undefined;
+            crypto.getBlock(seed[0..]);
+            crypto.getBlock(token[0..]);
+
             return @This(){
                 .info = Info{
                     .@"1_t" = versions,
@@ -98,6 +119,10 @@ pub fn Auth(comptime impl: type) type {
                     .@"6" = null,
                 },
                 .attestation_type = AttestationType{},
+                .pin_conf = .{
+                    .authenticator_key_agreement_key = ECDH.KeyPair.create(seed) catch unreachable,
+                    .pin_token = token,
+                },
             };
         }
 
@@ -115,6 +140,11 @@ pub fn Auth(comptime impl: type) type {
         /// or a global counter for all.
         pub fn getSignCount(cred_id: []const u8) u32 {
             return impl.getSignCount(cred_id);
+        }
+
+        /// Retries count is the number of attempts remaining before lockout.
+        pub fn getRetries() u8 {
+            return impl.getRetries();
         }
 
         pub const crypto = struct {
@@ -585,7 +615,34 @@ pub fn Auth(comptime impl: type) type {
                         return res.toOwnedSlice();
                     };
                 },
-                .authenticator_client_pin => {},
+                .authenticator_client_pin => {
+                    const cpp = cbor.parse(ClientPinParam, cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
+                        const x = switch (err) {
+                            error.MissingField => StatusCodes.ctap2_err_missing_parameter,
+                            else => StatusCodes.ctap2_err_invalid_cbor,
+                        };
+                        res.items[0] = @enumToInt(x);
+                        return res.toOwnedSlice();
+                    };
+                    // TODO: defer mcp.deinit(allocator);
+
+                    var cpr: ?ClientPinResponse = null;
+                    switch (cpp.@"2") {
+                        .getRetries => {
+                            cpr = .{
+                                .@"3" = getRetries(),
+                            };
+                        },
+                        else => {},
+                    }
+
+                    if (cpr) |resp| {
+                        cbor.stringify(resp, .{}, response) catch |err| {
+                            res.items[0] = @enumToInt(StatusCodes.fromError(err));
+                            return res.toOwnedSlice();
+                        };
+                    }
+                },
                 .authenticator_reset => {},
                 .authenticator_get_next_assertion => {},
                 .authenticator_vendor_first => {},
