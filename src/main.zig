@@ -9,7 +9,7 @@ pub const ms_length = Hmac.mac_length;
 pub const Ecdsa = crypt.ecdsa.EcdsaP256Sha256;
 pub const KeyPair = Ecdsa.KeyPair;
 pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
-pub const ECDH = std.crypto.dh.X25519;
+pub const ECDH = crypt.ecdh;
 
 const cbor = @import("zbor");
 const Allocator = std.mem.Allocator;
@@ -99,16 +99,9 @@ pub fn Auth(comptime impl: type) type {
         info: Info,
         /// Attestation type to be used for attestation.
         attestation_type: AttestationType,
-        /// PIN configuration generated during initialization.
-        pin_conf: PinConf,
 
         /// Default initialization without extensions.
         pub fn initDefault(versions: []const Versions, aaguid: [16]u8) Self {
-            var seed: [ECDH.seed_length]u8 = undefined;
-            var token: [32]u8 = undefined;
-            crypto.getBlock(seed[0..]);
-            crypto.getBlock(token[0..]);
-
             return @This(){
                 .info = Info{
                     .@"1_t" = versions,
@@ -119,10 +112,6 @@ pub fn Auth(comptime impl: type) type {
                     .@"6" = null,
                 },
                 .attestation_type = AttestationType{},
-                .pin_conf = .{
-                    .authenticator_key_agreement_key = ECDH.KeyPair.create(seed) catch unreachable,
-                    .pin_token = token,
-                },
             };
         }
 
@@ -616,6 +605,26 @@ pub fn Auth(comptime impl: type) type {
                     };
                 },
                 .authenticator_client_pin => {
+                    const PC = struct {
+                        var conf: ?PinConf = null;
+                    };
+
+                    // Crete configuration only if a PIN command is actually issued.
+                    if (PC.conf == null) {
+                        var seed: [ECDH.seed_length]u8 = undefined;
+                        var token: [32]u8 = undefined;
+                        crypto.getBlock(seed[0..]);
+                        crypto.getBlock(token[0..]);
+
+                        PC.conf = .{
+                            .authenticator_key_agreement_key = ECDH.KeyPair.create(seed) catch {
+                                res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                                return res.toOwnedSlice();
+                            },
+                            .pin_token = token,
+                        };
+                    }
+
                     const cpp = cbor.parse(ClientPinParam, cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => StatusCodes.ctap2_err_missing_parameter,

@@ -1,9 +1,9 @@
 const std = @import("std");
 const cbor = @import("zbor");
 
-pub const ecdsa = @import("ecdsa.zig");
+pub const ecdsa = @import("ecdsa.zig"); // copy from std lib without automatic call to rng.
 const EcdsaP256Sha256 = ecdsa.EcdsaP256Sha256;
-pub const ecdh = @import("ecdh.zig");
+pub const ecdh = @import("x25519.zig").X25519; // copy from std lib without automatic call to rng.
 
 // https://www.iana.org/assignments/cose/cose.xhtml
 pub const CoseId = enum(i16) {
@@ -47,12 +47,12 @@ test "serialize EcdsaP256Key" {
 pub const PlatformKeyAgreementKey = struct {
     // https://www.rfc-editor.org/rfc/rfc9053.html#section-6.3.1-5
     /// kty: Key type
-    @"1": u8 = 2, // EC
+    @"1": u8 = 1, // OKP - Octet Key Pair
     /// alg: Algorithm,
     @"3": i16 = -25, // ECDH-ES + HKDF-256
-    @"-1": u8 = 1, // P-256
+    // https://www.rfc-editor.org/rfc/rfc9053.html#section-7.2
+    @"-1": u8 = 4, // X25519
     @"-2_b": [32]u8, // x
-    @"-3_b": [32]u8, // y
 };
 
 test "platform key agreement key: 1" {}
