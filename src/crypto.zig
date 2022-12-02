@@ -3,7 +3,7 @@ const cbor = @import("zbor");
 
 pub const ecdsa = @import("ecdsa.zig"); // copy from std lib without automatic call to rng.
 const EcdsaP256Sha256 = ecdsa.EcdsaP256Sha256;
-pub const ecdh = @import("x25519.zig").X25519; // copy from std lib without automatic call to rng.
+pub const ecdh = @import("ecdh.zig").EcdhP256;
 
 // https://www.iana.org/assignments/cose/cose.xhtml
 pub const CoseId = enum(i16) {
@@ -56,3 +56,7 @@ pub const PlatformKeyAgreementKey = struct {
 };
 
 test "platform key agreement key: 1" {}
+
+test "crypto test" {
+    _ = ecdh;
+}

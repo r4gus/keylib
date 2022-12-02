@@ -611,7 +611,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // Crete configuration only if a PIN command is actually issued.
                     if (PC.conf == null) {
-                        var seed: [ECDH.seed_length]u8 = undefined;
+                        var seed: [ECDH.secret_length]u8 = undefined;
                         var token: [32]u8 = undefined;
                         crypto.getBlock(seed[0..]);
                         crypto.getBlock(token[0..]);
