@@ -3,12 +3,13 @@ const cbor = @import("zbor");
 
 pub const ecdsa = @import("ecdsa.zig"); // copy from std lib without automatic call to rng.
 const EcdsaP256Sha256 = ecdsa.EcdsaP256Sha256;
-pub const ecdh = @import("ecdh.zig").EcdhP256;
+pub const ecdh = @import("ecdh.zig");
 
 // https://www.iana.org/assignments/cose/cose.xhtml
 pub const CoseId = enum(i16) {
     /// ECDSA P-256 SHA-256
     ES256 = -7,
+    EcdhEsHkdf256 = -25,
 };
 
 pub const EcdsaPubKey = struct {
@@ -45,14 +46,16 @@ test "serialize EcdsaP256Key" {
 }
 
 pub const PlatformKeyAgreementKey = struct {
+    // https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html#gettingSharedSecret
     // https://www.rfc-editor.org/rfc/rfc9053.html#section-6.3.1-5
     /// kty: Key type
-    @"1": u8 = 1, // OKP - Octet Key Pair
+    @"1": u8 = 2, // ECC
     /// alg: Algorithm,
-    @"3": i16 = -25, // ECDH-ES + HKDF-256
+    @"3": CoseId = CoseId.EcdhEsHkdf256, // ECDH-ES + HKDF-256
     // https://www.rfc-editor.org/rfc/rfc9053.html#section-7.2
-    @"-1": u8 = 4, // X25519
+    @"-1": u8 = 1, // // P-256
     @"-2_b": [32]u8, // x
+    @"-3_b": [32]u8, // y
 };
 
 test "platform key agreement key: 1" {}

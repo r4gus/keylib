@@ -1,3 +1,7 @@
+const std = @import("std");
+const crypto = @import("crypto.zig");
+const EcdhP256 = crypto.ecdh.EcdhP256;
+
 /// The minimum length of a PIN in bytes.
 pub const minimum_pin_length: usize = 4;
 /// The maximum length of a PIN in bytes.
@@ -31,7 +35,7 @@ pub const ClientPinParam = struct {
     /// COSE_Key-encoded public key MUST contain the optional "alg"
     /// parameter and MUST NOT contain any other optional parameters.
     /// The "alg" parameter MUST contain a COSEAlgorithmIdentifier value.
-    @"3": ?[32]u8,
+    @"3": ?crypto.PlatformKeyAgreementKey,
     /// pinAuth: First 16 bytes of HMAC-SHA-256 of encrypted contents
     /// using sharedSecret. See Setting a new PIN, Changing existing
     /// PIN and Getting pinToken from the authenticator for more details.
@@ -42,9 +46,18 @@ pub const ClientPinParam = struct {
     /// pinHashEnc: Encrypted first 16 bytes of SHA-256 of PIN using
     /// sharedSecret.
     @"6": ?[16]u8,
+
+    pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+        if (self.@"5") |pin| {
+            allocator.free(pin);
+        }
+    }
 };
 
 pub const ClientPinResponse = struct {
+    /// Authenticator key agreement public key in COSE_Key format. This will
+    /// be used to establish a sharedSecret between platform and the authenticator.
+    @"1": ?crypto.PlatformKeyAgreementKey = null,
     /// pinToken: Encrypted pinToken using sharedSecret to be used in
     /// subsequent authenticatorMakeCredential and
     /// authenticatorGetAssertion operations.
@@ -55,3 +68,27 @@ pub const ClientPinResponse = struct {
     /// from the authenticator flows.
     @"3": ?u8 = null,
 };
+
+pub const PinConf = struct {
+    /// A ECDH key denoted by (a, aG) where "a" denotes
+    /// the private key and "aG" denotes the public key. A new
+    /// key is generated on each powerup.
+    authenticator_key_agreement_key: EcdhP256.KeyPair,
+    /// A random integer of length which is multiple of 16 bytes
+    /// (AES block length).
+    pin_token: [32]u8,
+};
+
+/// Create a new pin configuration which consists of a random token and a
+/// ECDH-ES P256 public key.
+pub fn makeConfig(rand: *const fn ([]u8) void) !PinConf {
+    var seed: [EcdhP256.secret_length]u8 = undefined;
+    var token: [32]u8 = undefined;
+    rand(seed[0..]);
+    rand(token[0..]);
+
+    return .{
+        .authenticator_key_agreement_key = try EcdhP256.KeyPair.create(seed),
+        .pin_token = token,
+    };
+}

@@ -39,7 +39,7 @@ pub const GetAssertionResponse = struct {
     /// credential: PublicKeyCredentialDescriptor structure containing the
     /// credential identifier whose private key was used to generate the
     /// assertion. May be omitted if the allowList has exactly one Credential.
-    @"1": ?PublicKeyCredentialDescriptor = null,
+    @"1": PublicKeyCredentialDescriptor,
     /// authData: The signed-over contextual bindings made by the authenticator,
     /// as specified in [WebAuthN].
     @"2_b": []const u8,

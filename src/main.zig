@@ -9,7 +9,9 @@ pub const ms_length = Hmac.mac_length;
 pub const Ecdsa = crypt.ecdsa.EcdsaP256Sha256;
 pub const KeyPair = Ecdsa.KeyPair;
 pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
-pub const ECDH = crypt.ecdh;
+pub const EcdhP256 = crypt.ecdh.EcdhP256;
+pub const Sha256 = std.crypto.hash.sha2.Sha256;
+pub const Aes256 = std.crypto.core.aes.Aes256;
 
 const cbor = @import("zbor");
 const Allocator = std.mem.Allocator;
@@ -47,6 +49,8 @@ pub const RelyingParty = @import("rp.zig");
 const client_pin = @import("client_pin.zig");
 const ClientPinParam = client_pin.ClientPinParam;
 const ClientPinResponse = client_pin.ClientPinResponse;
+const PinConf = client_pin.PinConf;
+const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
 
 /// General properties of a given authenticator.
 pub const Info = struct {
@@ -79,16 +83,6 @@ pub const AttType = enum {
 
 pub const AttestationType = struct {
     att_type: AttType = AttType.self,
-};
-
-const PinConf = struct {
-    /// A ECDH X25519 key denoted by (a, aG) where "a" denotes
-    /// the private key and "aG" denotes the public key. A new
-    /// key is generated on each powerup.
-    authenticator_key_agreement_key: ECDH.KeyPair,
-    /// A random integer of length which is multiple of 16 bytes
-    /// (AES block length).
-    pin_token: [32]u8,
 };
 
 pub fn Auth(comptime impl: type) type {
@@ -230,6 +224,22 @@ pub fn Auth(comptime impl: type) type {
                 var seed: [key_len]u8 = undefined;
                 Hkdf.expand(seed[0..], ctx[0..], getMs());
                 return try KeyPair.create(seed);
+            }
+        };
+
+        pub const pin = struct {
+            /// Get the currently set PIN hash.
+            ///
+            /// Returns null if no PIN has been set.
+            pub fn get() ?[]const u8 {
+                return impl.getPin();
+            }
+
+            /// Set the given PIN hash.
+            ///
+            /// The pin is never stored as plain-text.
+            pub fn set(p: [16]u8) void {
+                impl.setPin(p);
             }
         };
 
@@ -449,7 +459,7 @@ pub fn Auth(comptime impl: type) type {
                     // authenticator and bound to the specified rpId.
                     if (gap.@"3") |creds| {
                         for (creds) |cred| {
-                            if (cred.id.len < crypto.ctx_len + Hmac.mac_length) {
+                            if (cred.id_b.len < crypto.ctx_len + Hmac.mac_length) {
                                 continue;
                             }
 
@@ -457,14 +467,14 @@ pub fn Auth(comptime impl: type) type {
                             var mac: [Hmac.mac_length]u8 = undefined;
                             const key = crypto.getMacKey();
                             var hctx = Hmac.init(&key);
-                            hctx.update(cred.id[0..32]); // ctx
+                            hctx.update(cred.id_b[0..32]); // ctx
                             hctx.update(gap.@"1"); // rpId
                             hctx.final(mac[0..]);
 
                             // Compare the received hash to the one just
                             // calculated.
-                            if (std.mem.eql(u8, cred.id[32..], mac[0..])) {
-                                ctx_and_mac = cred.id[0..];
+                            if (std.mem.eql(u8, cred.id_b[32..], mac[0..])) {
+                                ctx_and_mac = cred.id_b[0..];
                                 break;
                             }
                         }
@@ -562,7 +572,7 @@ pub fn Auth(comptime impl: type) type {
                             .rfu1 = 0,
                             .uv = 0,
                             .rfu2 = 0,
-                            .at = 1,
+                            .at = 0,
                             .ed = 0,
                         },
                         .sign_count = getSignCount(ctx_and_mac.?),
@@ -589,6 +599,10 @@ pub fn Auth(comptime impl: type) type {
 
                     var x: [Ecdsa.Signature.der_encoded_max_length]u8 = undefined;
                     const gar = GetAssertionResponse{
+                        .@"1" = PublicKeyCredentialDescriptor{
+                            .@"type" = "public-key",
+                            .id_b = ctx_and_mac.?,
+                        },
                         .@"2_b" = authData.items,
                         .@"3_b" = sig.toDer(&x),
                     };
@@ -611,17 +625,9 @@ pub fn Auth(comptime impl: type) type {
 
                     // Crete configuration only if a PIN command is actually issued.
                     if (PC.conf == null) {
-                        var seed: [ECDH.secret_length]u8 = undefined;
-                        var token: [32]u8 = undefined;
-                        crypto.getBlock(seed[0..]);
-                        crypto.getBlock(token[0..]);
-
-                        PC.conf = .{
-                            .authenticator_key_agreement_key = ECDH.KeyPair.create(seed) catch {
-                                res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
-                                return res.toOwnedSlice();
-                            },
-                            .pin_token = token,
+                        PC.conf = client_pin.makeConfig(crypto.getBlock) catch {
+                            res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                            return res.toOwnedSlice();
                         };
                     }
 
@@ -633,8 +639,9 @@ pub fn Auth(comptime impl: type) type {
                         res.items[0] = @enumToInt(x);
                         return res.toOwnedSlice();
                     };
-                    // TODO: defer mcp.deinit(allocator);
+                    defer cpp.deinit(allocator);
 
+                    // Handle one of the subcommands.
                     var cpr: ?ClientPinResponse = null;
                     switch (cpp.@"2") {
                         .getRetries => {
@@ -642,7 +649,73 @@ pub fn Auth(comptime impl: type) type {
                                 .@"3" = getRetries(),
                             };
                         },
-                        else => {},
+                        .getKeyAgreement => {
+                            // Authenticator responds back with public key of
+                            // authenticatorKeyAgreementKey, "aG".
+                            const sec1 = PC.conf.?.authenticator_key_agreement_key.toUncompressedSec1();
+                            cpr = .{
+                                .@"1" = .{
+                                    .@"-2_b" = sec1[1..33].*,
+                                    .@"-3_b" = sec1[33..65].*,
+                                },
+                            };
+                        },
+                        .setPIN => {
+                            // keyAgreement, pinAuth and newPinEnc are mandatory for this command.
+                            if (cpp.@"3" == null or cpp.@"4" == null or cpp.@"5" == null) {
+                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_missing_parameter);
+                                return res.toOwnedSlice();
+                            }
+
+                            if (pin.get() != null) {
+                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_auth_invalid);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Generate shared secret
+                            const deG = EcdhP256.scalarmultXY(PC.conf.?.authenticator_key_agreement_key.secret_key, cpp.@"3".?.@"-2_b", cpp.@"3".?.@"-3_b") catch unreachable;
+                            var shared_secret: [Sha256.digest_length]u8 = undefined;
+                            // shared = SHA-256((deG).x)
+                            Sha256.hash(deG.toUncompressedSec1()[1..33], &shared_secret, .{});
+
+                            // Verify pinAuth
+                            var auth_pin_auth: [Hmac.mac_length]u8 = undefined;
+                            Hmac.create(&auth_pin_auth, cpp.@"5".?, shared_secret[0..]);
+                            // Only the first 16 bytes are compared
+                            if (!std.mem.eql(u8, auth_pin_auth[0..16], cpp.@"4".?[0..])) {
+                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_auth_invalid);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Decrypt the encrypted new pin using AES-256-CBC with IV=0
+                            // i.e. the first block doesnt have to be XORed. The encrypted
+                            // pin should be at least 64 bytes (CTAP2 docs)!
+                            var new_pin: [64]u8 = undefined;
+                            var i: usize = 0;
+                            var ctx = Aes256.initDec(shared_secret);
+                            ctx.decrypt(new_pin[0..16], cpp.@"5".?[0..16]);
+                            ctx.decrypt(new_pin[16..32], cpp.@"5".?[16..32]);
+                            while (i < 16) : (i += 1) new_pin[i + 16] ^= new_pin[i];
+                            ctx.decrypt(new_pin[32..48], cpp.@"5".?[32..48]);
+                            while (i < 32) : (i += 1) new_pin[i + 16] ^= new_pin[i];
+                            ctx.decrypt(new_pin[48..64], cpp.@"5".?[48..64]);
+                            while (i < 48) : (i += 1) new_pin[i + 16] ^= new_pin[i];
+                            // Determine the length of the pin.
+                            i = 0;
+                            while (i < 64) : (i += 1) if (new_pin[i] == 0) break;
+
+                            if (i < client_pin.minimum_pin_length) {
+                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_policy_violation);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Set the new PIN hash
+                            var new_pin_hash: [Sha256.digest_length]u8 = undefined;
+                            Sha256.hash(new_pin[0..i], &new_pin_hash, .{});
+                            pin.set(new_pin_hash[0..16].*);
+                        },
+                        .changePIN => {},
+                        .getPINToken => {},
                     }
 
                     if (cpr) |resp| {

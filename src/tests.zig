@@ -62,6 +62,22 @@ const test_impl = struct {
     pub fn getRetries() u8 {
         return retries(0);
     }
+
+    /// 16 byte pin hash
+    var pin: [16]u8 = undefined;
+    var pin_set: bool = false;
+
+    pub fn getPin() ?[]const u8 {
+        if (!pin_set) {
+            return null;
+        } else {
+            return pin[0..];
+        }
+    }
+
+    pub fn setPin(p: [16]u8) void {
+        pin = p;
+    }
 };
 
 test "fetch command from data" {
