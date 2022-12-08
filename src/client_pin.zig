@@ -1,4 +1,5 @@
 const std = @import("std");
+const cose = @import("zbor").cose;
 const crypto = @import("crypto.zig");
 const EcdhP256 = crypto.ecdh.EcdhP256;
 
@@ -35,7 +36,7 @@ pub const ClientPinParam = struct {
     /// COSE_Key-encoded public key MUST contain the optional "alg"
     /// parameter and MUST NOT contain any other optional parameters.
     /// The "alg" parameter MUST contain a COSEAlgorithmIdentifier value.
-    @"3": ?crypto.PlatformKeyAgreementKey,
+    @"3": ?cose.Key,
     /// pinAuth: First 16 bytes of HMAC-SHA-256 of encrypted contents
     /// using sharedSecret. See Setting a new PIN, Changing existing
     /// PIN and Getting pinToken from the authenticator for more details.
@@ -57,7 +58,7 @@ pub const ClientPinParam = struct {
 pub const ClientPinResponse = struct {
     /// Authenticator key agreement public key in COSE_Key format. This will
     /// be used to establish a sharedSecret between platform and the authenticator.
-    @"1": ?crypto.PlatformKeyAgreementKey = null,
+    @"1": ?cose.Key = null,
     /// pinToken: Encrypted pinToken using sharedSecret to be used in
     /// subsequent authenticatorMakeCredential and
     /// authenticatorGetAssertion operations.

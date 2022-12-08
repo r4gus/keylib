@@ -2,7 +2,6 @@
 const std = @import("std");
 
 pub const crypt = @import("crypto.zig");
-const EcdsaPubKey = crypt.EcdsaPubKey;
 pub const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 /// Master secret length
 pub const ms_length = Hmac.mac_length;
@@ -14,6 +13,7 @@ pub const Sha256 = std.crypto.hash.sha2.Sha256;
 pub const Aes256 = std.crypto.core.aes.Aes256;
 
 const cbor = @import("zbor");
+const cose = cbor.cose;
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const DataItem = cbor.DataItem;
@@ -387,7 +387,7 @@ pub fn Auth(comptime impl: type) type {
                         // context is used as id to later retrieve actual key using
                         // the master secret.
                         .credential_id = &cred_id,
-                        .credential_public_key = EcdsaPubKey.new(context.key_pair.public_key),
+                        .credential_public_key = cose.Key.fromP256Pub(.Es256, context.key_pair.public_key),
                     };
 
                     var ad = AuthData{
@@ -425,7 +425,7 @@ pub fn Auth(comptime impl: type) type {
 
                         var x: [Ecdsa.Signature.der_encoded_max_length]u8 = undefined;
                         stmt = AttStmt{ .@"packed" = .{
-                            .alg_b = crypt.CoseId.ES256,
+                            .alg_b = cose.Algorithm.Es256,
                             .sig_b = sig.toDer(&x),
                         } };
                     } else {
@@ -652,12 +652,11 @@ pub fn Auth(comptime impl: type) type {
                         .getKeyAgreement => {
                             // Authenticator responds back with public key of
                             // authenticatorKeyAgreementKey, "aG".
-                            const sec1 = PC.conf.?.authenticator_key_agreement_key.toUncompressedSec1();
                             cpr = .{
-                                .@"1" = .{
-                                    .@"-2_b" = sec1[1..33].*,
-                                    .@"-3_b" = sec1[33..65].*,
-                                },
+                                .@"1" = cose.Key.fromP256Pub(
+                                    .EcdhEsHkdf256,
+                                    PC.conf.?.authenticator_key_agreement_key,
+                                ),
                             };
                         },
                         .setPIN => {
@@ -673,7 +672,7 @@ pub fn Auth(comptime impl: type) type {
                             }
 
                             // Generate shared secret
-                            const deG = EcdhP256.scalarmultXY(PC.conf.?.authenticator_key_agreement_key.secret_key, cpp.@"3".?.@"-2_b", cpp.@"3".?.@"-3_b") catch unreachable;
+                            const deG = EcdhP256.scalarmultXY(PC.conf.?.authenticator_key_agreement_key.secret_key, cpp.@"3".?.P256.@"-2_b", cpp.@"3".?.P256.@"-3_b") catch unreachable;
                             var shared_secret: [Sha256.digest_length]u8 = undefined;
                             // shared = SHA-256((deG).x)
                             Sha256.hash(deG.toUncompressedSec1()[1..33], &shared_secret, .{});
