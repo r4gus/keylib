@@ -134,17 +134,6 @@ pub fn Auth(comptime impl: type) type {
             const key_len: usize = 32;
             const ctx_len: usize = 32;
 
-            pub const KeyContext = struct {
-                /// Context which serves as KEYID and is stored
-                /// by the RP.
-                ctx: [ctx_len]u8,
-                /// Key-Pair derived from the context and the
-                /// master secret. The private key must be kept
-                /// secret. The public key is stored by the
-                /// RP.
-                key_pair: KeyPair,
-            };
-
             /// Get a 32 bit random number.
             pub fn rand() u32 {
                 return impl.rand();
@@ -177,53 +166,6 @@ pub fn Auth(comptime impl: type) type {
                 const ikm = impl.getMs();
                 const salt = "CANDYSTICK";
                 return Hkdf.extract(salt, &ikm);
-            }
-
-            /// Create and store a new master secret.
-            ///
-            /// This function has to be called once on first boot
-            /// to create the secret. The master secret must not
-            /// change between power cycles. Changing the secret
-            /// means invalidating all generated key pairs, which
-            /// is equivalent to a reset.
-            pub fn createMs() void {
-                impl.createMs();
-            }
-
-            /// Derive a (deterministic) sub-key for message authentication codes.
-            pub fn getMacKey() [key_len]u8 {
-                var mac_key: [key_len]u8 = undefined;
-                Hkdf.expand(mac_key[0..], "MACKEY", getMs());
-                return mac_key;
-            }
-
-            /// Create a new key-pair.
-            pub fn createKeyPair() !KeyContext {
-                // Get new random context for new key pair
-                var ctx: [ctx_len]u8 = undefined;
-                getBlock(ctx[0..]);
-
-                // Derive subkey (seed) from master secret and ctx
-                var seed: [key_len]u8 = undefined;
-                Hkdf.expand(seed[0..], ctx[0..], getMs());
-
-                // Create a new (deterministic) key pair
-                const kc = KeyContext{
-                    .ctx = ctx,
-                    .key_pair = try KeyPair.create(seed),
-                };
-
-                return kc;
-            }
-
-            /// Derive a (deterministic) key-pair from a given context `ctx`.
-            ///
-            /// Note: If you change the master secret used during `createKeyPair`
-            /// you won't be able to derive the correct key-pair from the given context.
-            pub fn deriveKeyPair(ctx: [ctx_len]u8) !KeyPair {
-                var seed: [key_len]u8 = undefined;
-                Hkdf.expand(seed[0..], ctx[0..], getMs());
-                return try KeyPair.create(seed);
             }
         };
 
@@ -260,7 +202,6 @@ pub fn Auth(comptime impl: type) type {
             switch (cmdnr) {
                 .authenticator_make_credential => {
                     // TODO: Check exclude list... just ignore it for now
-                    // {1: h'C03991AC3DFF02BA1E520FC59B2D34774A641A4C425ABD313D931061FFBD1A5C', 2: {"id": "localhost", "name": "sweet home localhost"}, 3: {"id": h'781C7860AD88D26332622AF1745DEDB2E7A42B44892939C5566401270DBBC449', "name": "john smith", "displayName": "jsmith"}, 4: [{"alg": -7, "type": "public-key"}]}
                     const mcp = cbor.parse(MakeCredentialParam, cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => StatusCodes.ctap2_err_missing_parameter,
@@ -271,20 +212,12 @@ pub fn Auth(comptime impl: type) type {
                     };
                     defer mcp.deinit(allocator);
 
-                    // 1. If the excludeList parameter is present and contains a
-                    // credential ID that is present on this authenticator and
-                    // bound to the specified rpId, wait for user presence, then
-                    // terminate this procedure and return error code
-                    // CTAP2_ERR_CREDENTIAL_EXCLUDED.
-                    // TODO: check
+                    // TODO: Check exclude list (but we dont store any creds!)
 
-                    // 2. If the pubKeyCredParams parameter does not contain a valid
-                    // COSEAlgorithmIdentifier value that is supported by the
-                    // authenticator, terminate this procedure and return error code
-                    // CTAP2_ERR_UNSUPPORTED_ALGORITHM.
+                    // Check for a valid COSEAlgorithmIdentifier value
                     var valid_param: bool = false;
                     for (mcp.@"4") |param| {
-                        if (param.alg == -7) { // ES256
+                        if (crypt.isValidAlgorithm(param.alg)) {
                             valid_param = true;
                             break;
                         }
@@ -294,24 +227,12 @@ pub fn Auth(comptime impl: type) type {
                         return res.toOwnedSlice();
                     }
 
-                    // 3. If the options parameter is present, process all the options.
-                    // If the option is known but not supported, terminate this procedure
-                    // and return CTAP2_ERR_UNSUPPORTED_OPTION. If the option is known
-                    // but not valid for this command, terminate this procedure and
-                    // return CTAP2_ERR_INVALID_OPTION. Ignore any options that are not
-                    // understood. Note that because this specification defines normative
-                    // behaviors for them, all authenticators MUST understand the "rk",
-                    // "up", and "uv" options.
+                    // Process all given options
                     if (mcp.@"7") |options| {
-                        if (options.rk) {
+                        if (options.rk or options.uv) {
                             // we let the RP store the context for each credential.
                             res.items[0] = @enumToInt(StatusCodes.ctap2_err_unsupported_option);
                             return res.toOwnedSlice();
-                        }
-                        if (options.uv) {
-                            // TODO: user must provide two functions:
-                            //  1. verificationAvailable() -> bool
-                            //  2. verify() -> bool
                         }
                     }
 
@@ -342,22 +263,15 @@ pub fn Auth(comptime impl: type) type {
                     // supported, return CTAP2_ERR_PIN_AUTH_INVALID.
                     // TODO: implement
 
-                    // 8. If the authenticator has a display, show the items contained
-                    // within the user and rp parameter structures to the user.
-                    // Alternatively, request user interaction in an
-                    // authenticator-specific way (e.g., flash the LED light).
-                    // Request permission to create a credential. If the user declines
-                    // permission, return the CTAP2_ERR_OPERATION_DENIED error.
+                    // Request permission from the user
                     if (!requestPermission(&mcp.@"3", &mcp.@"2")) {
                         res.items[0] = @enumToInt(StatusCodes.ctap2_err_operation_denied);
                         return res.toOwnedSlice();
                     }
 
-                    // 9. Generate a new credential key pair for the algorithm specified.
-                    const context = crypto.createKeyPair() catch {
-                        res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
-                        return res.toOwnedSlice();
-                    };
+                    // Generate a new credential key pair for the algorithm specified.
+                    const context = crypt.newContext(crypto.getBlock);
+                    const key_pair = crypt.deriveKeyPair(crypto.getMs(), context) catch unreachable;
 
                     // 10. If "rk" in options parameter is set to true.
                     //     * If a credential for the same RP ID and account ID already
@@ -367,27 +281,18 @@ pub fn Auth(comptime impl: type) type {
                     //       persist the new credential, return CTAP2_ERR_KEY_STORE_FULL.
                     // TODO: Resident key support currently not planned
 
-                    // credId consists of the context used to derive the
-                    // private key and a MAC of the ctx and the rpId. This
-                    // is how we can make sure that the ctx or rpId havent
-                    // been tempered with.
-                    var cred_id: [crypto.ctx_len + Hmac.mac_length]u8 = undefined;
-                    std.mem.copy(u8, cred_id[0..32], &context.ctx);
-                    const key = crypto.getMacKey();
-                    var ctx = Hmac.init(&key);
-                    ctx.update(&context.ctx);
-                    ctx.update(mcp.@"2".id);
-                    ctx.final(cred_id[32..]);
+                    // Create a new credential id
+                    const cred_id = crypt.makeCredId(crypto.getMs(), &context, mcp.@"2".id);
 
                     // 11. Generate an attestation statement for the newly-created
                     // key using clientDataHash.
                     const acd = AttestedCredentialData{
                         .aaguid = self.info.@"3_b",
-                        .credential_length = crypto.ctx_len + Hmac.mac_length,
+                        .credential_length = crypt.cred_id_len,
                         // context is used as id to later retrieve actual key using
                         // the master secret.
                         .credential_id = &cred_id,
-                        .credential_public_key = cose.Key.fromP256Pub(.Es256, context.key_pair.public_key),
+                        .credential_public_key = crypt.getCoseKey(key_pair),
                     };
 
                     var ad = AuthData{
@@ -412,18 +317,12 @@ pub fn Auth(comptime impl: type) type {
                     // Create attestation statement
                     var stmt: ?AttStmt = null;
                     if (self.attestation_type.att_type == .self) {
-                        var st = context.key_pair.signer(null) catch {
-                            res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
-                            return res.toOwnedSlice();
-                        };
-                        st.update(authData.items);
-                        st.update(mcp.@"1"); // clientDataHash
-                        const sig = st.finalize() catch {
+                        const sig = crypt.sign(key_pair, authData.items, mcp.@"1") catch {
                             res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
                             return res.toOwnedSlice();
                         };
 
-                        var x: [Ecdsa.Signature.der_encoded_max_length]u8 = undefined;
+                        var x: [crypt.der_len]u8 = undefined;
                         stmt = AttStmt{ .@"packed" = .{
                             .alg_b = cose.Algorithm.Es256,
                             .sig_b = sig.toDer(&x),
@@ -454,26 +353,14 @@ pub fn Auth(comptime impl: type) type {
                     };
                     defer gap.deinit(allocator);
 
-                    var ctx_and_mac: ?[]const u8 = null;
                     // 1. locate all denoted credentials present on this
                     // authenticator and bound to the specified rpId.
+                    var ctx_and_mac: ?[]const u8 = null;
                     if (gap.@"3") |creds| {
                         for (creds) |cred| {
-                            if (cred.id_b.len < crypto.ctx_len + Hmac.mac_length) {
-                                continue;
-                            }
+                            if (cred.id_b.len < crypt.cred_id_len) continue;
 
-                            // Recalculate the hash
-                            var mac: [Hmac.mac_length]u8 = undefined;
-                            const key = crypto.getMacKey();
-                            var hctx = Hmac.init(&key);
-                            hctx.update(cred.id_b[0..32]); // ctx
-                            hctx.update(gap.@"1"); // rpId
-                            hctx.final(mac[0..]);
-
-                            // Compare the received hash to the one just
-                            // calculated.
-                            if (std.mem.eql(u8, cred.id_b[32..], mac[0..])) {
+                            if (crypt.verifyCredId(crypto.getMs(), cred.id_b, gap.@"1")) {
                                 ctx_and_mac = cred.id_b[0..];
                                 break;
                             }
@@ -585,19 +472,14 @@ pub fn Auth(comptime impl: type) type {
 
                     // 12. Sign the clientDataHash along with authData with the
                     // selected credential.
-                    const kp = crypto.deriveKeyPair(ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
-                    var st = kp.signer(null) catch {
-                        res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
-                        return res.toOwnedSlice();
-                    };
-                    st.update(authData.items); // authData
-                    st.update(gap.@"2_b"); // clientDataHash
-                    const sig = st.finalize() catch {
+                    const kp = crypt.deriveKeyPair(crypto.getMs(), ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
+
+                    const sig = crypt.sign(kp, authData.items, gap.@"2_b") catch {
                         res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
                         return res.toOwnedSlice();
                     };
 
-                    var x: [Ecdsa.Signature.der_encoded_max_length]u8 = undefined;
+                    var x: [crypt.der_len]u8 = undefined;
                     const gar = GetAssertionResponse{
                         .@"1" = PublicKeyCredentialDescriptor{
                             .@"type" = "public-key",

@@ -8,7 +8,7 @@ const RelyingParty = @import("rp.zig");
 const Allocator = std.mem.Allocator;
 
 pub const CredParam = struct {
-    alg: i32,
+    alg: cbor.cose.Algorithm,
     @"type": []const u8,
 
     pub fn deinit(self: *const @This(), allocator: Allocator) void {
@@ -77,7 +77,7 @@ test "cred params" {
     const cred_param = try cbor.parse(CredParam, cbor.DataItem.new(payload), .{ .allocator = allocator });
     defer cred_param.deinit(allocator);
 
-    try std.testing.expectEqual(cred_param.alg, -7);
+    try std.testing.expectEqual(cred_param.alg, cbor.cose.Algorithm.Es256);
     try std.testing.expectEqualSlices(u8, "public-key", cred_param.@"type");
 }
 
@@ -97,6 +97,6 @@ test "make credential" {
     try std.testing.expectEqualSlices(u8, "\x78\x1c\x78\x60\xad\x88\xd2\x63\x32\x62\x2a\xf1\x74\x5d\xed\xb2\xe7\xa4\x2b\x44\x89\x29\x39\xc5\x56\x64\x01\x27\x0d\xbb\xc4\x49", mcp.@"3".id);
     try std.testing.expectEqualSlices(u8, "john smith", mcp.@"3".name.?);
     try std.testing.expectEqualSlices(u8, "jsmith", mcp.@"3".displayName.?);
-    try std.testing.expectEqual(mcp.@"4"[0].alg, -7);
+    try std.testing.expectEqual(mcp.@"4"[0].alg, cbor.cose.Algorithm.Es256);
     try std.testing.expectEqualSlices(u8, "public-key", mcp.@"4"[0].@"type");
 }

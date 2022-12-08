@@ -149,18 +149,6 @@ test "test random function call" {
     try std.testing.expectEqual(x + 2, a.crypto.rand());
 }
 
-test "key pair generation" {
-    const a = Auth(test_impl);
-    const kc = try a.crypto.createKeyPair();
-
-    //std.log.err("{any}\n", .{kc.key_pair.public_key.toUncompressedSec1()});
-
-    const kp = try a.crypto.deriveKeyPair(kc.ctx);
-
-    try std.testing.expectEqual(kc.key_pair.public_key.p, kp.public_key.p);
-    try std.testing.expectEqual(kc.key_pair.secret_key.bytes, kp.secret_key.bytes);
-}
-
 test "getting retries from authenticator" {
     // Retries count is the number of attempts remaining before lockout.
     // When the device is nearing authenticator lockout, the platform
