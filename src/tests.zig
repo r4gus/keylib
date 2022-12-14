@@ -10,8 +10,13 @@ const Auth = authenticator.Auth;
 const User = @import("user.zig");
 const RelyingParty = @import("rp.zig");
 
+const test_data_1 = "\xF1\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00";
+const test_data_2 = "\x00\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00";
+
 // Just for tests
 const test_impl = struct {
+    var d: [authenticator.data_len]u8 = test_data_1.*;
+
     pub fn requestPermission(user: ?*const User, rp: ?*const RelyingParty) bool {
         _ = user;
         _ = rp;
@@ -28,55 +33,13 @@ const test_impl = struct {
         return S.i;
     }
 
-    pub fn getMs() [authenticator.ms_length]u8 {
-        return .{ 0x11, 0x25, 0xdc, 0xed, 0x00, 0x72, 0x95, 0xa2, 0x98, 0x63, 0x68, 0x2d, 0x7b, 0x1c, 0xc3, 0x83, 0x58, 0x38, 0xcf, 0x7a, 0x19, 0x62, 0xe0, 0x90, 0x5a, 0x36, 0xb2, 0xed, 0xa6, 0x07, 0x3e, 0xe1 };
+    pub fn load() [authenticator.data_len]u8 {
+        // VALID || MS || PIN || CTR || RETRIES
+        return d;
     }
 
-    pub fn createMs() void {}
-
-    pub fn getSignCount(cred_id: []const u8) u32 {
-        _ = cred_id;
-        const S = struct {
-            var i: u32 = 0;
-        };
-
-        const x = S.i;
-        S.i += 1;
-        return x;
-    }
-
-    fn retries(s: i8) u8 {
-        const S = struct {
-            var i: u8 = 8;
-        };
-
-        if (s > 0) {
-            S.i = 8;
-        } else if (s < 0 and S.i > 0) {
-            S.i -= 1;
-        }
-
-        return S.i;
-    }
-
-    pub fn getRetries() u8 {
-        return retries(0);
-    }
-
-    /// 16 byte pin hash
-    var pin: [16]u8 = undefined;
-    var pin_set: bool = false;
-
-    pub fn getPin() ?[]const u8 {
-        if (!pin_set) {
-            return null;
-        } else {
-            return pin[0..];
-        }
-    }
-
-    pub fn setPin(p: [16]u8) void {
-        pin = p;
+    pub fn store(data: [authenticator.data_len]u8) void {
+        d = data;
     }
 };
 
@@ -141,14 +104,6 @@ test "authenticatorMakeCredential (0x01)" {
     _ = input;
 }
 
-test "test random function call" {
-    const a = Auth(test_impl);
-
-    const x = a.crypto.rand();
-    try std.testing.expectEqual(x + 1, a.crypto.rand());
-    try std.testing.expectEqual(x + 2, a.crypto.rand());
-}
-
 test "getting retries from authenticator" {
     // Retries count is the number of attempts remaining before lockout.
     // When the device is nearing authenticator lockout, the platform
@@ -167,3 +122,39 @@ test "getting retries from authenticator" {
 }
 
 test "getting shared secret from authenticator" {}
+
+test "testing data getters" {
+    test_impl.d = test_data_1.*; // reset test data
+    const a = Auth(test_impl);
+
+    var x = a.Data.load();
+
+    try std.testing.expectEqual(true, x.isValid());
+    try std.testing.expectEqualSlices(u8, "\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1", &x.getMs());
+    try std.testing.expectEqual(false, x.isPinSet());
+    try std.testing.expectEqual(@intCast(u8, 8), x.getRetries());
+
+    // Sign counter will automatically increase
+    try std.testing.expectEqual(@intCast(u32, 0), x.getSignCtr());
+    try std.testing.expectEqual(@intCast(u32, 1), x.getSignCtr());
+    try std.testing.expectEqual(@intCast(u32, 2), x.getSignCtr());
+}
+
+test "testing data setters" {
+    test_impl.d = test_data_2.*; // reset test data
+    const a = Auth(test_impl);
+
+    var x = a.Data.load();
+
+    try std.testing.expectEqual(false, x.isValid());
+    x.setValid();
+    try std.testing.expectEqual(true, x.isValid());
+
+    try std.testing.expectEqual(@intCast(u8, 8), x.getRetries());
+    x.setRetries(7);
+    try std.testing.expectEqual(@intCast(u8, 7), x.getRetries());
+
+    try std.testing.expectEqualSlices(u8, "\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1", &x.getMs());
+    x.setMs("\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00".*);
+    try std.testing.expectEqualSlices(u8, "\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00", &x.getMs());
+}

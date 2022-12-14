@@ -3,14 +3,17 @@ const std = @import("std");
 
 pub const crypt = @import("crypto.zig");
 pub const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
-/// Master secret length
-pub const ms_length = Hmac.mac_length;
 pub const Ecdsa = crypt.ecdsa.EcdsaP256Sha256;
 pub const KeyPair = Ecdsa.KeyPair;
 pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 pub const EcdhP256 = crypt.ecdh.EcdhP256;
 pub const Sha256 = std.crypto.hash.sha2.Sha256;
 pub const Aes256 = std.crypto.core.aes.Aes256;
+
+pub const ms_length = Hmac.mac_length;
+pub const pin_len: usize = 16;
+// VALID || MASTER_SECRET || PIN || CTR || RETRIES || padding
+pub const data_len = 1 + ms_length + pin_len + 4 + 1 + 2;
 
 const cbor = @import("zbor");
 const cose = cbor.cose;
@@ -109,6 +112,81 @@ pub fn Auth(comptime impl: type) type {
             };
         }
 
+        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // Interface
+        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        pub const Data = struct {
+            d: [data_len]u8 = undefined,
+
+            pub fn load() @This() {
+                return @This(){
+                    .d = impl.load(),
+                };
+            }
+
+            pub fn store(self: *@This()) void {
+                impl.store(self.d);
+            }
+
+            /// Tells if the given data structure is valid or not.
+            pub fn isValid(self: *const @This()) bool {
+                return self.d[0] == 0xF1;
+            }
+
+            /// Tells if the given data structure is valid or not.
+            pub fn setValid(self: *@This()) void {
+                self.d[0] = 0xF1;
+            }
+
+            pub fn getMs(self: *const @This()) [ms_length]u8 {
+                return self.d[1 .. ms_length + 1].*;
+            }
+
+            pub fn setMs(self: *@This(), data: [ms_length]u8) void {
+                std.mem.copy(u8, self.d[1 .. ms_length + 1], data[0..]);
+            }
+
+            pub fn getPin(self: *const @This()) [pin_len]u8 {
+                return self.d[ms_length + 1 .. ms_length + 1 + pin_len].*;
+            }
+
+            pub fn setPin(self: *@This(), data: [pin_len]u8) void {
+                std.mem.copy(u8, self.d[ms_length + 1 .. ms_length + 1 + pin_len], data[0..]);
+            }
+
+            pub fn isPinSet(self: *const @This()) bool {
+                const p = self.getPin();
+                var i: usize = 0;
+                while (i < pin_len) : (i += 1) {
+                    if (p[i] != 0) return true;
+                }
+                return false;
+            }
+
+            pub fn getSignCtr(self: *@This()) u32 {
+                const offset: usize = 1 + ms_length + pin_len;
+                const x: u32 = std.mem.readIntSliceLittle(u32, self.d[offset .. offset + 4]);
+                std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], x + 1);
+                return x;
+            }
+
+            pub fn setSignCtr(self: *@This(), data: u32) void {
+                const offset: usize = 1 + ms_length + pin_len;
+                std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], data);
+            }
+
+            pub fn getRetries(self: *const @This()) u8 {
+                const offset: usize = 1 + ms_length + pin_len + 4;
+                return self.d[offset];
+            }
+
+            pub fn setRetries(self: *@This(), data: u8) void {
+                const offset: usize = 1 + ms_length + pin_len + 4;
+                self.d[offset] = data;
+            }
+        };
+
         /// This function asks the user in some way for permission,
         /// e.g. button press, touch, key press.
         ///
@@ -118,72 +196,47 @@ pub fn Auth(comptime impl: type) type {
             return impl.requestPermission(user, rp);
         }
 
-        /// Return the (updated) signature count for the given credential id.
-        /// This can either be a distinct counter for each credential
-        /// or a global counter for all.
-        pub fn getSignCount(cred_id: []const u8) u32 {
-            return impl.getSignCount(cred_id);
-        }
+        /// Fill the given slice with random data.
+        pub fn getBlock(buffer: []u8) void {
+            var r: u32 = undefined;
 
-        /// Retries count is the number of attempts remaining before lockout.
-        pub fn getRetries() u8 {
-            return impl.getRetries();
-        }
-
-        pub const crypto = struct {
-            const key_len: usize = 32;
-            const ctx_len: usize = 32;
-
-            /// Get a 32 bit random number.
-            pub fn rand() u32 {
-                return impl.rand();
-            }
-
-            /// Fill the given slice with random data.
-            pub fn getBlock(buffer: []u8) void {
-                var r: u32 = undefined;
-
-                var i: usize = 0;
-                while (i < buffer.len) : (i += 1) {
-                    if (i % 4 == 0) {
-                        // Get a fresh 32 bit integer every 4th iteration.
-                        r = rand();
-                    }
-
-                    // The shift value is always between 0 and 24, i.e. int cast will always succeed.
-                    buffer[i] = @intCast(u8, (r >> @intCast(u5, (8 * (i % 4)))) & 0xff);
+            var i: usize = 0;
+            while (i < buffer.len) : (i += 1) {
+                if (i % 4 == 0) {
+                    // Get a fresh 32 bit integer every 4th iteration.
+                    r = impl.rand();
                 }
-            }
 
-            /// Get the stored master secret.
-            ///
-            /// The master secret must be created on first boot, i.e.
-            /// one can expect the master secret to be available at
-            /// any time.
-            pub fn getMs() [ms_length]u8 {
-                // Create a more uniformly unbiased and higher entropy,
-                // from the RANDOMLY GENERATED master secret.
-                const ikm = impl.getMs();
-                const salt = "CANDYSTICK";
-                return Hkdf.extract(salt, &ikm);
+                // The shift value is always between 0 and 24, i.e. int cast will always succeed.
+                buffer[i] = @intCast(u8, (r >> @intCast(u5, (8 * (i % 4)))) & 0xff);
             }
-        };
+        }
 
-        pub const pin = struct {
-            /// Get the currently set PIN hash.
-            ///
-            /// Returns null if no PIN has been set.
-            pub fn get() ?[]const u8 {
-                return impl.getPin();
-            }
+        pub fn initData(self: *const Self) void {
+            _ = self;
+            var data = Data.load();
 
-            /// Set the given PIN hash.
-            ///
-            /// The pin is never stored as plain-text.
-            pub fn set(p: [16]u8) void {
-                impl.setPin(p);
-            }
-        };
+            // Do nothing if data has already been initialized.
+            if (data.isValid()) return;
+
+            // Create a more uniformly unbiased and higher entropy,
+            // from the RANDOMLY GENERATED byte string.
+            var ikm: [32]u8 = undefined;
+            getBlock(ikm[0..]);
+            const salt = "F1D0";
+            const ms = Hkdf.extract(salt, &ikm);
+
+            data.setMs(ms);
+            data.setPin("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".*);
+            data.setSignCtr(0);
+            data.setRetries(8);
+            data.setValid();
+            data.store();
+        }
+
+        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // CTAP Handler
+        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
         /// Main handler function, that takes a command and returns a response.
         pub fn handle(self: *const Self, allocator: Allocator, command: []const u8) ![]u8 {
@@ -198,6 +251,9 @@ pub fn Auth(comptime impl: type) type {
                 try response.writeByte(@enumToInt(StatusCodes.fromError(err)));
                 return res.toOwnedSlice();
             };
+
+            var data = Data.load();
+            defer data.store(); // write changes back to memory
 
             switch (cmdnr) {
                 .authenticator_make_credential => {
@@ -270,8 +326,8 @@ pub fn Auth(comptime impl: type) type {
                     }
 
                     // Generate a new credential key pair for the algorithm specified.
-                    const context = crypt.newContext(crypto.getBlock);
-                    const key_pair = crypt.deriveKeyPair(crypto.getMs(), context) catch unreachable;
+                    const context = crypt.newContext(getBlock);
+                    const key_pair = crypt.deriveKeyPair(data.getMs(), context) catch unreachable;
 
                     // 10. If "rk" in options parameter is set to true.
                     //     * If a credential for the same RP ID and account ID already
@@ -282,7 +338,7 @@ pub fn Auth(comptime impl: type) type {
                     // TODO: Resident key support currently not planned
 
                     // Create a new credential id
-                    const cred_id = crypt.makeCredId(crypto.getMs(), &context, mcp.@"2".id);
+                    const cred_id = crypt.makeCredId(data.getMs(), &context, mcp.@"2".id);
 
                     // 11. Generate an attestation statement for the newly-created
                     // key using clientDataHash.
@@ -305,7 +361,7 @@ pub fn Auth(comptime impl: type) type {
                             .at = 1,
                             .ed = 0,
                         },
-                        .sign_count = getSignCount(cred_id[0..]),
+                        .sign_count = data.getSignCtr(),
                         .attested_credential_data = acd,
                     };
                     // Calculate the SHA-256 hash of the rpId (base url).
@@ -360,7 +416,7 @@ pub fn Auth(comptime impl: type) type {
                         for (creds) |cred| {
                             if (cred.id_b.len < crypt.cred_id_len) continue;
 
-                            if (crypt.verifyCredId(crypto.getMs(), cred.id_b, gap.@"1")) {
+                            if (crypt.verifyCredId(data.getMs(), cred.id_b, gap.@"1")) {
                                 ctx_and_mac = cred.id_b[0..];
                                 break;
                             }
@@ -462,7 +518,7 @@ pub fn Auth(comptime impl: type) type {
                             .at = 0,
                             .ed = 0,
                         },
-                        .sign_count = getSignCount(ctx_and_mac.?),
+                        .sign_count = data.getSignCtr(),
                         // attestedCredentialData are excluded
                     };
                     std.crypto.hash.sha2.Sha256.hash(gap.@"1", &ad.rp_id_hash, .{});
@@ -472,7 +528,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // 12. Sign the clientDataHash along with authData with the
                     // selected credential.
-                    const kp = crypt.deriveKeyPair(crypto.getMs(), ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
+                    const kp = crypt.deriveKeyPair(data.getMs(), ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
 
                     const sig = crypt.sign(kp, authData.items, gap.@"2_b") catch {
                         res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
@@ -507,7 +563,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // Crete configuration only if a PIN command is actually issued.
                     if (PC.conf == null) {
-                        PC.conf = client_pin.makeConfig(crypto.getBlock) catch {
+                        PC.conf = client_pin.makeConfig(getBlock) catch {
                             res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
                             return res.toOwnedSlice();
                         };
@@ -528,7 +584,7 @@ pub fn Auth(comptime impl: type) type {
                     switch (cpp.@"2") {
                         .getRetries => {
                             cpr = .{
-                                .@"3" = getRetries(),
+                                .@"3" = data.getRetries(),
                             };
                         },
                         .getKeyAgreement => {
@@ -548,7 +604,7 @@ pub fn Auth(comptime impl: type) type {
                                 return res.toOwnedSlice();
                             }
 
-                            if (pin.get() != null) {
+                            if (data.isPinSet()) {
                                 res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_auth_invalid);
                                 return res.toOwnedSlice();
                             }
@@ -593,7 +649,7 @@ pub fn Auth(comptime impl: type) type {
                             // Set the new PIN hash
                             var new_pin_hash: [Sha256.digest_length]u8 = undefined;
                             Sha256.hash(new_pin[0..i], &new_pin_hash, .{});
-                            pin.set(new_pin_hash[0..16].*);
+                            data.setPin(new_pin_hash[0..16].*);
                         },
                         .changePIN => {},
                         .getPINToken => {},

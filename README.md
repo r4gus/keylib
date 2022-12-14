@@ -46,3 +46,30 @@ authenticator for subsequent authentications.
 3. Proceede normally as if `priv` was loaded from memory
 
 > __TODO:__ Also MAC the CTX to ensure its integrity.
+
+### Storing sensitive data
+
+One problem to solve is how to store sensitive data in a secure way. Sensitive data includes the master secret,
+the pin hash, and credentials (credentials are derived at the moment but maybe that should change to make them
+discoverable).
+
+#### Idea: Make PIN mandatory
+
+Use the pin hash as key with AES-GCM to encrypt all sensitive data.
+
+> Note: This is a general idea and might not be secure
+
+##### On first boot
+
+1. Create a random master secret (MS)
+2. Create a default PIN (e.g. 1234) which should be changed by the user
+3. Hash the PIN as defined by CTAP2 (PIN\_HASH) and use it to encrypt MS and PIN\_HASH
+4. One can derive a subkey from the MS using HKDF to en-/decrypt all other sensitve data
+
+##### Validating the PIN
+
+After the client has sent the user entered PIN to the authenticator, the PIN is hashed and
+used to decrypt the encrypted PIN\_HASH. If the calculated hash matches the encrypted hash,
+everything is fine, otherwise the received PIN was incorrect.
+
+If the hashes matched, decrypt the MS and use it as normal.
