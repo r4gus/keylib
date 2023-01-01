@@ -38,8 +38,6 @@ const extension = @import("extensions.zig");
 pub const Extensions = extension.Extensions;
 const option = @import("options.zig");
 pub const Options = option.Options;
-const pinprot = @import("pinprot.zig");
-pub const PinProtocols = pinprot.PinProtocols;
 const attestation_object = @import("attestation_object.zig");
 const AttestedCredentialData = attestation_object.AttestedCredentialData;
 const AuthData = attestation_object.AuthData;
@@ -653,6 +651,7 @@ pub fn Auth(comptime impl: type) type {
                         },
                         .changePIN => {},
                         .getPINToken => {},
+                        else => {},
                     }
 
                     if (cpr) |resp| {
