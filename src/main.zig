@@ -56,13 +56,13 @@ const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.
 /// General properties of a given authenticator.
 pub const Info = struct {
     /// versions: List of supported versions.
-    @"1_t": []const Versions,
+    @"1": []const Versions,
     /// extensions: List of supported extensions.
-    @"2_t": ?[]const Extensions,
+    @"2": ?[]const Extensions,
     /// aaguid: The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
     /// indicating the type of the authenticator. Authenticators with the
     /// same capabilities and firmware, can share the same AAGUID.
-    @"3_b": [16]u8,
+    @"3": [16]u8,
     /// optoins: Supported options.
     @"4": ?Options,
     /// maxMsgSize: Maximum message size supported by the authenticator.
@@ -99,9 +99,9 @@ pub fn Auth(comptime impl: type) type {
         pub fn initDefault(versions: []const Versions, aaguid: [16]u8) Self {
             return @This(){
                 .info = Info{
-                    .@"1_t" = versions,
-                    .@"2_t" = null,
-                    .@"3_b" = aaguid,
+                    .@"1" = versions,
+                    .@"2" = null,
+                    .@"3" = aaguid,
                     .@"4" = Options{}, // default options
                     .@"5" = null,
                     .@"6" = null,
@@ -256,7 +256,7 @@ pub fn Auth(comptime impl: type) type {
             switch (cmdnr) {
                 .authenticator_make_credential => {
                     // TODO: Check exclude list... just ignore it for now
-                    const mcp = cbor.parse(MakeCredentialParam, cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
+                    const mcp = cbor.parse(MakeCredentialParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => StatusCodes.ctap2_err_missing_parameter,
                             else => StatusCodes.ctap2_err_invalid_cbor,
@@ -341,7 +341,7 @@ pub fn Auth(comptime impl: type) type {
                     // 11. Generate an attestation statement for the newly-created
                     // key using clientDataHash.
                     const acd = AttestedCredentialData{
-                        .aaguid = self.info.@"3_b",
+                        .aaguid = self.info.@"3",
                         .credential_length = crypt.cred_id_len,
                         // context is used as id to later retrieve actual key using
                         // the master secret.
@@ -378,8 +378,8 @@ pub fn Auth(comptime impl: type) type {
 
                         var x: [crypt.der_len]u8 = undefined;
                         stmt = AttStmt{ .@"packed" = .{
-                            .alg_b = cose.Algorithm.Es256,
-                            .sig_b = sig.toDer(&x),
+                            .alg = cose.Algorithm.Es256,
+                            .sig = sig.toDer(&x),
                         } };
                     } else {
                         stmt = AttStmt{ .none = .{} };
@@ -387,7 +387,7 @@ pub fn Auth(comptime impl: type) type {
 
                     const ao = AttestationObject{
                         .@"1" = Fmt.@"packed",
-                        .@"2_b" = authData.items,
+                        .@"2" = authData.items,
                         .@"3" = stmt.?,
                     };
 
@@ -397,7 +397,7 @@ pub fn Auth(comptime impl: type) type {
                     };
                 },
                 .authenticator_get_assertion => {
-                    const gap = cbor.parse(GetAssertionParam, cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
+                    const gap = cbor.parse(GetAssertionParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => StatusCodes.ctap2_err_missing_parameter,
                             else => StatusCodes.ctap2_err_invalid_cbor,
@@ -412,10 +412,10 @@ pub fn Auth(comptime impl: type) type {
                     var ctx_and_mac: ?[]const u8 = null;
                     if (gap.@"3") |creds| {
                         for (creds) |cred| {
-                            if (cred.id_b.len < crypt.cred_id_len) continue;
+                            if (cred.id.len < crypt.cred_id_len) continue;
 
-                            if (crypt.verifyCredId(data.getMs(), cred.id_b, gap.@"1")) {
-                                ctx_and_mac = cred.id_b[0..];
+                            if (crypt.verifyCredId(data.getMs(), cred.id, gap.@"1")) {
+                                ctx_and_mac = cred.id[0..];
                                 break;
                             }
                         }
@@ -528,7 +528,7 @@ pub fn Auth(comptime impl: type) type {
                     // selected credential.
                     const kp = crypt.deriveKeyPair(data.getMs(), ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
 
-                    const sig = crypt.sign(kp, authData.items, gap.@"2_b") catch {
+                    const sig = crypt.sign(kp, authData.items, gap.@"2") catch {
                         res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
                         return res.toOwnedSlice();
                     };
@@ -536,11 +536,11 @@ pub fn Auth(comptime impl: type) type {
                     var x: [crypt.der_len]u8 = undefined;
                     const gar = GetAssertionResponse{
                         .@"1" = PublicKeyCredentialDescriptor{
-                            .@"type" = "public-key",
-                            .id_b = ctx_and_mac.?,
+                            .type = "public-key",
+                            .id = ctx_and_mac.?,
                         },
-                        .@"2_b" = authData.items,
-                        .@"3_b" = sig.toDer(&x),
+                        .@"2" = authData.items,
+                        .@"3" = sig.toDer(&x),
                     };
 
                     cbor.stringify(gar, .{}, response) catch |err| {
@@ -567,7 +567,7 @@ pub fn Auth(comptime impl: type) type {
                         };
                     }
 
-                    const cpp = cbor.parse(ClientPinParam, cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
+                    const cpp = cbor.parse(ClientPinParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => StatusCodes.ctap2_err_missing_parameter,
                             else => StatusCodes.ctap2_err_invalid_cbor,
@@ -608,7 +608,7 @@ pub fn Auth(comptime impl: type) type {
                             }
 
                             // Generate shared secret
-                            const deG = EcdhP256.scalarmultXY(PC.conf.?.authenticator_key_agreement_key.secret_key, cpp.@"3".?.P256.@"-2_b", cpp.@"3".?.P256.@"-3_b") catch unreachable;
+                            const deG = EcdhP256.scalarmultXY(PC.conf.?.authenticator_key_agreement_key.secret_key, cpp.@"3".?.P256.@"-2", cpp.@"3".?.P256.@"-3") catch unreachable;
                             var shared_secret: [Sha256.digest_length]u8 = undefined;
                             // shared = SHA-256((deG).x)
                             Sha256.hash(deG.toUncompressedSec1()[1..33], &shared_secret, .{});

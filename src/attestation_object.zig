@@ -143,7 +143,7 @@ pub const AttestationObject = struct {
     /// fmt
     @"1": Fmt,
     /// authData
-    @"2_b": []const u8,
+    @"2": []const u8,
     /// attStmt
     @"3": AttStmt,
 };
@@ -163,9 +163,9 @@ pub const AttStmt = union(AttStmtTag) {
     @"packed": struct { // basic, self, AttCA
         /// A COSEAlgorithmIdentifier containing the identifier of the algorithm used
         /// to generate the attestation signature.
-        alg_b: cose.Algorithm,
+        alg: cose.Algorithm,
         /// A byte string containing the attestation signature.
-        sig_b: []const u8,
+        sig: []const u8,
         /// The elements of this array contain attestnCert and its certificate chain (if any),
         /// each encoded in X.509 format. The attestation certificate attestnCert MUST be
         /// the first element in the array.
@@ -260,7 +260,7 @@ test "attestationObject encoding - no attestation" {
 
     const ao = AttestationObject{
         .@"1" = Fmt.@"packed",
-        .@"2_b" = authData.items,
+        .@"2" = authData.items,
         .@"3" = AttStmt{ .none = .{} },
     };
 

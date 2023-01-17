@@ -66,8 +66,8 @@ test "default Authenticator initialization" {
     const a = Auth(test_impl);
     const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
-    try std.testing.expectEqual(Versions.FIDO_2_0, auth.info.@"1_t"[0]);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.info.@"3_b");
+    try std.testing.expectEqual(Versions.FIDO_2_0, auth.info.@"1"[0]);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.info.@"3");
     try std.testing.expectEqual(false, auth.info.@"4".?.plat);
     try std.testing.expectEqual(false, auth.info.@"4".?.rk);
     try std.testing.expectEqual(auth.info.@"4".?.clientPin, null);

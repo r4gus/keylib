@@ -5,9 +5,9 @@ const AuthenticatorOptions = @import("auth_options.zig").AuthenticatorOptions;
 
 pub const GetAssertionParam = struct {
     /// rpId: Relying party identifier.
-    @"1": []const u8,
+    @"1": [:0]const u8,
     /// clientDataHash: Hash of the serialized client data collected by the host.
-    @"2_b": []const u8,
+    @"2": []const u8,
     /// allowList: A sequence of PublicKeyCredentialDescriptor structures, each
     /// denoting a credential, as specified in [WebAuthN]. If this parameter is
     /// present and has 1 or more entries, the authenticator MUST only generate
@@ -25,7 +25,7 @@ pub const GetAssertionParam = struct {
 
     pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
         allocator.free(self.@"1");
-        allocator.free(self.@"2_b");
+        allocator.free(self.@"2");
         if (self.@"3") |pkcds| {
             for (pkcds) |pkcd| {
                 pkcd.deinit(allocator);
@@ -42,10 +42,10 @@ pub const GetAssertionResponse = struct {
     @"1": PublicKeyCredentialDescriptor,
     /// authData: The signed-over contextual bindings made by the authenticator,
     /// as specified in [WebAuthN].
-    @"2_b": []const u8,
+    @"2": []const u8,
     /// signature: The assertion signature produced by the authenticator, as
     /// specified in [WebAuthN].
-    @"3_b": []const u8,
+    @"3": []const u8,
     // @"4": TODO: add user (0x4)
     /// numberOfCredentials: Total number of account credentials for the RP.
     /// This member is required when more than one account for the RP and the
