@@ -1,9 +1,6 @@
 const std = @import("std");
 const cbor = @import("zbor");
-const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
-const AuthenticatorOptions = @import("auth_options.zig").AuthenticatorOptions;
-const User = @import("user.zig");
-const RelyingParty = @import("rp.zig");
+const dobj = @import("../dobj.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -23,18 +20,18 @@ pub const MakeCredentialParam = struct {
     ///
     /// id: valid domain string identifying the Relying Party
     /// name: user friendly name
-    @"2": RelyingParty,
+    @"2": dobj.RelyingParty,
     /// user: PublicKeyCredentialUserEntity
-    @"3": User,
+    @"3": dobj.User,
     /// pubKeyCredParams: A sequence of CBOR maps
     @"4": []const CredParam,
     /// excludeList: A sequence of PublicKeyCredentialDescriptor structures.
     /// The authenticator returns an error if the authenticator already contains
     /// one of the credentials enumerated in this sequence.
-    @"5": ?[]const PublicKeyCredentialDescriptor,
+    @"5": ?[]const dobj.PublicKeyCredentialDescriptor,
     // TODO: add remaining fields (extensions 0x6)
     /// authenticator options: Parameters to influence authenticator operation.
-    @"7": ?AuthenticatorOptions,
+    @"7": ?dobj.AuthenticatorOptions,
     /// pinAuth: First 16 bytes of HMAC-SHA-256 of clientDataHash using pinToken
     /// which platform got from the authenticator: HMAC-SHA-256(pinToken, clientDataHash).
     @"8": ?[16]u8,

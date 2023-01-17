@@ -1,7 +1,8 @@
 const std = @import("std");
 const cbor = @import("zbor");
+const dobj = @import("dobj.zig");
 const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
-const AuthenticatorOptions = @import("auth_options.zig").AuthenticatorOptions;
+const AuthenticatorOptions = dobj.AuthenticatorOptions;
 
 pub const GetAssertionParam = struct {
     /// rpId: Relying party identifier.

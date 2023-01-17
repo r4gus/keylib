@@ -28,13 +28,15 @@
 //                         ---------------------------------------
 
 const std = @import("std");
-const cbor = @import("zbor");
-const cose = cbor.cose;
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
+
+const cbor = @import("zbor");
+const cose = cbor.cose;
 const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
-const crypto = @import("crypto.zig");
+
+const crypto = @import("../crypto.zig");
 const Ecdsa = crypto.ecdsa.EcdsaP256Sha256;
 
 pub const Flags = packed struct(u8) {

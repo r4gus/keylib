@@ -22,6 +22,8 @@ const testing = std.testing;
 const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
 
+const dobj = @import("dobj.zig");
+
 const status = @import("status.zig");
 pub const StatusCodes = status.StatusCodes;
 const errors = @import("error.zig");
@@ -38,15 +40,6 @@ const extension = @import("extensions.zig");
 pub const Extensions = extension.Extensions;
 const option = @import("options.zig");
 pub const Options = option.Options;
-const attestation_object = @import("attestation_object.zig");
-const AttestedCredentialData = attestation_object.AttestedCredentialData;
-const AuthData = attestation_object.AuthData;
-const Flags = attestation_object.Flags;
-const AttestationObject = attestation_object.AttestationObject;
-const Fmt = attestation_object.Fmt;
-const AttStmt = attestation_object.AttStmt;
-pub const User = @import("user.zig");
-pub const RelyingParty = @import("rp.zig");
 const client_pin = @import("client_pin.zig");
 const ClientPinParam = client_pin.ClientPinParam;
 const ClientPinResponse = client_pin.ClientPinResponse;
@@ -190,7 +183,7 @@ pub fn Auth(comptime impl: type) type {
         ///
         /// It returns `true` if permission has been granted, `false`
         /// otherwise (e.g. timeout).
-        pub fn requestPermission(user: ?*const User, rp: ?*const RelyingParty) bool {
+        pub fn requestPermission(user: ?*const dobj.User, rp: ?*const dobj.RelyingParty) bool {
             return impl.requestPermission(user, rp);
         }
 
@@ -340,7 +333,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // 11. Generate an attestation statement for the newly-created
                     // key using clientDataHash.
-                    const acd = AttestedCredentialData{
+                    const acd = dobj.AttestedCredentialData{
                         .aaguid = self.info.@"3",
                         .credential_length = crypt.cred_id_len,
                         // context is used as id to later retrieve actual key using
@@ -349,9 +342,9 @@ pub fn Auth(comptime impl: type) type {
                         .credential_public_key = crypt.getCoseKey(key_pair),
                     };
 
-                    var ad = AuthData{
+                    var ad = dobj.AuthData{
                         .rp_id_hash = undefined,
-                        .flags = Flags{
+                        .flags = dobj.Flags{
                             .up = 1,
                             .rfu1 = 0,
                             .uv = 0,
@@ -369,7 +362,7 @@ pub fn Auth(comptime impl: type) type {
                     try ad.encode(authData.writer());
 
                     // Create attestation statement
-                    var stmt: ?AttStmt = null;
+                    var stmt: ?dobj.AttStmt = null;
                     if (self.attestation_type.att_type == .self) {
                         const sig = crypt.sign(key_pair, authData.items, mcp.@"1") catch {
                             res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
@@ -377,16 +370,16 @@ pub fn Auth(comptime impl: type) type {
                         };
 
                         var x: [crypt.der_len]u8 = undefined;
-                        stmt = AttStmt{ .@"packed" = .{
+                        stmt = dobj.AttStmt{ .@"packed" = .{
                             .alg = cose.Algorithm.Es256,
                             .sig = sig.toDer(&x),
                         } };
                     } else {
-                        stmt = AttStmt{ .none = .{} };
+                        stmt = dobj.AttStmt{ .none = .{} };
                     }
 
-                    const ao = AttestationObject{
-                        .@"1" = Fmt.@"packed",
+                    const ao = dobj.AttestationObject{
+                        .@"1" = dobj.Fmt.@"packed",
                         .@"2" = authData.items,
                         .@"3" = stmt.?,
                     };
@@ -506,9 +499,9 @@ pub fn Auth(comptime impl: type) type {
                     // TODO: implement???
 
                     // Return signature
-                    var ad = AuthData{
+                    var ad = dobj.AuthData{
                         .rp_id_hash = undefined,
-                        .flags = Flags{
+                        .flags = dobj.Flags{
                             .up = 1,
                             .rfu1 = 0,
                             .uv = 0,
@@ -676,7 +669,7 @@ const tests = @import("tests.zig");
 
 test "main" {
     _ = tests;
-    _ = attestation_object;
+    _ = dobj;
     _ = crypt;
     _ = commands;
 }

@@ -9,7 +9,7 @@ const std = @import("std");
 pub const PublicKeyCredentialDescriptor = struct {
     id: []const u8,
     type: []const u8,
-    transports: ?[]const []const u8 = null,
+    transports: ?[]const [:0]const u8 = null,
 
     pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
         allocator.free(self.type);

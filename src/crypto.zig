@@ -5,8 +5,8 @@ const cose = cbor.cose;
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 
-pub const ecdsa = @import("ecdsa.zig"); // copy from std lib without automatic call to rng.
-pub const ecdh = @import("ecdh.zig");
+pub const ecdsa = @import("crypto/ecdsa.zig"); // copy from std lib without automatic call to rng.
+pub const ecdh = @import("crypto/ecdh.zig");
 
 // #########################################################################################
 // Credentials
