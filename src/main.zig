@@ -24,22 +24,14 @@ const Pair = cbor.Pair;
 
 const dobj = @import("dobj.zig");
 
-const status = @import("status.zig");
-pub const StatusCodes = status.StatusCodes;
-const errors = @import("error.zig");
-pub const Errors = errors.ErrorCodes;
 const commands = @import("commands.zig");
 pub const Commands = commands.Commands;
 const getCommand = commands.getCommand;
 const MakeCredentialParam = commands.make_credential.MakeCredentialParam;
 const GetAssertionParam = commands.get_assertion.GetAssertionParam;
 const GetAssertionResponse = commands.get_assertion.GetAssertionResponse;
-const version = @import("version.zig");
-pub const Versions = version.Versions;
 const extension = @import("extensions.zig");
 pub const Extensions = extension.Extensions;
-const option = @import("options.zig");
-pub const Options = option.Options;
 const client_pin = @import("client_pin.zig");
 const ClientPinParam = client_pin.ClientPinParam;
 const ClientPinResponse = client_pin.ClientPinResponse;
@@ -49,7 +41,7 @@ const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.
 /// General properties of a given authenticator.
 pub const Info = struct {
     /// versions: List of supported versions.
-    @"1": []const Versions,
+    @"1": []const dobj.Versions,
     /// extensions: List of supported extensions.
     @"2": ?[]const Extensions,
     /// aaguid: The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
@@ -57,7 +49,7 @@ pub const Info = struct {
     /// same capabilities and firmware, can share the same AAGUID.
     @"3": [16]u8,
     /// optoins: Supported options.
-    @"4": ?Options,
+    @"4": ?dobj.Options,
     /// maxMsgSize: Maximum message size supported by the authenticator.
     /// null = unlimited.
     @"5": ?u64,
@@ -89,13 +81,13 @@ pub fn Auth(comptime impl: type) type {
         attestation_type: AttestationType,
 
         /// Default initialization without extensions.
-        pub fn initDefault(versions: []const Versions, aaguid: [16]u8) Self {
+        pub fn initDefault(versions: []const dobj.Versions, aaguid: [16]u8) Self {
             return @This(){
                 .info = Info{
                     .@"1" = versions,
                     .@"2" = null,
                     .@"3" = aaguid,
-                    .@"4" = Options{}, // default options
+                    .@"4" = dobj.Options{}, // default options
                     .@"5" = null,
                     .@"6" = null,
                 },
@@ -239,7 +231,7 @@ pub fn Auth(comptime impl: type) type {
 
             const cmdnr = getCommand(command) catch |err| {
                 // On error, respond with a error code and return.
-                try response.writeByte(@enumToInt(StatusCodes.fromError(err)));
+                try response.writeByte(@enumToInt(dobj.StatusCodes.fromError(err)));
                 return res.toOwnedSlice();
             };
 
@@ -251,8 +243,8 @@ pub fn Auth(comptime impl: type) type {
                     // TODO: Check exclude list... just ignore it for now
                     const mcp = cbor.parse(MakeCredentialParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
-                            error.MissingField => StatusCodes.ctap2_err_missing_parameter,
-                            else => StatusCodes.ctap2_err_invalid_cbor,
+                            error.MissingField => dobj.StatusCodes.ctap2_err_missing_parameter,
+                            else => dobj.StatusCodes.ctap2_err_invalid_cbor,
                         };
                         res.items[0] = @enumToInt(x);
                         return res.toOwnedSlice();
@@ -270,7 +262,7 @@ pub fn Auth(comptime impl: type) type {
                         }
                     }
                     if (!valid_param) {
-                        res.items[0] = @enumToInt(StatusCodes.ctap2_err_unsupported_algorithm);
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_unsupported_algorithm);
                         return res.toOwnedSlice();
                     }
 
@@ -278,7 +270,7 @@ pub fn Auth(comptime impl: type) type {
                     if (mcp.@"7") |options| {
                         if (options.rk or options.uv) {
                             // we let the RP store the context for each credential.
-                            res.items[0] = @enumToInt(StatusCodes.ctap2_err_unsupported_option);
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_unsupported_option);
                             return res.toOwnedSlice();
                         }
                     }
@@ -312,7 +304,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // Request permission from the user
                     if (!requestPermission(&mcp.@"3", &mcp.@"2")) {
-                        res.items[0] = @enumToInt(StatusCodes.ctap2_err_operation_denied);
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
                         return res.toOwnedSlice();
                     }
 
@@ -365,7 +357,7 @@ pub fn Auth(comptime impl: type) type {
                     var stmt: ?dobj.AttStmt = null;
                     if (self.attestation_type.att_type == .self) {
                         const sig = crypt.sign(key_pair, authData.items, mcp.@"1") catch {
-                            res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
                             return res.toOwnedSlice();
                         };
 
@@ -385,15 +377,15 @@ pub fn Auth(comptime impl: type) type {
                     };
 
                     cbor.stringify(ao, .{}, response) catch |err| {
-                        res.items[0] = @enumToInt(StatusCodes.fromError(err));
+                        res.items[0] = @enumToInt(dobj.StatusCodes.fromError(err));
                         return res.toOwnedSlice();
                     };
                 },
                 .authenticator_get_assertion => {
                     const gap = cbor.parse(GetAssertionParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
-                            error.MissingField => StatusCodes.ctap2_err_missing_parameter,
-                            else => StatusCodes.ctap2_err_invalid_cbor,
+                            error.MissingField => dobj.StatusCodes.ctap2_err_missing_parameter,
+                            else => dobj.StatusCodes.ctap2_err_invalid_cbor,
                         };
                         res.items[0] = @enumToInt(x);
                         return res.toOwnedSlice();
@@ -428,7 +420,7 @@ pub fn Auth(comptime impl: type) type {
                     // not supported, return CTAP2_ERR_PIN_AUTH_INVALID.
                     if (gap.@"6" != null) {
                         // for now pinAuth is not supported
-                        res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_auth_invalid);
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
                         return res.toOwnedSlice();
                     }
 
@@ -448,7 +440,7 @@ pub fn Auth(comptime impl: type) type {
                     // MUST understand the "rk", "up", and "uv" options.
                     if (gap.@"5") |opt| {
                         if (opt.uv or !opt.up) { // currently no uv supported
-                            res.items[0] = @enumToInt(StatusCodes.ctap2_err_invalid_option);
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_invalid_option);
                             return res.toOwnedSlice();
                         }
                     }
@@ -458,14 +450,14 @@ pub fn Auth(comptime impl: type) type {
                     // (i.e., authenticator cannot disclose existence of a
                     // credential until the user interacted with the device):
                     if (!requestPermission(null, null)) {
-                        res.items[0] = @enumToInt(StatusCodes.ctap2_err_operation_denied);
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
                         return res.toOwnedSlice();
                     }
 
                     // 8. If no credentials were located in step 1, return
                     // CTAP2_ERR_NO_CREDENTIALS.
                     if (ctx_and_mac == null) {
-                        res.items[0] = @enumToInt(StatusCodes.ctap2_err_no_credentials);
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_no_credentials);
                         return res.toOwnedSlice();
                     }
 
@@ -522,7 +514,7 @@ pub fn Auth(comptime impl: type) type {
                     const kp = crypt.deriveKeyPair(data.getMs(), ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
 
                     const sig = crypt.sign(kp, authData.items, gap.@"2") catch {
-                        res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
                         return res.toOwnedSlice();
                     };
 
@@ -537,13 +529,13 @@ pub fn Auth(comptime impl: type) type {
                     };
 
                     cbor.stringify(gar, .{}, response) catch |err| {
-                        res.items[0] = @enumToInt(StatusCodes.fromError(err));
+                        res.items[0] = @enumToInt(dobj.StatusCodes.fromError(err));
                         return res.toOwnedSlice();
                     };
                 },
                 .authenticator_get_info => {
                     cbor.stringify(self.info, .{}, response) catch |err| {
-                        res.items[0] = @enumToInt(StatusCodes.fromError(err));
+                        res.items[0] = @enumToInt(dobj.StatusCodes.fromError(err));
                         return res.toOwnedSlice();
                     };
                 },
@@ -555,15 +547,15 @@ pub fn Auth(comptime impl: type) type {
                     // Crete configuration only if a PIN command is actually issued.
                     if (PC.conf == null) {
                         PC.conf = client_pin.makeConfig(getBlock) catch {
-                            res.items[0] = @enumToInt(StatusCodes.ctap1_err_other);
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
                             return res.toOwnedSlice();
                         };
                     }
 
                     const cpp = cbor.parse(ClientPinParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
-                            error.MissingField => StatusCodes.ctap2_err_missing_parameter,
-                            else => StatusCodes.ctap2_err_invalid_cbor,
+                            error.MissingField => dobj.StatusCodes.ctap2_err_missing_parameter,
+                            else => dobj.StatusCodes.ctap2_err_invalid_cbor,
                         };
                         res.items[0] = @enumToInt(x);
                         return res.toOwnedSlice();
@@ -591,12 +583,12 @@ pub fn Auth(comptime impl: type) type {
                         .setPIN => {
                             // keyAgreement, pinAuth and newPinEnc are mandatory for this command.
                             if (cpp.@"3" == null or cpp.@"4" == null or cpp.@"5" == null) {
-                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_missing_parameter);
+                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
                                 return res.toOwnedSlice();
                             }
 
                             if (data.isPinSet()) {
-                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_auth_invalid);
+                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
                                 return res.toOwnedSlice();
                             }
 
@@ -611,7 +603,7 @@ pub fn Auth(comptime impl: type) type {
                             Hmac.create(&auth_pin_auth, cpp.@"5".?, shared_secret[0..]);
                             // Only the first 16 bytes are compared
                             if (!std.mem.eql(u8, auth_pin_auth[0..16], cpp.@"4".?[0..])) {
-                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_auth_invalid);
+                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
                                 return res.toOwnedSlice();
                             }
 
@@ -633,7 +625,7 @@ pub fn Auth(comptime impl: type) type {
                             while (i < 64) : (i += 1) if (new_pin[i] == 0) break;
 
                             if (i < client_pin.minimum_pin_length) {
-                                res.items[0] = @enumToInt(StatusCodes.ctap2_err_pin_policy_violation);
+                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_policy_violation);
                                 return res.toOwnedSlice();
                             }
 
@@ -649,7 +641,7 @@ pub fn Auth(comptime impl: type) type {
 
                     if (cpr) |resp| {
                         cbor.stringify(resp, .{}, response) catch |err| {
-                            res.items[0] = @enumToInt(StatusCodes.fromError(err));
+                            res.items[0] = @enumToInt(dobj.StatusCodes.fromError(err));
                             return res.toOwnedSlice();
                         };
                     }

@@ -1,7 +1,7 @@
-const ErrorCodes = @import("error.zig").ErrorCodes;
+const dobj = @import("dobj.zig");
 
 pub const make_credential = @import("commands/make_credential.zig");
-pub const get_assertion = @import("get_assertion.zig");
+pub const get_assertion = @import("commands/get_assertion.zig");
 pub const client_pin = @import("client_pin.zig");
 
 /// Commands supported by the CTAP protocol.
@@ -31,7 +31,7 @@ pub const Commands = enum(u8) {
     /// Vendor specific implementation.
     authenticator_vendor_last = 0xbf,
 
-    pub fn fromRaw(byte: u8) ErrorCodes!Commands {
+    pub fn fromRaw(byte: u8) dobj.ErrorCodes!Commands {
         switch (byte) {
             0x01 => return .authenticator_make_credential,
             0x02 => return .authenticator_get_assertion,
@@ -41,15 +41,15 @@ pub const Commands = enum(u8) {
             0x08 => return .authenticator_get_next_assertion,
             0x40 => return .authenticator_vendor_first,
             0xbf => return .authenticator_vendor_last,
-            else => return ErrorCodes.invalid_command,
+            else => return dobj.ErrorCodes.invalid_command,
         }
     }
 };
 
 /// Determine the command encoded by `data`.
-pub fn getCommand(data: []const u8) ErrorCodes!Commands {
+pub fn getCommand(data: []const u8) dobj.ErrorCodes!Commands {
     if (data.len < 1) {
-        return ErrorCodes.invalid_length;
+        return dobj.ErrorCodes.invalid_length;
     }
 
     return Commands.fromRaw(data[0]);

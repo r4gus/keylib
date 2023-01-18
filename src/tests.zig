@@ -1,11 +1,10 @@
 const std = @import("std");
 const dobj = @import("dobj.zig");
 
-const ErrorCodes = @import("error.zig").ErrorCodes;
+const ErrorCodes = dobj.ErrorCodes;
 const commands = @import("commands.zig");
 const Commands = commands.Commands;
 const getCommand = commands.getCommand;
-const Versions = @import("version.zig").Versions;
 const authenticator = @import("main.zig");
 const Auth = authenticator.Auth;
 const User = dobj.User;
@@ -59,15 +58,15 @@ test "fetch command from data" {
 }
 
 test "version enum to string" {
-    try std.testing.expectEqualStrings("FIDO_2_0", Versions.FIDO_2_0.toString());
-    try std.testing.expectEqualStrings("U2F_V2", Versions.U2F_V2.toString());
+    try std.testing.expectEqualStrings("FIDO_2_0", dobj.Versions.FIDO_2_0.toString());
+    try std.testing.expectEqualStrings("U2F_V2", dobj.Versions.U2F_V2.toString());
 }
 
 test "default Authenticator initialization" {
     const a = Auth(test_impl);
-    const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = a.initDefault(&[_]dobj.Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
-    try std.testing.expectEqual(Versions.FIDO_2_0, auth.info.@"1"[0]);
+    try std.testing.expectEqual(dobj.Versions.FIDO_2_0, auth.info.@"1"[0]);
     try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, &auth.info.@"3");
     try std.testing.expectEqual(false, auth.info.@"4".?.plat);
     try std.testing.expectEqual(false, auth.info.@"4".?.rk);
@@ -82,7 +81,7 @@ test "get info from 'default' authenticator" {
     const allocator = std.testing.allocator;
 
     const a = Auth(test_impl);
-    const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = a.initDefault(&[_]dobj.Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
     const response = try auth.handle(allocator, "\x04");
     defer allocator.free(response);
@@ -114,7 +113,7 @@ test "getting retries from authenticator" {
     const req = "\x06\xA2\x01\x01\x02\x01";
 
     const a = Auth(test_impl);
-    const auth = a.initDefault(&[_]Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
+    const auth = a.initDefault(&[_]dobj.Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
 
     const response = try auth.handle(allocator, req);
     defer allocator.free(response);

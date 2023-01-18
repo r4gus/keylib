@@ -6,7 +6,7 @@ const Allocator = std.mem.Allocator;
 
 pub const CredParam = struct {
     alg: cbor.cose.Algorithm,
-    type: []const u8,
+    type: [:0]const u8,
 
     pub fn deinit(self: *const @This(), allocator: Allocator) void {
         allocator.free(self.type);
