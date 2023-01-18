@@ -2,7 +2,7 @@ const dobj = @import("dobj.zig");
 
 pub const make_credential = @import("commands/make_credential.zig");
 pub const get_assertion = @import("commands/get_assertion.zig");
-pub const client_pin = @import("client_pin.zig");
+pub const client_pin = @import("commands/client_pin.zig");
 
 /// Commands supported by the CTAP protocol.
 pub const Commands = enum(u8) {

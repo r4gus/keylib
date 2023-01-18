@@ -1,7 +1,6 @@
 const std = @import("std");
 const cbor = @import("zbor");
 const dobj = @import("../dobj.zig");
-const PublicKeyCredentialDescriptor = @import("../public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
 
 pub const GetAssertionParam = struct {
     /// rpId: Relying party identifier.
@@ -12,7 +11,7 @@ pub const GetAssertionParam = struct {
     /// denoting a credential, as specified in [WebAuthN]. If this parameter is
     /// present and has 1 or more entries, the authenticator MUST only generate
     /// an assertion using one of the denoted credentials.
-    @"3": ?[]const PublicKeyCredentialDescriptor = null,
+    @"3": ?[]const dobj.PublicKeyCredentialDescriptor = null,
     // TODO: add remaining fields (extensions 0x4)
     /// options: Parameters to influence authenticator operation.
     @"5": ?dobj.AuthenticatorOptions = null,
@@ -39,7 +38,7 @@ pub const GetAssertionResponse = struct {
     /// credential: PublicKeyCredentialDescriptor structure containing the
     /// credential identifier whose private key was used to generate the
     /// assertion. May be omitted if the allowList has exactly one Credential.
-    @"1": PublicKeyCredentialDescriptor,
+    @"1": dobj.PublicKeyCredentialDescriptor,
     /// authData: The signed-over contextual bindings made by the authenticator,
     /// as specified in [WebAuthN].
     @"2": []const u8,

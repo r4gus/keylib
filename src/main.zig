@@ -32,11 +32,9 @@ const GetAssertionParam = commands.get_assertion.GetAssertionParam;
 const GetAssertionResponse = commands.get_assertion.GetAssertionResponse;
 const extension = @import("extensions.zig");
 pub const Extensions = extension.Extensions;
-const client_pin = @import("client_pin.zig");
-const ClientPinParam = client_pin.ClientPinParam;
-const ClientPinResponse = client_pin.ClientPinResponse;
-const PinConf = client_pin.PinConf;
-const PublicKeyCredentialDescriptor = @import("public_key_credential_descriptor.zig").PublicKeyCredentialDescriptor;
+const ClientPinParam = commands.client_pin.ClientPinParam;
+const ClientPinResponse = commands.client_pin.ClientPinResponse;
+const PinConf = commands.client_pin.PinConf;
 
 /// General properties of a given authenticator.
 pub const Info = struct {
@@ -520,7 +518,7 @@ pub fn Auth(comptime impl: type) type {
 
                     var x: [crypt.der_len]u8 = undefined;
                     const gar = GetAssertionResponse{
-                        .@"1" = PublicKeyCredentialDescriptor{
+                        .@"1" = dobj.PublicKeyCredentialDescriptor{
                             .type = "public-key",
                             .id = ctx_and_mac.?,
                         },
@@ -546,7 +544,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // Crete configuration only if a PIN command is actually issued.
                     if (PC.conf == null) {
-                        PC.conf = client_pin.makeConfig(getBlock) catch {
+                        PC.conf = commands.client_pin.makeConfig(getBlock) catch {
                             res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
                             return res.toOwnedSlice();
                         };
@@ -624,7 +622,7 @@ pub fn Auth(comptime impl: type) type {
                             i = 0;
                             while (i < 64) : (i += 1) if (new_pin[i] == 0) break;
 
-                            if (i < client_pin.minimum_pin_length) {
+                            if (i < commands.client_pin.minimum_pin_length) {
                                 res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_policy_violation);
                                 return res.toOwnedSlice();
                             }
