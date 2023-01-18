@@ -15,14 +15,18 @@ pub const pin_len: usize = 16;
 // VALID || MASTER_SECRET || PIN || CTR || RETRIES || padding
 pub const data_len = 1 + ms_length + pin_len + 4 + 1 + 2;
 
+const dobj = @import("dobj.zig");
+
+pub const Versions = dobj.Versions;
+pub const User = dobj.User;
+pub const RelyingParty = dobj.RelyingParty;
+
 const cbor = @import("zbor");
 const cose = cbor.cose;
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const DataItem = cbor.DataItem;
 const Pair = cbor.Pair;
-
-const dobj = @import("dobj.zig");
 
 const commands = @import("commands.zig");
 pub const Commands = commands.Commands;
