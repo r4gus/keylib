@@ -243,7 +243,11 @@ pub fn Auth(comptime impl: type) type {
             switch (cmdnr) {
                 .authenticator_make_credential => {
                     // TODO: Check exclude list... just ignore it for now
-                    const mcp = cbor.parse(MakeCredentialParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
+                    const mcp_raw = cbor.DataItem.new(command[1..]) catch {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_invalid_cbor);
+                        return res.toOwnedSlice();
+                    };
+                    const mcp = cbor.parse(MakeCredentialParam, mcp_raw, .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => dobj.StatusCodes.ctap2_err_missing_parameter,
                             else => dobj.StatusCodes.ctap2_err_invalid_cbor,
@@ -365,7 +369,7 @@ pub fn Auth(comptime impl: type) type {
 
                         var x: [crypt.der_len]u8 = undefined;
                         stmt = dobj.AttStmt{ .@"packed" = .{
-                            .alg = cose.Algorithm.Es256,
+                            .@"#alg" = cose.Algorithm.Es256,
                             .sig = sig.toDer(&x),
                         } };
                     } else {

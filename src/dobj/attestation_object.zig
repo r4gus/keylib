@@ -165,7 +165,7 @@ pub const AttStmt = union(AttStmtTag) {
     @"packed": struct { // basic, self, AttCA
         /// A COSEAlgorithmIdentifier containing the identifier of the algorithm used
         /// to generate the attestation signature.
-        alg: cose.Algorithm,
+        @"#alg": cose.Algorithm,
         /// A byte string containing the attestation signature.
         sig: []const u8,
         /// The elements of this array contain attestnCert and its certificate chain (if any),
