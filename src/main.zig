@@ -1,6 +1,8 @@
 /// Client to Authenticator (CTAP) library
 const std = @import("std");
 
+pub const ctaphid = @import("ctaphid.zig");
+
 pub const crypt = @import("crypto.zig");
 pub const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 pub const Ecdsa = crypt.ecdsa.EcdsaP256Sha256;
@@ -670,4 +672,5 @@ test "main" {
     _ = dobj;
     _ = crypt;
     _ = commands;
+    _ = ctaphid;
 }
