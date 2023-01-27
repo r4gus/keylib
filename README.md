@@ -10,7 +10,12 @@
 Just add the library to your project and then call `pull-deps.sh` to pull
 all dependencies.
 
-> _Note_: For a working example see [Candy Stick](https://github.com/r4gus/candy-stick).
+### Examples
+
+| Platform | Architecture | Link |
+|:--------:|:------------:|:----:|
+| ATSAMD51 Curiosity Nano | Arm | [candy-stick](https://github.com/r4gus/candy-stick) |
+| nRF52840-MDK USB Dongle | Arm | [candy-stick](https://github.com/r4gus/candy-stick-nrf) |
 
 ## Crypto
 

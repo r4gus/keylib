@@ -52,19 +52,23 @@ pub const ErrorCodes = enum(u8) {
 };
 
 pub const channels = struct {
+    // CID 0 and ffffffff are reserved for broadcast communication.
+    var idctr: u32 = 0;
+
     /// Allocate a new channel Id (CID) for communication with a client.
     pub fn allocateChannelId() u32 {
-        // CID 0 and ffffffff are reserved for broadcast communication.
-        const S = struct {
-            var idctr: u32 = 0;
-        };
-        S.idctr += 1;
-        return S.x;
+        idctr += 1;
+        return idctr;
     }
 
     /// Check if the given CID represents a broadcast channel.
     pub fn isBroadcast(cid: Cid) bool {
         return cid == 0 or cid == 0xffffffff;
+    }
+
+    /// Check if the given cid has been allocated.
+    pub fn isValid(cid: Cid) bool {
+        return 0 < cid and cid <= idctr;
     }
 };
 
@@ -143,31 +147,6 @@ pub const InitResponse = packed struct {
     pub const SIZE: usize = FOFF + 1;
 };
 
-/// Create a CTAPHID_INIT response.
-///
-/// To allocate a new channel, the requesting application uses the broadcast channel
-/// (0xffffffff). The device then responds with the newly allocated channel in the
-/// response, using the broadcast channel.
-///
-/// * `channel` - 0xffffffff if new channel was allocated, allocated Cid else.
-/// * `init_response` - Pointer to a `InitResponse` struct.
-///
-/// The caller is responsible for deallocating the memory after use.
-pub fn initResponse(allocator: Allocator, channel: Cid, init_response: *const InitResponse) ![]u8 {
-    //var response = try allocator.alloc(u8, CID_LENGTH + CMD_LENGTH + BCNT_LENGTH + InitResponse.SIZE);
-    var response = try allocator.alloc(u8, 64);
-    std.mem.copy(u8, response[0..CID_LENGTH], std.mem.asBytes(&channel));
-    response[CID_LENGTH] = @enumToInt(Cmd.init) | 0x80;
-    response[CID_LENGTH + CMD_LENGTH] = @intCast(u8, (InitResponse.SIZE >> 8) & 0xff); // msb
-    response[CID_LENGTH + CMD_LENGTH + 1] = @intCast(u8, InitResponse.SIZE & 0xff); // lsb
-    init_response.serialize(response[CID_LENGTH + CMD_LENGTH + BCNT_LENGTH ..]);
-    for (response[24..]) |*b| {
-        b.* = 0;
-    }
-
-    return response;
-}
-
 //--------------------------------------------------------------------+
 // Response Handler
 //--------------------------------------------------------------------+
@@ -190,6 +169,30 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
         // All clients (CIDs) share the same buffer, i.e. only one request
         // can be handled at a time.
         var data: [7609]u8 = undefined;
+
+        pub fn @"error"(e: ErrorCodes) CtapHidResponseIterator {
+            const es = switch (e) {
+                .invalid_cmd => "\x01",
+                .invalid_par => "\x02",
+                .invalid_len => "\x03",
+                .invalid_seq => "\x04",
+                .msg_timeout => "\x05",
+                .channel_busy => "\x06",
+                .lock_required => "\x0a",
+                .invalid_channel => "\x0b",
+                else => "\x7f",
+            };
+
+            const response = resp.iterator(if (busy) |c| c else 0xffffffff, Cmd.err, es);
+
+            busy = null;
+            cmd = null;
+            bcnt_total = 0;
+            bcnt = 0;
+            seq = 0;
+
+            return response;
+        }
     };
 
     if (S.busy == null) { // initialization packet
@@ -228,6 +231,17 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
     }
 
     if (S.bcnt >= S.bcnt_total and S.busy != null and S.cmd != null) {
+        defer reset(&S);
+
+        switch (S.cmd.?) {
+            .init => {},
+            else => {
+                if (!channels.isValid(S.busy.?)) {
+                    //return S.@"error"(ErrorCodes.invalid_channel); //<---- BUG TODO
+                }
+            },
+        }
+
         switch (S.cmd.?) {
             .init => {
                 const ir = InitResponse.new(misc.sliceToInt(Nonce, S.data[0..8]), 0xcafebabe, false, true, false);
@@ -238,7 +252,6 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
                 ir.serialize(data[0..]);
                 var response = resp.iterator(S.busy.?, S.cmd.?, data);
 
-                reset(&S);
                 return response;
             },
             .cbor => {
@@ -249,23 +262,18 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
 
                 var response = resp.iterator(S.busy.?, S.cmd.?, data);
 
-                reset(&S);
                 return response;
             },
             .ping => {
                 var response = resp.iterator(S.busy.?, S.cmd.?, S.data[0..S.bcnt]);
 
-                reset(&S);
                 return response;
             },
             .cancel => {
-                reset(&S);
                 return null;
             },
             else => {
-                var response = resp.iterator(S.busy.?, S.cmd.?, "\x01"); // invalid request
-                reset(&S);
-                return response;
+                return S.@"error"(ErrorCodes.invalid_cmd);
             },
         }
     }
