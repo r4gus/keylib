@@ -63,7 +63,7 @@ pub const channels = struct {
 
     /// Check if the given CID represents a broadcast channel.
     pub fn isBroadcast(cid: Cid) bool {
-        return cid == 0 or cid == 0xffffffff;
+        return cid == 0xffffffff;
     }
 
     /// Check if the given cid has been allocated.
@@ -157,6 +157,8 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
         // Authenticator is currently busy handling a request with the given
         // Cid. `null` means not busy.
         var busy: ?Cid = null;
+        // Time in ms the initialization packet was received.
+        var begin: ?u32 = null;
         // Command to be executed.
         var cmd: ?Cmd = null;
         // The ammount of expected data bytes (max is: 64 - 7 + 128 * (64 - 5) = 7609).
@@ -169,6 +171,8 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
         // All clients (CIDs) share the same buffer, i.e. only one request
         // can be handled at a time.
         var data: [7609]u8 = undefined;
+
+        const timeout: u32 = 250; // 250 milli second timeout
 
         pub fn @"error"(e: ErrorCodes) CtapHidResponseIterator {
             const es = switch (e) {
@@ -186,6 +190,7 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
             const response = resp.iterator(if (busy) |c| c else 0xffffffff, Cmd.err, es);
 
             busy = null;
+            begin = null;
             cmd = null;
             bcnt_total = 0;
             bcnt = 0;
@@ -195,15 +200,26 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
         }
     };
 
+    if (S.begin != null and (auth.millis() - S.begin.?) > S.timeout) {
+        // the previous transaction has timed out -> reset
+        reset(&S);
+    }
+
     if (S.busy == null) { // initialization packet
-        if (packet.len < 7) {
-            // TODO: error packet ist too short
+        if (packet.len < 7) { // packet is too short
+            return S.@"error"(ErrorCodes.other);
         } else if (packet[4] & 0x80 == 0) {
-            // TODO: error, expected initialization packet but found continuation packet
+            // expected initialization packet but found continuation packet
+            return S.@"error"(ErrorCodes.invalid_cmd);
         }
 
-        // TODO: handle error bit 7 of CMD not being set.
         S.busy = misc.sliceToInt(Cid, packet[0..4]);
+        S.begin = auth.millis();
+
+        if (!channels.isBroadcast(S.busy.?) and !channels.isValid(S.busy.?)) {
+            return S.@"error"(ErrorCodes.invalid_channel);
+        }
+
         S.cmd = @intToEnum(Cmd, packet[4] & 0x7f);
         S.bcnt_total = misc.sliceToInt(u16, packet[5..7]);
 
@@ -212,16 +228,18 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
         S.bcnt = @intCast(u16, l);
     } else { // continuation packet
         if (packet.len < 5) {
-            // TODO: error packet ist too short
+            return S.@"error"(ErrorCodes.other);
         }
 
         if (misc.sliceToInt(Cid, packet[0..4]) != S.busy.?) {
-            // TODO: error, cid's don't match
             // tell client that the authenticator is busy!
+            return S.@"error"(ErrorCodes.channel_busy);
         } else if (packet[4] & 0x80 != 0) {
-            // TODO: error, expected continuation packet but found initialization packet
+            // expected continuation packet but found initialization packet
+            return S.@"error"(ErrorCodes.invalid_cmd);
         } else if ((S.seq == null and packet[4] > 0) or (S.seq != null and packet[4] != S.seq.? + 1)) {
-            // TODO: unexpected sequence number
+            // unexpected sequence number
+            return S.@"error"(ErrorCodes.invalid_seq);
         }
 
         S.seq = packet[4];
@@ -237,14 +255,14 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
             .init => {},
             else => {
                 if (!channels.isValid(S.busy.?)) {
-                    //return S.@"error"(ErrorCodes.invalid_channel); //<---- BUG TODO
+                    // return S.@"error"(ErrorCodes.invalid_channel); //<---- BUG TODO
                 }
             },
         }
 
         switch (S.cmd.?) {
             .init => {
-                const ir = InitResponse.new(misc.sliceToInt(Nonce, S.data[0..8]), 0xcafebabe, false, true, false);
+                const ir = InitResponse.new(misc.sliceToInt(Nonce, S.data[0..8]), channels.allocateChannelId(), false, true, false);
                 var data = allocator.alloc(u8, InitResponse.SIZE) catch {
                     reset(&S);
                     return null;
@@ -283,6 +301,7 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
 
 inline fn reset(s: anytype) void {
     s.*.busy = null;
+    s.*.begin = null;
     s.*.cmd = null;
     s.*.bcnt_total = 0;
     s.*.bcnt = 0;

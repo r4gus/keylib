@@ -174,6 +174,11 @@ pub fn Auth(comptime impl: type) type {
             }
         };
 
+        pub fn millis(self: *const Self) u32 {
+            _ = self;
+            return impl.millis();
+        }
+
         /// This function asks the user in some way for permission,
         /// e.g. button press, touch, key press.
         ///
