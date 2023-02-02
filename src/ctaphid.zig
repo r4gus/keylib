@@ -112,9 +112,9 @@ pub const InitResponse = packed struct {
             .nonce = nonce,
             .cid = cid,
             .version_identifier = 2,
-            .major_device_version_number = 1,
-            .minor_device_version_number = 0,
-            .build_device_version_number = 0,
+            .major_device_version_number = 0xca,
+            .minor_device_version_number = 0xfe,
+            .build_device_version_number = 0x01,
             .wink = wink,
             .reserved1 = false,
             .cbor = cbor,
@@ -169,11 +169,13 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
         var seq: ?u8 = 0;
         // Data buffer.
         // All clients (CIDs) share the same buffer, i.e. only one request
-        // can be handled at a time.
+        // can be handled at a time. This buffer is also used for some of
+        // the response data.
         var data: [7609]u8 = undefined;
 
         const timeout: u32 = 250; // 250 milli second timeout
 
+        /// Reset the state and return a error response message.
         pub fn @"error"(e: ErrorCodes) CtapHidResponseIterator {
             const es = switch (e) {
                 .invalid_cmd => "\x01",
@@ -251,40 +253,61 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
     if (S.bcnt >= S.bcnt_total and S.busy != null and S.cmd != null) {
         defer reset(&S);
 
+        // verify that the channel is valid
         switch (S.cmd.?) {
-            .init => {},
+            .init => {
+                // init can be called using the broadcast channel or an allocated one
+                if (!channels.isBroadcast(S.busy.?) and !channels.isValid(S.busy.?)) {
+                    return S.@"error"(ErrorCodes.invalid_channel);
+                }
+            },
             else => {
+                // all other commands require a valid channel
                 if (!channels.isValid(S.busy.?)) {
-                    // return S.@"error"(ErrorCodes.invalid_channel); //<---- BUG TODO
+                    return S.@"error"(ErrorCodes.invalid_channel);
                 }
             },
         }
 
+        // execute the command
         switch (S.cmd.?) {
-            .init => {
-                const ir = InitResponse.new(misc.sliceToInt(Nonce, S.data[0..8]), channels.allocateChannelId(), false, true, false);
-                var data = allocator.alloc(u8, InitResponse.SIZE) catch {
-                    reset(&S);
-                    return null;
-                };
-                ir.serialize(data[0..]);
-                var response = resp.iterator(S.busy.?, S.cmd.?, data);
-
-                return response;
+            .msg => {
+                return S.@"error"(ErrorCodes.invalid_cmd);
             },
             .cbor => {
                 var data = auth.handle(allocator, S.data[0..S.bcnt]) catch {
-                    reset(&S);
-                    return null;
+                    return S.@"error"(ErrorCodes.other);
                 };
 
                 var response = resp.iterator(S.busy.?, S.cmd.?, data);
 
                 return response;
             },
+            .init => {
+                if (channels.isBroadcast(S.busy.?)) {
+                    // If sent on the broadcast CID, it requests the device to allocate a
+                    // unique 32-bit channel identifier (CID) that can be used by the
+                    // requesting application during its lifetime.
+                    const ir = InitResponse.new(
+                        misc.sliceToInt(Nonce, S.data[0..8]),
+                        channels.allocateChannelId(),
+                        false,
+                        true,
+                        false,
+                    );
+                    ir.serialize(S.data[0..InitResponse.SIZE]);
+                    var response = resp.iterator(S.busy.?, S.cmd.?, S.data[0..InitResponse.SIZE]);
+                    return response;
+                } else {
+                    // The device then responds with the CID of the channel it received
+                    // the INIT on, using that channel.
+                    misc.intToSlice(S.data[0..], S.busy.?);
+                    var response = resp.iterator(S.busy.?, S.cmd.?, S.data[0..4]);
+                    return response;
+                }
+            },
             .ping => {
                 var response = resp.iterator(S.busy.?, S.cmd.?, S.data[0..S.bcnt]);
-
                 return response;
             },
             .cancel => {
