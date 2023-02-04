@@ -3,6 +3,8 @@ const cose = @import("zbor").cose;
 const crypto = @import("../crypto.zig");
 const EcdhP256 = crypto.ecdh.EcdhP256;
 const Sha256 = std.crypto.hash.sha2.Sha256;
+pub const Aes256 = std.crypto.core.aes.Aes256;
+pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 
 /// The minimum length of a PIN in bytes.
 pub const minimum_pin_length: usize = 4;
@@ -127,18 +129,18 @@ pub const PinUvAuthTokenState = struct {
     // TODO: usage_timer
     in_use: bool = false,
     /// The platform MUST invoke an authenticator operation using the pinUvAuthToken within this time limit
-    initial_usage_time_limit: u64 = 19000, // 19 s = 19000 ms
+    initial_usage_time_limit: u32 = 19000, // 19 s = 19000 ms
     /// The length of time the user is considered "present", as represented by the userPresent flag
-    user_present_time_limit: u64 = 19000, // 19 s = 19000 ms
-    max_usage_time_period: u64 = 600000, // 10 min = 600 s = 600000 ms
+    user_present_time_limit: u32 = 19000, // 19 s = 19000 ms
+    max_usage_time_period: u32 = 600000, // 10 min = 600 s = 600000 ms
     user_verified: bool = false,
     user_present: bool = false,
     /// The time in ms `beginUsingPinUvAuthToken` was called. Reference point to check
     /// if a time limit has been reached.
-    usage_timer: ?u64 = null,
+    usage_timer: ?u32 = null,
     /// Token has been used at least once
     used: bool = false,
-    pinRetries: u8,
+    pinRetries: u8 = 8,
     uvRetries: u8,
     /// The PIN/UV auth protocol state
     state: ?AuthProtocolState = null,
@@ -146,7 +148,7 @@ pub const PinUvAuthTokenState = struct {
     /// This function prepares the pinUvAuthToken for use by the platform, which has
     /// invoked one of the pinUvAuthToken-issuing operations, by setting particular
     /// pinUvAuthToken state variables to given use-case-specific values.
-    pub fn beginUsingPinUvAuthToken(self: *@This(), user_is_present: bool, start: u64) void {
+    pub fn beginUsingPinUvAuthToken(self: *@This(), user_is_present: bool, start: u32) void {
         self.user_present = user_is_present;
         self.user_verified = true;
         self.initial_usage_time_limit = 19000; // 19 s = 19000 ms
@@ -158,7 +160,7 @@ pub const PinUvAuthTokenState = struct {
     }
 
     /// Observes the pinUvAuthToken usage timer and takes appropriate action.
-    pub fn pinUvAuthTokenUsageTimerObserver(self: *@This(), time_ms: u64) void {
+    pub fn pinUvAuthTokenUsageTimerObserver(self: *@This(), time_ms: u32) void {
         if (self.usage_timer == null) return;
         const delta = time_ms - self.usage_timer.?;
 
@@ -233,7 +235,7 @@ pub const PinUvAuthTokenState = struct {
         );
     }
 
-    pub fn ecdh(self: *const @This(), peer_cose_key: cose.Key) ![Sha256.digest_length]u8 {
+    pub fn ecdh(self: *const @This(), peer_cose_key: cose.Key) ![64]u8 {
         const shared_point = try EcdhP256.scalarmultXY(
             self.state.?.authenticator_key_agreement_key.secret_key,
             peer_cose_key.@"-2_b",
@@ -242,10 +244,100 @@ pub const PinUvAuthTokenState = struct {
         // let z be the 32-byte, big-endian encoding of the x-coordinate
         // of the shared point
         const z: [32]u8 = shared_point.toUncompressedSec1()[1..33].*;
-        var shared: [Sha256.digest_length]u8 = undefined;
-        Sha256.hash(z[0..], &shared, .{});
-        return z;
+
+        // finalize shared secret
+        var shared: [64]u8 = undefined;
+        const salt: [32]u8 = .{0};
+
+        const prk = Hkdf.extract(salt[0..], z[0..]);
+        Hkdf.expand(shared[0..32], "CTAP2 HMAC key", prk);
+        Hkdf.expand(shared[32..64], "CTAP2 AES key", prk);
+
+        return shared;
     }
 
     // TODO: resume at encapsulate ( §6.5.6)
+
+    /// Return the AES-256-CBC encryption of demPlaintext.
+    /// The iv must be randomly generated
+    /// The result is iv || ct
+    pub fn encrypt(
+        iv: [16]u8,
+        key: [64]u8,
+        out: []u8,
+        demPlaintext: []const u8,
+    ) void {
+        var _iv: [16]u8 = iv;
+        std.mem.copy(u8, out[0..16], _iv[0..]);
+
+        var ctx = Aes256.initEnc(key[32..].*);
+
+        var i: usize = 0;
+        while (i < demPlaintext.len) : (i += 16) {
+            var block: [16]u8 = undefined;
+            std.mem.copy(u8, block[0..], demPlaintext[i .. i + 16]);
+
+            // block[i] xor iv
+            var j: usize = 0;
+            while (j < 16) : (j += 1) {
+                block[j] ^= _iv[j];
+            }
+
+            var block2: [16]u8 = undefined;
+            ctx.encrypt(&block2, &block);
+            std.mem.copy(u8, out[i + 16 .. i + 32], block2[0..]);
+            std.mem.copy(u8, _iv[0..], block2[0..]);
+        }
+    }
+
+    /// Return the AES-256-CBC decryption of demCiphertext.
+    /// Expect key to have the form iv || ct
+    pub fn decrypt(
+        key: [64]u8,
+        out: []u8,
+        demCiphertext: []const u8,
+    ) void {
+        var iv: [16]u8 = demCiphertext[0..16].*;
+        var ctx = Aes256.initDec(key[32..].*);
+
+        var i: usize = 16;
+        while (i < demCiphertext.len) : (i += 16) {
+            var block: [16]u8 = undefined;
+            std.mem.copy(u8, block[0..], demCiphertext[i .. i + 16]);
+            var block2: [16]u8 = undefined;
+
+            ctx.decrypt(&block2, &block);
+
+            // block[i] xor iv
+            var j: usize = 0;
+            while (j < 16) : (j += 1) {
+                block2[j] ^= iv[j];
+            }
+
+            std.mem.copy(u8, out[i - 16 .. i], block2[0..]);
+            std.mem.copy(u8, iv[0..], block[0..]);
+        }
+    }
 };
+
+test "aes cbc encryption 1" {
+    const iv = [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+    const key = "\x82\x0e\x51\x5a\xfe\x6f\xdb\x9c\xf9\x25\xd5\xa7\x10\x87\x55\x3b\xee\x15\x1e\xc6\xa4\x7d\xc2\xb8\x11\xd4\xb9\x18\x57\x95\xf3\x7a\xe5\x88\xd5\xe0\xa3\x51\x16\x72\x51\x15\xca\x45\x3d\x65\x06\x99\xca\x95\x9d\x93\x07\x06\x58\xdd\xea\xb5\x06\xa9\x5a\x1d\x51\xf2";
+    var out: [32]u8 = undefined;
+    const in = "abcdefghjklmnopq";
+
+    PinUvAuthTokenState.encrypt(iv, key.*, out[0..], in[0..]);
+
+    try std.testing.expectEqualSlices(u8, iv[0..], out[0..16]);
+    try std.testing.expectEqualSlices(u8, "\x2b\x0d\xaf\xde\xc8\xee\x0d\x22\x7d\xe7\x17\x78\xfe\xde\xc5\x31", out[16..]);
+}
+
+test "aes cbc decryption 1" {
+    const key = "\x82\x0e\x51\x5a\xfe\x6f\xdb\x9c\xf9\x25\xd5\xa7\x10\x87\x55\x3b\xee\x15\x1e\xc6\xa4\x7d\xc2\xb8\x11\xd4\xb9\x18\x57\x95\xf3\x7a\xe5\x88\xd5\xe0\xa3\x51\x16\x72\x51\x15\xca\x45\x3d\x65\x06\x99\xca\x95\x9d\x93\x07\x06\x58\xdd\xea\xb5\x06\xa9\x5a\x1d\x51\xf2";
+    var out: [16]u8 = undefined;
+    const in = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x2b\x0d\xaf\xde\xc8\xee\x0d\x22\x7d\xe7\x17\x78\xfe\xde\xc5\x31";
+
+    PinUvAuthTokenState.decrypt(key.*, out[0..], in[0..]);
+
+    try std.testing.expectEqualSlices(u8, "abcdefghjklmnopq", out[0..]);
+}
