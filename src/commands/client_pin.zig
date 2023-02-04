@@ -3,8 +3,9 @@ const cose = @import("zbor").cose;
 const crypto = @import("../crypto.zig");
 const EcdhP256 = crypto.ecdh.EcdhP256;
 const Sha256 = std.crypto.hash.sha2.Sha256;
-pub const Aes256 = std.crypto.core.aes.Aes256;
-pub const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
+const Aes256 = std.crypto.core.aes.Aes256;
+const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
+const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 
 /// The minimum length of a PIN in bytes.
 pub const minimum_pin_length: usize = 4;
@@ -318,6 +319,10 @@ pub const PinUvAuthTokenState = struct {
             std.mem.copy(u8, iv[0..], block[0..]);
         }
     }
+
+    //pub fn authenticate(key: [32]u8, message: []const u8) [Hmac.mac_length]u8 {
+    //
+    //}
 };
 
 test "aes cbc encryption 1" {
