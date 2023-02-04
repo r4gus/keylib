@@ -320,9 +320,12 @@ pub const PinUvAuthTokenState = struct {
         }
     }
 
-    //pub fn authenticate(key: [32]u8, message: []const u8) [Hmac.mac_length]u8 {
-    //
-    //}
+    /// Return the result of computing HMAC-SHA-256 on a 32-byte key and a message.
+    pub fn authenticate(key: [32]u8, message: []const u8) [Hmac.mac_length]u8 {
+        var signature: [Hmac.mac_length]u8 = undefined;
+        Hmac.create(&signature, message, key[0..]);
+        return signature;
+    }
 };
 
 test "aes cbc encryption 1" {
@@ -367,4 +370,11 @@ test "aes cbc decryption 2" {
     PinUvAuthTokenState.decrypt(key.*, out[0..], in[0..]);
 
     try std.testing.expectEqualSlices(u8, "\xd2\xcb\xec\x7a\x7e\x0e\x65\x87\x0c\xeb\x7f\x1d\xbb\x98\x4a\x75\xd6\xb2\xce\x33\x2a\xb0\x84\x1b\xa6\xe6\x71\x61\x49\x74\xfd\x65\x08\xf1\xb2\x93\x1a\x25\xeb\xbc\x5b\xe9\xc5\x2c\x27\x92\x32\x99", out[0..]);
+}
+
+test "authenticate 1" {
+    const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
+    const out = PinUvAuthTokenState.authenticate(key.*, "ctap2fido2webauthn");
+
+    try std.testing.expectEqualSlices(u8, "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", out[0..]);
 }
