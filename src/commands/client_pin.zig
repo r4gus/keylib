@@ -326,6 +326,13 @@ pub const PinUvAuthTokenState = struct {
         Hmac.create(&signature, message, key[0..]);
         return signature;
     }
+
+    /// Return true if HMAC(key, message) == signature
+    /// If the key is a pinUvAuthToken, it must be IN USE!
+    pub fn verify(key: [32]u8, message: []const u8, signature: [Hmac.mac_length]u8) bool {
+        const signature2 = authenticate(key, message);
+        return std.mem.eql(u8, signature2[0..], signature[0..]);
+    }
 };
 
 test "aes cbc encryption 1" {
@@ -377,4 +384,16 @@ test "authenticate 1" {
     const out = PinUvAuthTokenState.authenticate(key.*, "ctap2fido2webauthn");
 
     try std.testing.expectEqualSlices(u8, "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", out[0..]);
+}
+
+test "verify 1" {
+    const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
+    const out = PinUvAuthTokenState.verify(key.*, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c".*);
+    try std.testing.expectEqual(true, out);
+}
+
+test "verify 2" {
+    const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
+    const out = PinUvAuthTokenState.verify(key.*, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x09\x4e\x4c\xe8\x45\x7c".*);
+    try std.testing.expectEqual(false, out);
 }
