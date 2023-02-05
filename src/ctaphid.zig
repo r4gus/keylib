@@ -151,8 +151,7 @@ pub const InitResponse = packed struct {
 // Response Handler
 //--------------------------------------------------------------------+
 
-// TODO: assume that the allocator will always provide enough memory.
-pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
+pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
     const S = struct {
         // Authenticator is currently busy handling a request with the given
         // Cid. `null` means not busy.
@@ -275,12 +274,15 @@ pub fn handle(allocator: Allocator, packet: []const u8, auth: anytype) ?CtapHidR
                 return S.@"error"(ErrorCodes.invalid_cmd);
             },
             .cbor => {
-                var data = auth.handle(allocator, S.data[0..S.bcnt]) catch {
+                var response = resp.CtapHidResponseIterator.new(S.busy.?, S.cmd.?);
+                var fba = std.heap.FixedBufferAllocator.init(&response.raw);
+                const a = fba.allocator();
+
+                var data = auth.handle(a, S.data[0..S.bcnt]) catch {
                     return S.@"error"(ErrorCodes.other);
                 };
 
-                var response = resp.iterator(S.busy.?, S.cmd.?, data);
-
+                response.data = data;
                 return response;
             },
             .init => {

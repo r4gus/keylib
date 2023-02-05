@@ -35,12 +35,23 @@ const COMMAND_ID = 0x80;
 ///
 /// The first time `next()` is called, the iterator will return a `u8` slice of size `PACKET_SIZE` (64 Bytes, i.e. USB full speed) which contains a initialization packet, i.e. header plus the first data bytes (`PACKET_SIZE`-7). Every continuous call to `next()` will return a continuation packet until all data bytes have been encoded.
 pub const CtapHidResponseIterator = struct {
-    cntr: usize,
-    seq: misc.Seq,
-    buffer: [PACKET_SIZE]u8,
-    data: []const u8,
+    cntr: usize = 0,
+    seq: misc.Seq = 0,
+    buffer: [PACKET_SIZE]u8 = undefined,
+    data: []const u8 = &.{},
     cid: misc.Cid,
     cmd: command.Cmd,
+    raw: [2048]u8 = undefined,
+
+    pub fn new(
+        cid: misc.Cid,
+        cmd: command.Cmd,
+    ) CtapHidResponseIterator {
+        return .{
+            .cid = cid,
+            .cmd = cmd,
+        };
+    }
 
     /// Get the next data packet.
     ///
