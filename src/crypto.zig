@@ -4,6 +4,7 @@ const cose = cbor.cose;
 
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
+const Sha256 = std.crypto.hash.sha2.Sha256;
 
 pub const ecdsa = @import("crypto/ecdsa.zig"); // copy from std lib without automatic call to rng.
 pub const ecdh = @import("crypto/ecdh.zig");
@@ -107,6 +108,28 @@ pub fn sign(kp: KeyPair, auth_data: []const u8, client_data_hash: []const u8) !S
 
 pub fn getCoseKey(kp: KeyPair) cose.Key {
     return cose.Key.fromP256Pub(.Es256, kp.public_key);
+}
+
+// #########################################################################################
+// State
+// #########################################################################################
+
+pub fn createMasterSecret(comptime rand: fn ([]u8) void) [32]u8 {
+    var ikm: [32]u8 = undefined;
+    var salt: [16]u8 = undefined;
+    rand(ikm[0..]);
+    rand(salt[0..]);
+    return Hkdf.extract(&salt, &ikm);
+}
+
+pub fn pinHash(pin: []const u8) [16]u8 {
+    var ph: [32]u8 = undefined;
+    Sha256.hash(pin, &ph, .{});
+    return ph[0..16].*;
+}
+
+pub fn defaultPinHash() [16]u8 {
+    return pinHash("candystick");
 }
 
 test "crypto test" {
