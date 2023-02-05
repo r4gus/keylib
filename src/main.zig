@@ -40,6 +40,7 @@ const extension = @import("extensions.zig");
 pub const Extensions = extension.Extensions;
 const ClientPinParam = commands.client_pin.ClientPinParam;
 const ClientPinResponse = commands.client_pin.ClientPinResponse;
+const PinUvAuthTokenState = commands.client_pin.PinUvAuthTokenState;
 const PinConf = commands.client_pin.PinConf;
 
 /// General properties of a given authenticator.
@@ -554,16 +555,16 @@ pub fn Auth(comptime impl: type) type {
                     };
                 },
                 .authenticator_client_pin => {
-                    const PC = struct {
-                        var conf: ?PinConf = null;
+                    const S = struct {
+                        var initialized: bool = false;
+                        var state: PinUvAuthTokenState = .{};
                     };
 
-                    // Crete configuration only if a PIN command is actually issued.
-                    if (PC.conf == null) {
-                        PC.conf = commands.client_pin.makeConfig(getBlock) catch {
-                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
-                            return res.toOwnedSlice();
-                        };
+                    // At power-up, the authenticator calls initialize for each
+                    // pinUvAuthProtocol that it supports.
+                    if (!S.initialized) {
+                        S.state.initialize(getBlock);
+                        S.initialized = true;
                     }
 
                     const cpp = cbor.parse(ClientPinParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
@@ -585,69 +586,28 @@ pub fn Auth(comptime impl: type) type {
                             };
                         },
                         .getKeyAgreement => {
-                            // Authenticator responds back with public key of
-                            // authenticatorKeyAgreementKey, "aG".
+                            // Validate arguments
+                            // +++++++++++++++++++
+                            // return error if required parameter is not provided.
+                            const protocol = if (cpp.@"1") |prot| prot else {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
+                                return res.toOwnedSlice();
+                            };
+                            // return error if authenticator doesn't support the selected protocol.
+                            if (protocol != .v2) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Create response
+                            // +++++++++++++++++
                             cpr = .{
-                                .@"1" = cose.Key.fromP256Pub(
-                                    .EcdhEsHkdf256,
-                                    PC.conf.?.authenticator_key_agreement_key,
-                                ),
+                                .@"1" = S.state.getPublicKey(),
                             };
                         },
-                        .setPIN => {
-                            // keyAgreement, pinAuth and newPinEnc are mandatory for this command.
-                            if (cpp.@"3" == null or cpp.@"4" == null or cpp.@"5" == null) {
-                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
-                                return res.toOwnedSlice();
-                            }
-
-                            if (data.isPinSet()) {
-                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
-                                return res.toOwnedSlice();
-                            }
-
-                            // Generate shared secret
-                            const deG = EcdhP256.scalarmultXY(PC.conf.?.authenticator_key_agreement_key.secret_key, cpp.@"3".?.P256.@"-2", cpp.@"3".?.P256.@"-3") catch unreachable;
-                            var shared_secret: [Sha256.digest_length]u8 = undefined;
-                            // shared = SHA-256((deG).x)
-                            Sha256.hash(deG.toUncompressedSec1()[1..33], &shared_secret, .{});
-
-                            // Verify pinAuth
-                            var auth_pin_auth: [Hmac.mac_length]u8 = undefined;
-                            Hmac.create(&auth_pin_auth, cpp.@"5".?, shared_secret[0..]);
-                            // Only the first 16 bytes are compared
-                            if (!std.mem.eql(u8, auth_pin_auth[0..16], cpp.@"4".?[0..])) {
-                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
-                                return res.toOwnedSlice();
-                            }
-
-                            // Decrypt the encrypted new pin using AES-256-CBC with IV=0
-                            // i.e. the first block doesnt have to be XORed. The encrypted
-                            // pin should be at least 64 bytes (CTAP2 docs)!
-                            var new_pin: [64]u8 = undefined;
-                            var i: usize = 0;
-                            var ctx = Aes256.initDec(shared_secret);
-                            ctx.decrypt(new_pin[0..16], cpp.@"5".?[0..16]);
-                            ctx.decrypt(new_pin[16..32], cpp.@"5".?[16..32]);
-                            while (i < 16) : (i += 1) new_pin[i + 16] ^= new_pin[i];
-                            ctx.decrypt(new_pin[32..48], cpp.@"5".?[32..48]);
-                            while (i < 32) : (i += 1) new_pin[i + 16] ^= new_pin[i];
-                            ctx.decrypt(new_pin[48..64], cpp.@"5".?[48..64]);
-                            while (i < 48) : (i += 1) new_pin[i + 16] ^= new_pin[i];
-                            // Determine the length of the pin.
-                            i = 0;
-                            while (i < 64) : (i += 1) if (new_pin[i] == 0) break;
-
-                            if (i < commands.client_pin.minimum_pin_length) {
-                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_policy_violation);
-                                return res.toOwnedSlice();
-                            }
-
-                            // Set the new PIN hash
-                            var new_pin_hash: [Sha256.digest_length]u8 = undefined;
-                            Sha256.hash(new_pin[0..i], &new_pin_hash, .{});
-                            data.setPin(new_pin_hash[0..16].*);
-                        },
+                        .setPIN => {},
                         .changePIN => {},
                         .getPINToken => {},
                         else => {},

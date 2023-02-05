@@ -19,7 +19,6 @@ pub const PinProtocol = enum(u8) {
     /// Pin protocol version 1.
     v1 = 1,
     /// Pin Protocol version 2 for FIPS certified authenticators.
-    /// Currently not supported!
     v2 = 2,
 };
 
@@ -32,13 +31,12 @@ pub const SubCommand = enum(u8) {
     getPINToken = 0x05,
     getPinUvAuthTokenUsingUv = 0x06,
     getUvRetries = 0x07,
-    getPinUvAuthTokenUsingPin = 0x08,
+    getPinUvAuthTokenUsingPin = 0x09,
 };
 
 pub const ClientPinParam = struct {
-    /// punProtocol: PIN protocol version chosen by the client. For
-    /// this version of the spec, this SHALL be the number 1.
-    @"1": PinProtocol,
+    /// pinAuthProtocol: PIN protocol version chosen by the client.
+    @"1": ?PinProtocol,
     /// subCommand: The authenticator Client PIN sub command currently
     /// being requested.
     @"2": SubCommand,
@@ -57,10 +55,18 @@ pub const ClientPinParam = struct {
     /// pinHashEnc: Encrypted first 16 bytes of SHA-256 of PIN using
     /// sharedSecret.
     @"6": ?[16]u8,
+    /// permissions: Bitfield of permissions. If present, MUST NOT be 0.
+    @"9": ?u8,
+    /// rpId: The RP ID to assign as the permissions RP ID.
+    @"10": ?[]const u8,
 
     pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
         if (self.@"5") |pin| {
             allocator.free(pin);
+        }
+
+        if (self.@"10") |id| {
+            allocator.free(id);
         }
     }
 };
@@ -69,7 +75,7 @@ pub const ClientPinResponse = struct {
     /// Authenticator key agreement public key in COSE_Key format. This will
     /// be used to establish a sharedSecret between platform and the authenticator.
     @"1": ?cose.Key = null,
-    /// pinToken: Encrypted pinToken using sharedSecret to be used in
+    /// pinUvAuthToken: Encrypted pinToken using sharedSecret to be used in
     /// subsequent authenticatorMakeCredential and
     /// authenticatorGetAssertion operations.
     @"2": ?[]const u8 = null,
@@ -78,6 +84,11 @@ pub const ClientPinResponse = struct {
     /// Setting a new PIN, Changing existing PIN and Getting pinToken
     /// from the authenticator flows.
     @"3": ?u8 = null,
+    /// powerCycleState: Present and true if the authenticator requires a power
+    /// cycle before any future PIN operation, false if no power cycle needed.
+    @"4": ?bool = null,
+    /// uvRetries: Number of uv attempts remaining before lockout.
+    @"5": ?u8 = null,
 };
 
 pub const AuthProtocolState = struct {
@@ -121,12 +132,13 @@ pub const PinUvAuthTokenPermissions = packed struct {
     be: u1 = 0,
     lbw: u1 = 0,
     acfg: u1 = 0,
+    reserved: u2 = 0,
 };
 
 pub const PinUvAuthTokenState = struct {
     /// A permissions RP ID, initially null
     rp_id: ?[]const u8 = null,
-    permissions: PinUvAuthTokenPermissions = 0,
+    permissions: u8 = 0,
     // TODO: usage_timer
     in_use: bool = false,
     /// The platform MUST invoke an authenticator operation using the pinUvAuthToken within this time limit
@@ -142,7 +154,7 @@ pub const PinUvAuthTokenState = struct {
     /// Token has been used at least once
     used: bool = false,
     pinRetries: u8 = 8,
-    uvRetries: u8,
+    uvRetries: u8 = 8,
     /// The PIN/UV auth protocol state
     state: ?AuthProtocolState = null,
 
@@ -218,7 +230,8 @@ pub const PinUvAuthTokenState = struct {
         rand(seed[0..]);
 
         self.state = .{
-            .authenticator_key_agreement_key = try EcdhP256.KeyPair.create(seed),
+            // TODO: is it really unreachable???
+            .authenticator_key_agreement_key = EcdhP256.KeyPair.create(seed) catch unreachable,
             .pin_token = undefined,
         };
     }
