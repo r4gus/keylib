@@ -604,7 +604,108 @@ pub fn Auth(comptime impl: type) type {
                             };
                         },
                         .setPIN => {},
-                        .changePIN => {},
+                        .changePIN => {
+                            // Return error if the authenticator does not receive the
+                            // mandatory parameters for this command.
+                            if (cpp.@"1" == null or cpp.@"3" == null or cpp.@"5" == null or
+                                cpp.@"6" == null or cpp.@"4" == null)
+                            {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
+                                return res.toOwnedSlice();
+                            }
+
+                            // If pinUvAuthProtocol is not supported, return error.
+                            if (cpp.@"1".? != .v2) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                                return res.toOwnedSlice();
+                            }
+
+                            // If the pinRetries counter is 0, return error.
+                            const retries = data.getRetries();
+                            if (retries <= 0) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_blocked);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Obtain the shared secret
+                            const shared_secret = S.state.ecdh(cpp.@"3".?) catch {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                                return res.toOwnedSlice();
+                            };
+
+                            // Verify the data (newPinEnc || pinHashEnc)
+                            const new_pin_len = cpp.@"5".?.len;
+                            var msg = try allocator.alloc(u8, new_pin_len + 16);
+                            defer allocator.free(msg);
+                            std.mem.copy(u8, msg[0..new_pin_len], cpp.@"5".?[0..]);
+                            std.mem.copy(u8, msg[new_pin_len..], cpp.@"6".?[0..]);
+
+                            const verified = PinUvAuthTokenState.verify(
+                                shared_secret[0..32].*,
+                                msg, // newPinEnc || pinHashEnc
+                                cpp.@"4".?, // pinUvAuthParam
+                            );
+                            if (!verified) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                                return res.toOwnedSlice();
+                            }
+
+                            // decrement pin retries
+                            data.setRetries(retries - 1);
+
+                            // Decrypt pinHashEnc and match against stored pinHash
+                            var pinHash1: [16]u8 = undefined;
+                            PinUvAuthTokenState.decrypt(
+                                shared_secret,
+                                pinHash1[0..],
+                                cpp.@"6".?[0..],
+                            );
+                            if (!std.mem.eql(u8, pinHash1[0..], data.getPin()[0..])) {
+                                // The pin hashes don't match
+                                S.state.regenerate(getBlock);
+
+                                res.items[0] = if (data.getRetries() == 0)
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_blocked)
+                                    // TODO: reset authenticator -> DOOMSDAY
+                                else
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Set the pinRetries to maximum
+                            data.setRetries(8);
+
+                            // Decrypt new pin
+                            var paddedNewPin: [64]u8 = undefined;
+                            PinUvAuthTokenState.decrypt(
+                                shared_secret,
+                                paddedNewPin[0..],
+                                cpp.@"5".?[0..],
+                            );
+                            var pnp_end: usize = 0;
+                            while (paddedNewPin[pnp_end] != 0 and pnp_end < 64) : (pnp_end += 1) {}
+                            const newPin = paddedNewPin[0..pnp_end];
+                            if (newPin.len < commands.client_pin.minimum_pin_length) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_policy_violation);
+                                return res.toOwnedSlice();
+                            }
+
+                            // TODO: support forcePINChange
+                            // TODO: support 15.
+                            // TODO: support 16.
+
+                            // Store new pin
+                            data.setPin(crypt.pinHash(newPin));
+
+                            // Invalidate pinUvAuthTokens
+                            S.state.resetPinUvAuthToken(getBlock);
+                        },
                         .getPINToken => {},
                         else => {},
                     }

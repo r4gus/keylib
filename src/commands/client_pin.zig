@@ -35,7 +35,7 @@ pub const SubCommand = enum(u8) {
 };
 
 pub const ClientPinParam = struct {
-    /// pinAuthProtocol: PIN protocol version chosen by the client.
+    /// pinUvAuthProtocol: PIN protocol version chosen by the client.
     @"1": ?PinProtocol,
     /// subCommand: The authenticator Client PIN sub command currently
     /// being requested.
@@ -45,13 +45,13 @@ pub const ClientPinParam = struct {
     /// parameter and MUST NOT contain any other optional parameters.
     /// The "alg" parameter MUST contain a COSEAlgorithmIdentifier value.
     @"3": ?cose.Key,
-    /// pinAuth: First 16 bytes of HMAC-SHA-256 of encrypted contents
+    /// pinUvAuth: HMAC-SHA-256 of encrypted contents
     /// using sharedSecret. See Setting a new PIN, Changing existing
     /// PIN and Getting pinToken from the authenticator for more details.
-    @"4": ?[16]u8,
+    @"4": ?[Hmac.mac_length]u8,
     /// newPinEnc: Encrypted new PIN using sharedSecret. Encryption is
     /// done over UTF-8 representation of new PIN.
-    @"5": ?[]const u8,
+    @"5": ?[]const u8, // TODO: this should always be 64 bytes
     /// pinHashEnc: Encrypted first 16 bytes of SHA-256 of PIN using
     /// sharedSecret.
     @"6": ?[16]u8,
@@ -225,7 +225,7 @@ pub const PinUvAuthTokenState = struct {
     }
 
     /// Generate a fresh, random P-256 private key, x.
-    fn regenerate(self: *@This(), rand: *const fn ([]u8) void) void {
+    pub fn regenerate(self: *@This(), rand: *const fn ([]u8) void) void {
         var seed: [EcdhP256.secret_length]u8 = undefined;
         rand(seed[0..]);
 
@@ -237,7 +237,7 @@ pub const PinUvAuthTokenState = struct {
     }
 
     /// Generate a fresh 32 bytes pinUvAuthToken.
-    fn resetPinUvAuthToken(self: *@This(), rand: *const fn ([]u8) void) void {
+    pub fn resetPinUvAuthToken(self: *@This(), rand: *const fn ([]u8) void) void {
         rand(self.state.?.pin_token[0..]);
     }
 
@@ -252,8 +252,8 @@ pub const PinUvAuthTokenState = struct {
     pub fn ecdh(self: *const @This(), peer_cose_key: cose.Key) ![64]u8 {
         const shared_point = try EcdhP256.scalarmultXY(
             self.state.?.authenticator_key_agreement_key.secret_key,
-            peer_cose_key.@"-2_b",
-            peer_cose_key.@"-3_b",
+            peer_cose_key.P256.@"-2",
+            peer_cose_key.P256.@"-3",
         );
         // let z be the 32-byte, big-endian encoding of the x-coordinate
         // of the shared point
@@ -261,7 +261,7 @@ pub const PinUvAuthTokenState = struct {
 
         // finalize shared secret
         var shared: [64]u8 = undefined;
-        const salt: [32]u8 = .{0};
+        const salt: [32]u8 = .{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
         const prk = Hkdf.extract(salt[0..], z[0..]);
         Hkdf.expand(shared[0..32], "CTAP2 HMAC key", prk);
