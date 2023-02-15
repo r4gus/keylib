@@ -43,6 +43,8 @@ const ClientPinResponse = commands.client_pin.ClientPinResponse;
 const PinUvAuthTokenState = commands.client_pin.PinUvAuthTokenState;
 const PinConf = commands.client_pin.PinConf;
 
+const data_module = @import("data.zig");
+
 /// General properties of a given authenticator.
 pub const Info = struct {
     /// versions: List of supported versions.
@@ -759,4 +761,5 @@ test "main" {
     _ = crypt;
     _ = commands;
     _ = ctaphid;
+    _ = data_module;
 }
