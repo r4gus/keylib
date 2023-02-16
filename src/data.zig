@@ -17,6 +17,14 @@ pub const PublicData = struct {
     },
     c: []const u8, // ms || pinHash || pinLen || signCtr || padding
     tag: [16]u8,
+
+    pub fn isValid(self: *const @This()) bool {
+        return self.meta.valid == 0xF1;
+    }
+
+    pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+        allocator.free(self.c);
+    }
 };
 
 /// This data must not be stored as plain-text

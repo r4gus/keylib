@@ -106,76 +106,107 @@ pub fn Auth(comptime impl: type) type {
         // Interface
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-        pub const Data = struct {
-            d: [data_len]u8 = undefined,
+        pub fn loadData(allocator: std.mem.Allocator) !data_module.PublicData {
+            var d = impl.load(allocator);
+            defer allocator.free(d);
+            return cbor.parse(data_module.PublicData, try cbor.DataItem.new(d), .{ .allocator = allocator }) catch unreachable;
+        }
 
-            pub fn load() @This() {
-                return @This(){
-                    .d = impl.load(),
-                };
-            }
+        pub fn storeData(data: *const data_module.PublicData) void {
+            // Lets allocate the required memory on the stack for data
+            // serialization.
+            var raw: [512]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&raw);
+            const allocator = fba.allocator();
+            var arr = std.ArrayList(u8).init(allocator);
+            defer arr.deinit();
+            var writer = arr.writer();
 
-            pub fn store(self: *@This()) void {
-                impl.store(self.d);
-            }
+            // reserve bytes for cbor size
+            writer.writeAll("\x00\x00\x00\x00") catch unreachable;
 
-            /// Tells if the given data structure is valid or not.
-            pub fn isValid(self: *const @This()) bool {
-                return self.d[0] == 0xF1;
-            }
+            // Serialize PublicData to cbor
+            cbor.stringify(data, .{}, writer) catch unreachable;
 
-            /// Tells if the given data structure is valid or not.
-            pub fn setValid(self: *@This()) void {
-                self.d[0] = 0xF1;
-            }
+            // Prepend size. This might help reading back the data if no
+            // underlying file system is available.
+            const len = @intCast(u32, arr.items.len - 4);
+            std.mem.writeIntSliceLittle(u32, arr.items[0..4], len);
 
-            pub fn getMs(self: *const @This()) [ms_length]u8 {
-                return self.d[1 .. ms_length + 1].*;
-            }
+            // Now store `SIZE || CBOR`
+            impl.store(arr.items[0..]);
+        }
 
-            pub fn setMs(self: *@This(), data: [ms_length]u8) void {
-                std.mem.copy(u8, self.d[1 .. ms_length + 1], data[0..]);
-            }
+        //pub const Data = struct {
+        //    d: [data_len]u8 = undefined,
 
-            pub fn getPin(self: *const @This()) [pin_len]u8 {
-                return self.d[ms_length + 1 .. ms_length + 1 + pin_len].*;
-            }
+        //    pub fn load() @This() {
+        //        return @This(){
+        //            .d = impl.load(),
+        //        };
+        //    }
 
-            pub fn setPin(self: *@This(), data: [pin_len]u8) void {
-                std.mem.copy(u8, self.d[ms_length + 1 .. ms_length + 1 + pin_len], data[0..]);
-            }
+        //    pub fn store(self: *@This()) void {
+        //        impl.store(self.d);
+        //    }
 
-            pub fn isPinSet(self: *const @This()) bool {
-                const p = self.getPin();
-                var i: usize = 0;
-                while (i < pin_len) : (i += 1) {
-                    if (p[i] != 0) return true;
-                }
-                return false;
-            }
+        //    /// Tells if the given data structure is valid or not.
+        //    pub fn isValid(self: *const @This()) bool {
+        //        return self.d[0] == 0xF1;
+        //    }
 
-            pub fn getSignCtr(self: *@This()) u32 {
-                const offset: usize = 1 + ms_length + pin_len;
-                const x: u32 = std.mem.readIntSliceLittle(u32, self.d[offset .. offset + 4]);
-                std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], x + 1);
-                return x;
-            }
+        //    /// Tells if the given data structure is valid or not.
+        //    pub fn setValid(self: *@This()) void {
+        //        self.d[0] = 0xF1;
+        //    }
 
-            pub fn setSignCtr(self: *@This(), data: u32) void {
-                const offset: usize = 1 + ms_length + pin_len;
-                std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], data);
-            }
+        //    pub fn getMs(self: *const @This()) [ms_length]u8 {
+        //        return self.d[1 .. ms_length + 1].*;
+        //    }
 
-            pub fn getRetries(self: *const @This()) u8 {
-                const offset: usize = 1 + ms_length + pin_len + 4;
-                return self.d[offset];
-            }
+        //    pub fn setMs(self: *@This(), data: [ms_length]u8) void {
+        //        std.mem.copy(u8, self.d[1 .. ms_length + 1], data[0..]);
+        //    }
 
-            pub fn setRetries(self: *@This(), data: u8) void {
-                const offset: usize = 1 + ms_length + pin_len + 4;
-                self.d[offset] = data;
-            }
-        };
+        //    pub fn getPin(self: *const @This()) [pin_len]u8 {
+        //        return self.d[ms_length + 1 .. ms_length + 1 + pin_len].*;
+        //    }
+
+        //    pub fn setPin(self: *@This(), data: [pin_len]u8) void {
+        //        std.mem.copy(u8, self.d[ms_length + 1 .. ms_length + 1 + pin_len], data[0..]);
+        //    }
+
+        //    pub fn isPinSet(self: *const @This()) bool {
+        //        const p = self.getPin();
+        //        var i: usize = 0;
+        //        while (i < pin_len) : (i += 1) {
+        //            if (p[i] != 0) return true;
+        //        }
+        //        return false;
+        //    }
+
+        //    pub fn getSignCtr(self: *@This()) u32 {
+        //        const offset: usize = 1 + ms_length + pin_len;
+        //        const x: u32 = std.mem.readIntSliceLittle(u32, self.d[offset .. offset + 4]);
+        //        std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], x + 1);
+        //        return x;
+        //    }
+
+        //    pub fn setSignCtr(self: *@This(), data: u32) void {
+        //        const offset: usize = 1 + ms_length + pin_len;
+        //        std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], data);
+        //    }
+
+        //    pub fn getRetries(self: *const @This()) u8 {
+        //        const offset: usize = 1 + ms_length + pin_len + 4;
+        //        return self.d[offset];
+        //    }
+
+        //    pub fn setRetries(self: *@This(), data: u8) void {
+        //        const offset: usize = 1 + ms_length + pin_len + 4;
+        //        self.d[offset] = data;
+        //    }
+        //};
 
         pub fn millis(self: *const Self) u32 {
             _ = self;
@@ -207,23 +238,50 @@ pub fn Auth(comptime impl: type) type {
             }
         }
 
+        pub fn reset(allocator: std.mem.Allocator, ctr: [12]u8) void {
+            const default_pin = "candystick";
+
+            // Prepare secret data
+            var secret_data: data_module.SecretData = undefined;
+            secret_data.master_secret = crypt.createMasterSecret(getBlock);
+            secret_data.pin_hash = crypt.pinHash(default_pin);
+            secret_data.pin_length = default_pin.len;
+            secret_data.sign_ctr = 0;
+
+            // Prepare public data
+            var public_data: data_module.PublicData = undefined;
+            defer public_data.deinit(allocator);
+            public_data.meta.valid = 0xF1;
+            getBlock(public_data.meta.salt[0..]);
+            public_data.meta.nonce_ctr = ctr;
+            public_data.meta.pin_retries = 8;
+
+            // Derive key from pin
+            const key = Hkdf.extract(public_data.meta.salt[0..], default_pin);
+
+            // Encrypt secret data
+            public_data.c = data_module.encryptSecretData(
+                allocator,
+                &public_data.tag,
+                &secret_data,
+                key,
+                public_data.meta.nonce_ctr,
+            ) catch unreachable;
+
+            storeData(&public_data);
+        }
+
         pub fn initData(self: *const Self) void {
             _ = self;
-            var data = Data.load();
+            var raw: [1024]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator(&raw);
+            const allocator = fba.allocator();
 
-            // Do nothing if data has already been initialized.
-            if (data.isValid()) return;
+            var data = loadData(allocator) catch {
+                reset(allocator, [_]u8{0} ** 12);
+            };
 
-            // Create a more uniformly unbiased and higher entropy,
-            // from the RANDOMLY GENERATED byte string.
-            const ms = crypt.createMasterSecret(getBlock);
-
-            data.setMs(ms);
-            data.setPin(crypt.defaultPinHash());
-            data.setSignCtr(0);
-            data.setRetries(8);
-            data.setValid();
-            data.store();
+            if (!data.isValid()) reset(allocator, [_]u8{0} ** 12);
         }
 
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -244,8 +302,60 @@ pub fn Auth(comptime impl: type) type {
                 return res.toOwnedSlice();
             };
 
-            var data = Data.load();
-            defer data.store(); // write changes back to memory
+            const S = struct {
+                var initialized: bool = false;
+                var state: PinUvAuthTokenState = .{};
+            };
+
+            // At power-up, the authenticator calls initialize for each
+            // pinUvAuthProtocol that it supports.
+            if (!S.initialized) {
+                S.state.initialize(getBlock);
+                S.initialized = true;
+            }
+
+            // Load authenticator data
+            var write_back = true; // This gets overwritten by authReset
+            var data = loadData(allocator) catch {
+                reset(allocator, [_]u8{0} ** 12);
+
+                res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
+                return res.toOwnedSlice(); // TODO: handle properly
+            };
+            var secret_data: ?data_module.SecretData = null;
+            if (S.state.pin_key) |key| {
+                secret_data = try data_module.decryptSecretData(
+                    allocator,
+                    data.c,
+                    data.tag[0..],
+                    key,
+                    data.meta.nonce_ctr,
+                );
+            }
+            defer {
+                if (write_back) {
+                    if (secret_data) |*sd| {
+                        // Update nonce counter
+                        var nctr: u96 = std.mem.readIntSliceLittle(u96, data.meta.nonce_ctr[0..]);
+                        nctr += 1;
+                        var nctr_raw: [12]u8 = undefined;
+                        std.mem.writeIntSliceLittle(u96, nctr_raw[0..], nctr);
+
+                        // Encrypt data
+                        data.c = data_module.encryptSecretData(
+                            allocator,
+                            &data.tag,
+                            sd,
+                            S.state.pin_key.?,
+                            nctr_raw,
+                        ) catch unreachable;
+
+                        data.meta.nonce_ctr = nctr_raw;
+                    }
+
+                    storeData(&data);
+                }
+            }
 
             switch (cmdnr) {
                 .authenticator_make_credential => {
@@ -323,7 +433,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // Generate a new credential key pair for the algorithm specified.
                     const context = crypt.newContext(getBlock);
-                    const key_pair = crypt.deriveKeyPair(data.getMs(), context) catch unreachable;
+                    const key_pair = crypt.deriveKeyPair(secret_data.?.master_secret, context) catch unreachable;
 
                     // 10. If "rk" in options parameter is set to true.
                     //     * If a credential for the same RP ID and account ID already
@@ -334,7 +444,7 @@ pub fn Auth(comptime impl: type) type {
                     // TODO: Resident key support currently not planned
 
                     // Create a new credential id
-                    const cred_id = crypt.makeCredId(data.getMs(), &context, mcp.@"2".id);
+                    const cred_id = crypt.makeCredId(secret_data.?.master_secret, &context, mcp.@"2".id);
 
                     // 11. Generate an attestation statement for the newly-created
                     // key using clientDataHash.
@@ -357,9 +467,11 @@ pub fn Auth(comptime impl: type) type {
                             .at = 1,
                             .ed = 0,
                         },
-                        .sign_count = data.getSignCtr(),
+                        .sign_count = secret_data.?.sign_ctr,
                         .attested_credential_data = acd,
                     };
+                    secret_data.?.sign_ctr += 1;
+
                     // Calculate the SHA-256 hash of the rpId (base url).
                     std.crypto.hash.sha2.Sha256.hash(mcp.@"2".id, &ad.rp_id_hash, .{});
                     var authData = std.ArrayList(u8).init(allocator);
@@ -412,7 +524,7 @@ pub fn Auth(comptime impl: type) type {
                         for (creds) |cred| {
                             if (cred.id.len < crypt.cred_id_len) continue;
 
-                            if (crypt.verifyCredId(data.getMs(), cred.id, gap.@"1")) {
+                            if (crypt.verifyCredId(secret_data.?.master_secret, cred.id, gap.@"1")) {
                                 ctx_and_mac = cred.id[0..];
                                 break;
                             }
@@ -514,9 +626,10 @@ pub fn Auth(comptime impl: type) type {
                             .at = 0,
                             .ed = 0,
                         },
-                        .sign_count = data.getSignCtr(),
+                        .sign_count = secret_data.?.sign_ctr,
                         // attestedCredentialData are excluded
                     };
+                    secret_data.?.sign_ctr += 1;
                     std.crypto.hash.sha2.Sha256.hash(gap.@"1", &ad.rp_id_hash, .{});
                     var authData = std.ArrayList(u8).init(allocator);
                     defer authData.deinit();
@@ -524,7 +637,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // 12. Sign the clientDataHash along with authData with the
                     // selected credential.
-                    const kp = crypt.deriveKeyPair(data.getMs(), ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
+                    const kp = crypt.deriveKeyPair(secret_data.?.master_secret, ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
 
                     const sig = crypt.sign(kp, authData.items, gap.@"2") catch {
                         res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
@@ -553,18 +666,6 @@ pub fn Auth(comptime impl: type) type {
                     };
                 },
                 .authenticator_client_pin => {
-                    const S = struct {
-                        var initialized: bool = false;
-                        var state: PinUvAuthTokenState = .{};
-                    };
-
-                    // At power-up, the authenticator calls initialize for each
-                    // pinUvAuthProtocol that it supports.
-                    if (!S.initialized) {
-                        S.state.initialize(getBlock);
-                        S.initialized = true;
-                    }
-
                     const cpp = cbor.parse(ClientPinParam, try cbor.DataItem.new(command[1..]), .{ .allocator = allocator }) catch |err| {
                         const x = switch (err) {
                             error.MissingField => dobj.StatusCodes.ctap2_err_missing_parameter,
@@ -580,7 +681,7 @@ pub fn Auth(comptime impl: type) type {
                     switch (cpp.@"2") {
                         .getRetries => {
                             cpr = .{
-                                .@"3" = data.getRetries(),
+                                .@"3" = data.meta.pin_retries,
                             };
                         },
                         .getKeyAgreement => {
@@ -625,7 +726,7 @@ pub fn Auth(comptime impl: type) type {
                             }
 
                             // If the pinRetries counter is 0, return error.
-                            const retries = data.getRetries();
+                            const retries = data.meta.pin_retries;
                             if (retries <= 0) {
                                 res.items[0] =
                                     @enumToInt(dobj.StatusCodes.ctap2_err_pin_blocked);
@@ -658,7 +759,7 @@ pub fn Auth(comptime impl: type) type {
                             }
 
                             // decrement pin retries
-                            data.setRetries(retries - 1);
+                            data.meta.pin_retries = retries - 1;
 
                             // Decrypt pinHashEnc and match against stored pinHash
                             var pinHash1: [16]u8 = undefined;
@@ -667,11 +768,11 @@ pub fn Auth(comptime impl: type) type {
                                 pinHash1[0..],
                                 cpp.@"6".?[0..],
                             );
-                            if (!std.mem.eql(u8, pinHash1[0..], data.getPin()[0..])) {
+                            if (!std.mem.eql(u8, pinHash1[0..], secret_data.?.pin_hash[0..])) {
                                 // The pin hashes don't match
                                 S.state.regenerate(getBlock);
 
-                                res.items[0] = if (data.getRetries() == 0)
+                                res.items[0] = if (data.meta.pin_retries == 0)
                                     @enumToInt(dobj.StatusCodes.ctap2_err_pin_blocked)
                                     // TODO: reset authenticator -> DOOMSDAY
                                 else
@@ -680,7 +781,7 @@ pub fn Auth(comptime impl: type) type {
                             }
 
                             // Set the pinRetries to maximum
-                            data.setRetries(8);
+                            data.meta.pin_retries = 8;
 
                             // Decrypt new pin
                             var paddedNewPin: [64]u8 = undefined;
@@ -703,7 +804,7 @@ pub fn Auth(comptime impl: type) type {
                             // TODO: support 16.
 
                             // Store new pin
-                            data.setPin(crypt.pinHash(newPin));
+                            secret_data.?.pin_hash = crypt.pinHash(newPin);
 
                             // Invalidate pinUvAuthTokens
                             S.state.resetPinUvAuthToken(getBlock);
@@ -728,20 +829,8 @@ pub fn Auth(comptime impl: type) type {
                         return res.toOwnedSlice();
                     }
 
-                    // Invalidate all credentials by setting a new master secret
-                    const ms = crypt.createMasterSecret(getBlock);
-                    data.setMs(ms);
-
-                    // Reset pin hash to the hash of the default pin.
-                    // This pin MUST be changed by the user directly after the reset.
-                    const ph = crypt.defaultPinHash();
-                    data.setPin(ph);
-
-                    // Reset the rest of the data
-                    data.setSignCtr(0);
-                    data.setRetries(8);
-                    data.setValid();
-                    // changes will stored automatically through defer
+                    reset(allocator, data.meta.nonce_ctr);
+                    write_back = false;
                 },
                 .authenticator_get_next_assertion => {},
                 .authenticator_vendor_first => {},

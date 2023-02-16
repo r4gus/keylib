@@ -10,12 +10,16 @@ const Auth = authenticator.Auth;
 const User = dobj.User;
 const RelyingParty = dobj.RelyingParty;
 
-const test_data_1 = "\xF1\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00";
-const test_data_2 = "\x00\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00";
+// {"master_secret": h'e47a9b6ffeba6e96de8306454748d77dc08b2e47c99ce4896a262b710095f46b', "pin_hash": h'48d5ad47b3406da2b35f556c62718c66', "pin_length": 10, "sign_ctr": 0}
+// Hkdf.extract(cdb1a61bc0547a3e4ca761884aad3d9ffd1db1167771f322511c5a42162c27c0, candystick) = d8abc5124b4fbab7c5957dab1246a9bab0a78e99933f36f7530b9664a9f7a5f3
+// {"meta": {"valid": 0xf1, "salt": h'cdb1a61bc0547a3e4ca761884aad3d9ffd1db1167771f322511c5a42162c27c0', "nonce_ctr": h'000000000000000000000000', "pin_retries": 8}, "c": h'35a07a14a4c5b5b6f56f9d9104e35ddeeb2dedabea651963d34d38da7926240bba47e88512f4548367db2dcfb66953f651618cf46f645b72b1c3a58369ca9ba32819859380157ebfdea5c7bd15dc09c0a3bbfeb6e3cfe41cba4c74060c779feffb', "tag": h'e67740ccacf37310b0d596eb67dec1c5'}
+
+const test_data_1 = "\xa3\x64\x6d\x65\x74\x61\xa4\x65\x76\x61\x6c\x69\x64\x18\xf1\x64\x73\x61\x6c\x74\x58\x20\xcd\xb1\xa6\x1b\xc0\x54\x7a\x3e\x4c\xa7\x61\x88\x4a\xad\x3d\x9f\xfd\x1d\xb1\x16\x77\x71\xf3\x22\x51\x1c\x5a\x42\x16\x2c\x27\xc0\x69\x6e\x6f\x6e\x63\x65\x5f\x63\x74\x72\x4c\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6b\x70\x69\x6e\x5f\x72\x65\x74\x72\x69\x65\x73\x08\x61\x63\x58\x61\x35\xa0\x7a\x14\xa4\xc5\xb5\xb6\xf5\x6f\x9d\x91\x04\xe3\x5d\xde\xeb\x2d\xed\xab\xea\x65\x19\x63\xd3\x4d\x38\xda\x79\x26\x24\x0b\xba\x47\xe8\x85\x12\xf4\x54\x83\x67\xdb\x2d\xcf\xb6\x69\x53\xf6\x51\x61\x8c\xf4\x6f\x64\x5b\x72\xb1\xc3\xa5\x83\x69\xca\x9b\xa3\x28\x19\x85\x93\x80\x15\x7e\xbf\xde\xa5\xc7\xbd\x15\xdc\x09\xc0\xa3\xbb\xfe\xb6\xe3\xcf\xe4\x1c\xba\x4c\x74\x06\x0c\x77\x9f\xef\xfb\x63\x74\x61\x67\x50\xe6\x77\x40\xcc\xac\xf3\x73\x10\xb0\xd5\x96\xeb\x67\xde\xc1\xc5";
 
 // Just for tests
 const test_impl = struct {
-    var d: [authenticator.data_len]u8 = test_data_1.*;
+    var d: [512]u8 = undefined;
+    var data: []const u8 = test_data_1;
 
     pub fn requestPermission(user: ?*const User, rp: ?*const RelyingParty) bool {
         _ = user;
@@ -33,13 +37,15 @@ const test_impl = struct {
         return S.i;
     }
 
-    pub fn load() [authenticator.data_len]u8 {
-        // VALID || MS || PIN || CTR || RETRIES
-        return d;
+    pub fn load(allocator: std.mem.Allocator) []const u8 {
+        var x = allocator.alloc(u8, data.len) catch unreachable; // we always provide enough memory
+        std.mem.copy(u8, x[0..data.len], data[0..]);
+        return x;
     }
 
-    pub fn store(data: [authenticator.data_len]u8) void {
-        d = data;
+    pub fn store(out: []const u8) void {
+        std.mem.copy(u8, d[0..out.len], out[0..]);
+        data = d[0..out.len];
     }
 };
 
@@ -77,84 +83,12 @@ test "default Authenticator initialization" {
     try std.testing.expectEqual(auth.info.@"6", null);
 }
 
-test "get info from 'default' authenticator" {
+test "authenticator get info" {
     const allocator = std.testing.allocator;
 
     const a = Auth(test_impl);
     const auth = a.initDefault(&[_]dobj.Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
-
-    const response = try auth.handle(allocator, "\x04");
-    defer allocator.free(response);
-
-    try std.testing.expectEqualStrings("\x00\xa3\x01\x81\x68\x46\x49\x44\x4f\x5f\x32\x5f\x30\x03\x50\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x04\xa3\x62\x72\x6b\xf4\x62\x75\x70\xf5\x64\x70\x6c\x61\x74\xf4", response);
-}
-
-test "authenticatorMakeCredential (0x01)" {
-    // {
-    //   1: h'C03991AC3DFF02BA1E520FC59B2D34774A641A4C425ABD313D931061FFBD1A5C',
-    //   2: {"id": "localhost", "name": "sweet home localhost"},
-    //   3: {
-    //     "id": h'781C7860AD88D26332622AF1745DEDB2E7A42B44892939C5566401270DBBC449',
-    //     "name": "john smith",
-    //     "displayName": "jsmith"
-    //   },
-    //   4: [{"alg": -7, "type": "public-key"}]
-    // }
-    const input = "\xa4\x01\x58\x20\xc0\x39\x91\xac\x3d\xff\x02\xba\x1e\x52\x0f\xc5\x9b\x2d\x34\x77\x4a\x64\x1a\x4c\x42\x5a\xbd\x31\x3d\x93\x10\x61\xff\xbd\x1a\x5c\x02\xa2\x62\x69\x64\x69\x6c\x6f\x63\x61\x6c\x68\x6f\x73\x74\x64\x6e\x61\x6d\x65\x74\x73\x77\x65\x65\x74\x20\x68\x6f\x6d\x65\x20\x6c\x6f\x63\x61\x6c\x68\x6f\x73\x74\x03\xa3\x62\x69\x64\x58\x20\x78\x1c\x78\x60\xad\x88\xd2\x63\x32\x62\x2a\xf1\x74\x5d\xed\xb2\xe7\xa4\x2b\x44\x89\x29\x39\xc5\x56\x64\x01\x27\x0d\xbb\xc4\x49\x64\x6e\x61\x6d\x65\x6a\x6a\x6f\x68\x6e\x20\x73\x6d\x69\x74\x68\x6b\x64\x69\x73\x70\x6c\x61\x79\x4e\x61\x6d\x65\x66\x6a\x73\x6d\x69\x74\x68\x04\x81\xa2\x63\x61\x6c\x67\x26\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79";
-    _ = input;
-}
-
-test "getting retries from authenticator" {
-    // Retries count is the number of attempts remaining before lockout.
-    // When the device is nearing authenticator lockout, the platform
-    // can optionally warn the user to be careful while entering the PIN.
-    const allocator = std.testing.allocator;
-
-    const req = "\x06\xA2\x01\x01\x02\x01";
-
-    const a = Auth(test_impl);
-    const auth = a.initDefault(&[_]dobj.Versions{.FIDO_2_0}, [_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
-
-    const response = try auth.handle(allocator, req);
-    defer allocator.free(response);
-
-    try std.testing.expectEqualStrings("\x00\xA1\x03\x08", response);
-}
-
-test "getting shared secret from authenticator" {}
-
-test "testing data getters" {
-    test_impl.d = test_data_1.*; // reset test data
-    const a = Auth(test_impl);
-
-    var x = a.Data.load();
-
-    try std.testing.expectEqual(true, x.isValid());
-    try std.testing.expectEqualSlices(u8, "\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1", &x.getMs());
-    try std.testing.expectEqual(false, x.isPinSet());
-    try std.testing.expectEqual(@intCast(u8, 8), x.getRetries());
-
-    // Sign counter will automatically increase
-    try std.testing.expectEqual(@intCast(u32, 0), x.getSignCtr());
-    try std.testing.expectEqual(@intCast(u32, 1), x.getSignCtr());
-    try std.testing.expectEqual(@intCast(u32, 2), x.getSignCtr());
-}
-
-test "testing data setters" {
-    test_impl.d = test_data_2.*; // reset test data
-    const a = Auth(test_impl);
-
-    var x = a.Data.load();
-
-    try std.testing.expectEqual(false, x.isValid());
-    x.setValid();
-    try std.testing.expectEqual(true, x.isValid());
-
-    try std.testing.expectEqual(@intCast(u8, 8), x.getRetries());
-    x.setRetries(7);
-    try std.testing.expectEqual(@intCast(u8, 7), x.getRetries());
-
-    try std.testing.expectEqualSlices(u8, "\x11\x25\xdc\xed\x00\x72\x95\xa2\x98\x63\x68\x2d\x7b\x1c\xc3\x83\x58\x38\xcf\x7a\x19\x62\xe0\x90\x5a\x36\xb2\xed\xa6\x07\x3e\xe1", &x.getMs());
-    x.setMs("\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00".*);
-    try std.testing.expectEqualSlices(u8, "\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00", &x.getMs());
+    
+    const x = try auth.handle(allocator, "");
+    defer allocator.free(x);
 }

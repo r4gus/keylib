@@ -139,7 +139,6 @@ pub const PinUvAuthTokenState = struct {
     /// A permissions RP ID, initially null
     rp_id: ?[]const u8 = null,
     permissions: u8 = 0,
-    // TODO: usage_timer
     in_use: bool = false,
     /// The platform MUST invoke an authenticator operation using the pinUvAuthToken within this time limit
     initial_usage_time_limit: u32 = 19000, // 19 s = 19000 ms
@@ -157,6 +156,8 @@ pub const PinUvAuthTokenState = struct {
     uvRetries: u8 = 8,
     /// The PIN/UV auth protocol state
     state: ?AuthProtocolState = null,
+    /// Key for encrypting the authenticators secret data
+    pin_key: ?[32]u8 = null,
 
     /// This function prepares the pinUvAuthToken for use by the platform, which has
     /// invoked one of the pinUvAuthToken-issuing operations, by setting particular
