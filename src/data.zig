@@ -3,6 +3,8 @@ const Aes256Gcm = std.crypto.aead.aes_gcm.Aes256Gcm;
 
 const cbor = @import("zbor");
 
+const dobj = @import("dobj.zig");
+
 /// The state/ data of the Authenticator
 pub const PublicData = struct {
     meta: struct {
@@ -15,7 +17,11 @@ pub const PublicData = struct {
         /// Pin attempts left
         pin_retries: u8,
     },
+    /// Force a pin change
+    forcePINChange: ?bool = null,
+    /// The encrypted secret data (e.g. master secret)
     c: []const u8, // ms || pinHash || pinLen || signCtr || padding
+    /// The tag belonging to the encrypted data
     tag: [16]u8,
 
     pub fn isValid(self: *const @This()) bool {

@@ -18,5 +18,5 @@ const extension = @import("../extensions.zig");
 @"5": ?u64,
 /// pinProtocols: List of supported PIN Protocol versions.
 @"6": ?[]const u8, // TODO: add _a option to enforce array
-/// A pin change is required Y/n
+/// forcePinChange: A pin change is required Y/n
 @"12": ?bool = false,

@@ -45,25 +45,6 @@ const PinConf = commands.client_pin.PinConf;
 
 const data_module = @import("data.zig");
 
-/// General properties of a given authenticator.
-pub const Info = struct {
-    /// versions: List of supported versions.
-    @"1": []const dobj.Versions,
-    /// extensions: List of supported extensions.
-    @"2": ?[]const Extensions,
-    /// aaguid: The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
-    /// indicating the type of the authenticator. Authenticators with the
-    /// same capabilities and firmware, can share the same AAGUID.
-    @"3": [16]u8,
-    /// optoins: Supported options.
-    @"4": ?dobj.Options,
-    /// maxMsgSize: Maximum message size supported by the authenticator.
-    /// null = unlimited.
-    @"5": ?u64,
-    /// pinProtocols: List of supported PIN Protocol versions.
-    @"6": ?[]const u8, // TODO: add _a option to enforce array
-};
-
 pub const AttType = enum {
     /// In this case, no attestation information is available.
     none,
@@ -83,15 +64,15 @@ pub fn Auth(comptime impl: type) type {
         const Self = @This();
 
         /// General properties of the given authenticator.
-        info: Info,
+        info: dobj.Info,
         /// Attestation type to be used for attestation.
         attestation_type: AttestationType,
 
         /// Default initialization without extensions.
-        pub fn initDefault(versions: []const dobj.Versions, aaguid: [16]u8) Self {
+        pub fn initDefault(aaguid: [16]u8) Self {
             return @This(){
-                .info = Info{
-                    .@"1" = versions,
+                .info = dobj.Info{
+                    .@"1" = &[_]Versions{Versions.FIDO_2_0},
                     .@"2" = null,
                     .@"3" = aaguid,
                     .@"4" = dobj.Options{}, // default options
@@ -609,7 +590,12 @@ pub fn Auth(comptime impl: type) type {
                     };
                 },
                 .authenticator_get_info => {
-                    cbor.stringify(self.info, .{}, response) catch |err| {
+                    var i = self.info;
+                    if (data.forcePINChange) |fpc| {
+                        i.@"12" = fpc;
+                    }
+
+                    cbor.stringify(i, .{}, response) catch |err| {
                         res.items[0] = @enumToInt(dobj.StatusCodes.fromError(err));
                         return res.toOwnedSlice();
                     };
