@@ -25,6 +25,8 @@ pub const ErrorCodes = @import("dobj/error.zig").ErrorCodes;
 
 pub const Versions = @import("dobj/version.zig").Versions;
 
+pub const Info = @import("dobj/Info.zig");
+
 test "data test" {
     _ = attestation_object;
 }
