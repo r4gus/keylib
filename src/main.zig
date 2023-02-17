@@ -275,24 +275,27 @@ pub fn Auth(comptime impl: type) type {
                         std.mem.writeIntSliceLittle(u96, nctr_raw[0..], nctr);
 
                         // Encrypt data
-                        data.c = data_module.encryptSecretData(
+                        var tmp_tag: [16]u8 = undefined;
+                        const tmp_c = data_module.encryptSecretData(
                             allocator,
-                            &data.tag,
+                            &tmp_tag,
                             sd,
                             S.state.pin_key.?,
                             nctr_raw,
                         ) catch unreachable;
 
+                        allocator.free(data.c);
+                        data.c = tmp_c;
+                        std.mem.copy(u8, data.tag[0..], tmp_tag[0..]);
                         data.meta.nonce_ctr = nctr_raw;
                     }
 
                     // Write data back into long term storage
                     storeData(&data);
-
-                    // Free dynamically allocated memory. data must
-                    // not be used after this.
-                    data.deinit(allocator);
                 }
+                // Free dynamically allocated memory. data must
+                // not be used after this.
+                data.deinit(allocator);
             }
 
             switch (cmdnr) {
@@ -755,7 +758,25 @@ pub fn Auth(comptime impl: type) type {
                             // Invalidate pinUvAuthTokens
                             S.state.resetPinUvAuthToken(getBlock);
                         },
-                        .getPINToken => {},
+                        .getPinUvAuthTokenUsingPin => {
+                            // Return error if the authenticator does not receive the
+                            // mandatory parameters for this command.
+                            if (cpp.@"1" == null or cpp.@"3" == null or cpp.@"5" == null or cpp.@"9" == null)
+                            {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
+                                return res.toOwnedSlice();
+                            }
+
+                            // If pinUvAuthProtocol is not supported or the permissions are 0, 
+                            // return error.
+                            if (cpp.@"1".? != .v2 or cpp.@"9".? == 0) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                                return res.toOwnedSlice();
+                            }
+
+                        },
                         else => {},
                     }
 
