@@ -109,7 +109,7 @@ pub fn Auth(comptime impl: type) type {
         pub fn loadData(allocator: std.mem.Allocator) !data_module.PublicData {
             var d = impl.load(allocator);
             defer allocator.free(d);
-            return cbor.parse(data_module.PublicData, try cbor.DataItem.new(d), .{ .allocator = allocator }) catch unreachable;
+            return try cbor.parse(data_module.PublicData, try cbor.DataItem.new(d), .{ .allocator = allocator });
         }
 
         pub fn storeData(data: *const data_module.PublicData) void {
@@ -136,77 +136,6 @@ pub fn Auth(comptime impl: type) type {
             // Now store `SIZE || CBOR`
             impl.store(arr.items[0..]);
         }
-
-        //pub const Data = struct {
-        //    d: [data_len]u8 = undefined,
-
-        //    pub fn load() @This() {
-        //        return @This(){
-        //            .d = impl.load(),
-        //        };
-        //    }
-
-        //    pub fn store(self: *@This()) void {
-        //        impl.store(self.d);
-        //    }
-
-        //    /// Tells if the given data structure is valid or not.
-        //    pub fn isValid(self: *const @This()) bool {
-        //        return self.d[0] == 0xF1;
-        //    }
-
-        //    /// Tells if the given data structure is valid or not.
-        //    pub fn setValid(self: *@This()) void {
-        //        self.d[0] = 0xF1;
-        //    }
-
-        //    pub fn getMs(self: *const @This()) [ms_length]u8 {
-        //        return self.d[1 .. ms_length + 1].*;
-        //    }
-
-        //    pub fn setMs(self: *@This(), data: [ms_length]u8) void {
-        //        std.mem.copy(u8, self.d[1 .. ms_length + 1], data[0..]);
-        //    }
-
-        //    pub fn getPin(self: *const @This()) [pin_len]u8 {
-        //        return self.d[ms_length + 1 .. ms_length + 1 + pin_len].*;
-        //    }
-
-        //    pub fn setPin(self: *@This(), data: [pin_len]u8) void {
-        //        std.mem.copy(u8, self.d[ms_length + 1 .. ms_length + 1 + pin_len], data[0..]);
-        //    }
-
-        //    pub fn isPinSet(self: *const @This()) bool {
-        //        const p = self.getPin();
-        //        var i: usize = 0;
-        //        while (i < pin_len) : (i += 1) {
-        //            if (p[i] != 0) return true;
-        //        }
-        //        return false;
-        //    }
-
-        //    pub fn getSignCtr(self: *@This()) u32 {
-        //        const offset: usize = 1 + ms_length + pin_len;
-        //        const x: u32 = std.mem.readIntSliceLittle(u32, self.d[offset .. offset + 4]);
-        //        std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], x + 1);
-        //        return x;
-        //    }
-
-        //    pub fn setSignCtr(self: *@This(), data: u32) void {
-        //        const offset: usize = 1 + ms_length + pin_len;
-        //        std.mem.writeIntSliceLittle(u32, self.d[offset .. offset + 4], data);
-        //    }
-
-        //    pub fn getRetries(self: *const @This()) u8 {
-        //        const offset: usize = 1 + ms_length + pin_len + 4;
-        //        return self.d[offset];
-        //    }
-
-        //    pub fn setRetries(self: *@This(), data: u8) void {
-        //        const offset: usize = 1 + ms_length + pin_len + 4;
-        //        self.d[offset] = data;
-        //    }
-        //};
 
         pub fn millis(self: *const Self) u32 {
             _ = self;
@@ -252,7 +181,8 @@ pub fn Auth(comptime impl: type) type {
             var public_data: data_module.PublicData = undefined;
             defer public_data.deinit(allocator);
             public_data.meta.valid = 0xF1;
-            getBlock(public_data.meta.salt[0..]);
+            //getBlock(public_data.meta.salt[0..]);
+            public_data.meta.salt = "\xcd\xb1\xa6\x1b\xc0\x54\x7a\x3e\x4c\xa7\x61\x88\x4a\xad\x3d\x9f\xfd\x1d\xb1\x16\x77\x71\xf3\x22\x51\x1c\x5a\x42\x16\x2c\x27\xc0".*;
             public_data.meta.nonce_ctr = ctr;
             public_data.meta.pin_retries = 8;
 
@@ -271,17 +201,18 @@ pub fn Auth(comptime impl: type) type {
             storeData(&public_data);
         }
 
+        // TODO: is this function redundant after the last change?
         pub fn initData(self: *const Self) void {
             _ = self;
             var raw: [1024]u8 = undefined;
-            var fba = std.heap.FixedBufferAllocator(&raw);
+            var fba = std.heap.FixedBufferAllocator.init(&raw);
             const allocator = fba.allocator();
 
-            var data = loadData(allocator) catch {
+            reset(allocator, [_]u8{0} ** 12);
+            _ = loadData(allocator) catch {
                 reset(allocator, [_]u8{0} ** 12);
+                return;
             };
-
-            if (!data.isValid()) reset(allocator, [_]u8{0} ** 12);
         }
 
         // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -324,13 +255,16 @@ pub fn Auth(comptime impl: type) type {
             };
             var secret_data: ?data_module.SecretData = null;
             if (S.state.pin_key) |key| {
-                secret_data = try data_module.decryptSecretData(
+                secret_data = data_module.decryptSecretData(
                     allocator,
                     data.c,
                     data.tag[0..],
                     key,
                     data.meta.nonce_ctr,
-                );
+                ) catch {
+                    res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
+                    return res.toOwnedSlice(); // TODO: handle properly
+                };
             }
             defer {
                 if (write_back) {
@@ -353,7 +287,12 @@ pub fn Auth(comptime impl: type) type {
                         data.meta.nonce_ctr = nctr_raw;
                     }
 
+                    // Write data back into long term storage
                     storeData(&data);
+
+                    // Free dynamically allocated memory. data must
+                    // not be used after this.
+                    data.deinit(allocator);
                 }
             }
 
