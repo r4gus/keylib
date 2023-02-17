@@ -208,7 +208,6 @@ pub fn Auth(comptime impl: type) type {
             var fba = std.heap.FixedBufferAllocator.init(&raw);
             const allocator = fba.allocator();
 
-            reset(allocator, [_]u8{0} ** 12);
             _ = loadData(allocator) catch {
                 reset(allocator, [_]u8{0} ** 12);
                 return;
@@ -298,7 +297,6 @@ pub fn Auth(comptime impl: type) type {
 
             switch (cmdnr) {
                 .authenticator_make_credential => {
-                    // TODO: Check exclude list... just ignore it for now
                     const mcp_raw = cbor.DataItem.new(command[1..]) catch {
                         res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_invalid_cbor);
                         return res.toOwnedSlice();
@@ -367,6 +365,15 @@ pub fn Auth(comptime impl: type) type {
                     // Request permission from the user
                     if (!requestPermission(&mcp.@"3", &mcp.@"2")) {
                         res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
+                        return res.toOwnedSlice();
+                    }
+
+                    if (secret_data == null) {
+                        // Decrypting the secret data requires a key derived from the
+                        // pin that has the same lifetime as the token, i.e., we use
+                        // the presence of secret data to check that the user has authenticated
+                        // herself.
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_required);
                         return res.toOwnedSlice();
                     }
 
