@@ -160,6 +160,7 @@ pub const PinUvAuthTokenPermissions = packed struct {
 };
 
 pub const PinUvAuthTokenState = struct {
+    rp_id_raw: [64]u8 = undefined, // TODO: maybee allocate the memory dynamically???
     /// A permissions RP ID, initially null
     rp_id: ?[]const u8 = null,
     permissions: u8 = 0,

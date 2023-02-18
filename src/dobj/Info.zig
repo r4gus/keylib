@@ -2,6 +2,7 @@
 
 const dobj = @import("../dobj.zig");
 const extension = @import("../extensions.zig");
+const PinProtocol = @import("../commands.zig").client_pin.PinProtocol;
 
 /// versions: List of supported versions.
 @"1": []const dobj.Versions,
@@ -17,6 +18,6 @@ const extension = @import("../extensions.zig");
 /// null = unlimited.
 @"5": ?u64,
 /// pinProtocols: List of supported PIN Protocol versions.
-@"6": ?[]const u8, // TODO: add _a option to enforce array
+@"#6": ?[]const PinProtocol, // TODO: add _a option to enforce array
 /// forcePinChange: A pin change is required Y/n
 @"12": ?bool = false,

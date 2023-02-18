@@ -47,6 +47,10 @@ const test_impl = struct {
         std.mem.copy(u8, d[0..out.len], out[0..]);
         data = d[0..out.len];
     }
+
+    pub fn millis() u32 {
+        return @intCast(u32, std.time.milliTimestamp());
+    }
 };
 
 test "fetch command from data" {

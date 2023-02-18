@@ -38,6 +38,7 @@ const GetAssertionParam = commands.get_assertion.GetAssertionParam;
 const GetAssertionResponse = commands.get_assertion.GetAssertionResponse;
 const extension = @import("extensions.zig");
 pub const Extensions = extension.Extensions;
+const PinProtocol = commands.client_pin.PinProtocol;
 const ClientPinParam = commands.client_pin.ClientPinParam;
 const ClientPinResponse = commands.client_pin.ClientPinResponse;
 const PinUvAuthTokenState = commands.client_pin.PinUvAuthTokenState;
@@ -72,12 +73,15 @@ pub fn Auth(comptime impl: type) type {
         pub fn initDefault(aaguid: [16]u8) Self {
             return @This(){
                 .info = dobj.Info{
-                    .@"1" = &[_]Versions{Versions.FIDO_2_0},
+                    .@"1" = &[_]Versions{Versions.FIDO_2_1},
                     .@"2" = null,
                     .@"3" = aaguid,
-                    .@"4" = dobj.Options{}, // default options
+                    .@"4" = dobj.Options{
+                        .clientPin = true,
+                        .pinUvAuthToken = true,
+                    }, // default options
                     .@"5" = null,
-                    .@"6" = null,
+                    .@"#6" = &[_]PinProtocol{.v2},
                 },
                 .attestation_type = AttestationType{},
             };
@@ -797,6 +801,9 @@ pub fn Auth(comptime impl: type) type {
                                 pinHash[0..],
                                 cpp.@"6".?[0..],
                             );
+
+                            // TODO: derive the key from pinHash and then decrypt secret data
+
                             if (!std.mem.eql(u8, pinHash[0..], secret_data.?.pin_hash[0..])) {
                                 // The pin hashes don't match
                                 S.state.regenerate(getBlock);
@@ -808,6 +815,49 @@ pub fn Auth(comptime impl: type) type {
                                     @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
                                 return res.toOwnedSlice();
                             }
+
+                            // Set retry counter to maximum
+                            data.meta.pin_retries = 8;
+
+                            // Check if user is forced to change the pin
+                            if (data.forcePINChange) |change| {
+                                if (change) {
+                                    res.items[0] =
+                                        @enumToInt(dobj.StatusCodes.ctap2_err_pin_policy_violation);
+                                    return res.toOwnedSlice();
+                                }
+                            }
+
+                            // Create a new pinUvAuthToken
+                            S.state.resetPinUvAuthToken(getBlock);
+
+                            // Begin using the pin uv auth token
+                            S.state.beginUsingPinUvAuthToken(false, self.millis());
+
+                            // Set permissions
+                            S.state.permissions = cpp.@"9".?;
+
+                            // If the rpId parameter is present, associate the permissions RP ID 
+                            // with the pinUvAuthToken.
+                            if (cpp.@"10") |rpId| {
+                                const l = if (rpId.len > 64) 64 else rpId.len;
+                                std.mem.copy(u8, S.state.rp_id_raw[0..l], rpId[0..l]);
+                                S.state.rp_id = S.state.rp_id_raw[0..l];
+                            }
+
+                            // The authenticator returns the encrypted pinUvAuthToken for the 
+                            // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
+                            var enc_shared_secret: [48]u8 = undefined;
+                            var iv: [16]u8 = undefined;
+                            getBlock(iv[0..]);
+                            PinUvAuthTokenState.encrypt(
+                                iv,
+                                shared_secret,
+                                enc_shared_secret[0..],
+                                S.state.state.?.pin_token[0..],
+                            );
+
+                            res.writer().writeAll(enc_shared_secret[0..]) catch unreachable;
                         },
                         else => {},
                     }
