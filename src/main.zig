@@ -881,9 +881,14 @@ pub fn Auth(comptime impl: type) type {
                     reset(allocator, data.meta.nonce_ctr);
                     write_back = false;
                 },
-                .authenticator_get_next_assertion => {},
-                .authenticator_vendor_first => {},
-                .authenticator_vendor_last => {},
+                .authenticator_selection => {
+                    // Request permission from the user
+                    if (!requestPermission(null, null)) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
+                        return res.toOwnedSlice();
+                    }
+                },
+                else => {}
             }
 
             return res.toOwnedSlice();

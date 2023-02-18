@@ -22,6 +22,14 @@ pub const Commands = enum(u8) {
     /// The client calls this method when the authenticatorGetAssertion response contains the
     /// `numberOfCredentials` member and the number of credentials exceeds 1.
     authenticator_get_next_assertion = 0x08,
+    authenticator_bio_enrollment = 0x09,
+    authenticator_credential_management = 0x0a,
+    /// This command allows the platform to let a user select a certain authenticator by asking for user presence.
+    authenticator_selection = 0x0b,
+    /// This command allows a platform to store a larger amount of information associated with a credential.
+    authenticator_large_blobs = 0x0c,
+    /// This command is used to configure various authenticator features through the use of its subcommands.
+    authenticator_config = 0x0d,
     /// Vendor specific implementation.
     /// Command codes in the range between authenticatorVendorFirst and authenticatorVendorLast
     /// may be used for vendor-specific implementations. For example, the vendor may choose to
