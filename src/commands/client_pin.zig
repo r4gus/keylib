@@ -273,6 +273,10 @@ pub const PinUvAuthTokenState = struct {
         rand(self.state.?.pin_token[0..]);
     }
 
+    pub fn getUserVerifiedFlagValue(self: *@This()) bool {
+        return if (self.in_use) self.user_verified else false;
+    }
+
     /// Return the public part of the key as COSE key.
     pub fn getPublicKey(self: *const @This()) cose.Key {
         return cose.Key.fromP256Pub(

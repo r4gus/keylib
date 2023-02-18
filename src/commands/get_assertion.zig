@@ -18,7 +18,7 @@ pub const GetAssertionParam = struct {
     /// pinAuth: First 16 bytes of HMAC-SHA-256 of clientDataHash using pinToken
     /// which platform got from the authenticator:
     /// HMAC-SHA-256(pinToken, clientDataHash).
-    @"6": ?[16]u8 = null,
+    @"6": ?[32]u8 = null,
     /// pinProtocol: PIN protocol version selected by client.
     @"7": ?u8 = null,
 

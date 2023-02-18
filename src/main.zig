@@ -296,7 +296,25 @@ pub fn Auth(comptime impl: type) type {
                     };
                     defer mcp.deinit(allocator);
 
-                    // TODO: Check exclude list (but we dont store any creds!)
+                    // Return error if a zero length pinUvAuthParam is receieved
+                    if (mcp.@"8" == null) {
+                        if (!requestPermission(&mcp.@"3", &mcp.@"2")) {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
+                            return res.toOwnedSlice();
+                        } else {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
+                            return res.toOwnedSlice();
+                        }
+                    }
+
+                    // Check for supported pinUvAuthProtocol version
+                    if (mcp.@"9" == null) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
+                        return res.toOwnedSlice();
+                    } else if (mcp.@"9".? != 2) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                        return res.toOwnedSlice();
+                    }
 
                     // Check for a valid COSEAlgorithmIdentifier value
                     var valid_param: bool = false;
@@ -315,50 +333,49 @@ pub fn Auth(comptime impl: type) type {
                     if (mcp.@"7") |options| {
                         if (options.rk or options.uv) {
                             // we let the RP store the context for each credential.
+                            // we also don't support built in user verification
                             res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_unsupported_option);
                             return res.toOwnedSlice();
                         }
                     }
 
-                    // 4. Optionally, if the extensions parameter is present, process
-                    // any extensions that this authenticator supports.
-                    // TODO: support extensions
-
-                    // 5. If pinAuth parameter is present and pinProtocol is 1, verify
-                    // it by matching it against first 16 bytes of HMAC-SHA-256 of
-                    // clientDataHash parameter using pinToken:
-                    // HMAC-SHA-256(pinToken, clientDataHash).
-                    //     * If the verification succeeds, set the "uv" bit to 1
-                    //       in the response.
-                    //     * If the verification fails, return CTAP2_ERR_PIN_AUTH_INVALID
-                    //       error.
-                    if (mcp.@"8") |pinAuth| {
-                        _ = pinAuth;
-                        if (mcp.@"9" != null and mcp.@"9".? == 1) {
-                            // TODO: verify
-                        }
+                    // Enforce user verification
+                    if (!S.state.in_use) { // TODO: maybe just switch with getUserVerifiedFlagValue() call
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_token_expired);
+                        return res.toOwnedSlice();
                     }
-
-                    // 6. If pinAuth parameter is not present and clientPin been set on
-                    // the authenticator, return CTAP2_ERR_PIN_REQUIRED error.
-                    // TODO: support clientPin
-
-                    // 7. If pinAuth parameter is present and the pinProtocol is not
-                    // supported, return CTAP2_ERR_PIN_AUTH_INVALID.
-                    // TODO: implement
-
-                    // Request permission from the user
-                    if (!requestPermission(&mcp.@"3", &mcp.@"2")) {
-                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
+                    
+                    if (!PinUvAuthTokenState.verify(S.state.state.?.pin_token, mcp.@"1", mcp.@"8".?)) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
                         return res.toOwnedSlice();
                     }
 
-                    if (secret_data == null) {
-                        // Decrypting the secret data requires a key derived from the
-                        // pin that has the same lifetime as the token, i.e., we use
-                        // the presence of secret data to check that the user has authenticated
-                        // herself.
-                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_required);
+                    if (S.state.permissions & 0x01 == 0) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                        return res.toOwnedSlice();
+                    }
+
+                    if (S.state.rp_id) |rpId| {
+                        const rpId2 = mcp.@"2".id;
+                        if (!std.mem.eql(u8, rpId, rpId2)) {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                            return res.toOwnedSlice();
+                        }
+                    }
+
+                    if (!S.state.getUserVerifiedFlagValue()) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                        return res.toOwnedSlice();
+                    }
+
+                    // TODO: If the pinUvAuthToken does not have a permissions RP ID associated:
+                    // Associate the request’s rp.id parameter value with the pinUvAuthToken as its permissions RP ID.
+
+                    // TODO: check exclude list
+
+                    // Request permission from the user
+                    if (!S.state.user_present and !requestPermission(&mcp.@"3", &mcp.@"2")) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
                         return res.toOwnedSlice();
                     }
 
@@ -366,18 +383,10 @@ pub fn Auth(comptime impl: type) type {
                     const context = crypt.newContext(getBlock);
                     const key_pair = crypt.deriveKeyPair(secret_data.?.master_secret, context) catch unreachable;
 
-                    // 10. If "rk" in options parameter is set to true.
-                    //     * If a credential for the same RP ID and account ID already
-                    //       exists on the authenticator, overwrite that credential.
-                    //     * Store the user parameter along the newly-created key pair.
-                    //     * If authenticator does not have enough internal storage to
-                    //       persist the new credential, return CTAP2_ERR_KEY_STORE_FULL.
-                    // TODO: Resident key support currently not planned
-
                     // Create a new credential id
                     const cred_id = crypt.makeCredId(secret_data.?.master_secret, &context, mcp.@"2".id);
 
-                    // 11. Generate an attestation statement for the newly-created
+                    // Generate an attestation statement for the newly-created
                     // key using clientDataHash.
                     const acd = dobj.AttestedCredentialData{
                         .aaguid = self.info.@"3",
@@ -393,7 +402,7 @@ pub fn Auth(comptime impl: type) type {
                         .flags = dobj.Flags{
                             .up = 1,
                             .rfu1 = 0,
-                            .uv = 0,
+                            .uv = 1,
                             .rfu2 = 0,
                             .at = 1,
                             .ed = 0,

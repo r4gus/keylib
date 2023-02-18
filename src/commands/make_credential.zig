@@ -32,9 +32,8 @@ pub const MakeCredentialParam = struct {
     // TODO: add remaining fields (extensions 0x6)
     /// authenticator options: Parameters to influence authenticator operation.
     @"7": ?dobj.AuthenticatorOptions,
-    /// pinAuth: First 16 bytes of HMAC-SHA-256 of clientDataHash using pinToken
-    /// which platform got from the authenticator: HMAC-SHA-256(pinToken, clientDataHash).
-    @"8": ?[16]u8,
+    /// pinUvAuthParam: Result of calling authenticate(pinUvAuthToken, clientDataHash)
+    @"8": ?[32]u8,
     /// pinProtocol: PIN protocol version chosen by the client.
     @"9": ?u8,
 
