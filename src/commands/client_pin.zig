@@ -54,7 +54,7 @@ pub const ClientPinParam = struct {
     @"5": ?[]const u8, // TODO: this should always be 64 bytes
     /// pinHashEnc: Encrypted first 16 bytes of SHA-256 of PIN using
     /// sharedSecret.
-    @"6": ?[16]u8,
+    @"6": ?[32]u8,
     /// permissions: Bitfield of permissions. If present, MUST NOT be 0.
     @"9": ?u8,
     /// rpId: The RP ID to assign as the permissions RP ID.
@@ -98,7 +98,7 @@ pub const ClientPinParam = struct {
 pub const ClientPinResponse = struct {
     /// Authenticator key agreement public key in COSE_Key format. This will
     /// be used to establish a sharedSecret between platform and the authenticator.
-    @"1": ?cose.Key = null,
+    @"#1": ?cose.Key = null,
     /// pinUvAuthToken: Encrypted pinToken using sharedSecret to be used in
     /// subsequent authenticatorMakeCredential and
     /// authenticatorGetAssertion operations.
@@ -113,6 +113,12 @@ pub const ClientPinResponse = struct {
     @"4": ?bool = null,
     /// uvRetries: Number of uv attempts remaining before lockout.
     @"5": ?u8 = null,
+
+    pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+        if (self.@"2") |pinUvAuthToken| {
+            allocator.free(pinUvAuthToken);
+        }
+    }
 };
 
 pub const AuthProtocolState = struct {

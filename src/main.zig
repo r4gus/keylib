@@ -618,6 +618,7 @@ pub fn Auth(comptime impl: type) type {
                         .getRetries => {
                             cpr = .{
                                 .@"3" = data.meta.pin_retries,
+                                .@"4" = false,
                             };
                         },
                         .getKeyAgreement => {
@@ -639,7 +640,7 @@ pub fn Auth(comptime impl: type) type {
                             // Create response
                             // +++++++++++++++++
                             cpr = .{
-                                .@"1" = S.state.getPublicKey(),
+                                .@"#1" = S.state.getPublicKey(),
                             };
                         },
                         .setPIN => {},
@@ -748,7 +749,7 @@ pub fn Auth(comptime impl: type) type {
                         .getPinUvAuthTokenUsingPin => {
                             // Return error if the authenticator does not receive the
                             // mandatory parameters for this command.
-                            if (cpp.@"1" == null or cpp.@"3" == null or cpp.@"5" == null or cpp.@"9" == null)
+                            if (cpp.@"1" == null or cpp.@"3" == null or cpp.@"6" == null or cpp.@"9" == null)
                             {
                                 res.items[0] =
                                     @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
@@ -847,7 +848,7 @@ pub fn Auth(comptime impl: type) type {
 
                             // The authenticator returns the encrypted pinUvAuthToken for the 
                             // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
-                            var enc_shared_secret: [48]u8 = undefined;
+                            var enc_shared_secret = allocator.alloc(u8, 48) catch unreachable;
                             var iv: [16]u8 = undefined;
                             getBlock(iv[0..]);
                             PinUvAuthTokenState.encrypt(
@@ -857,7 +858,10 @@ pub fn Auth(comptime impl: type) type {
                                 S.state.state.?.pin_token[0..],
                             );
 
-                            res.writer().writeAll(enc_shared_secret[0..]) catch unreachable;
+                            // Response
+                            cpr = .{
+                                .@"2" = enc_shared_secret,
+                            };
                         },
                         else => {},
                     }
@@ -867,6 +871,7 @@ pub fn Auth(comptime impl: type) type {
                             res.items[0] = @enumToInt(dobj.StatusCodes.fromError(err));
                             return res.toOwnedSlice();
                         };
+                        resp.deinit(allocator);
                     }
                 },
                 .authenticator_reset => {
