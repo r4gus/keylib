@@ -69,6 +69,30 @@ pub const ClientPinParam = struct {
             allocator.free(id);
         }
     }
+
+    pub fn mcPermissionSet(self: *const @This()) bool {
+        return if (self.@"9") |p| p & 0x01 != 0 else false;
+    }
+
+    pub fn gaPermissionSet(self: *const @This()) bool {
+        return if (self.@"9") |p| p & 0x02 != 0 else false;
+    }
+
+    pub fn cmPermissionSet(self: *const @This()) bool {
+        return if (self.@"9") |p| p & 0x04 != 0 else false;
+    }
+
+    pub fn bePermissionSet(self: *const @This()) bool {
+        return if (self.@"9") |p| p & 0x08 != 0 else false;
+    }
+
+    pub fn lbwPermissionSet(self: *const @This()) bool {
+        return if (self.@"9") |p| p & 0x10 != 0 else false;
+    }
+
+    pub fn acfgPermissionSet(self: *const @This()) bool {
+        return if (self.@"9") |p| p & 0x20 != 0 else false;
+    }
 };
 
 pub const ClientPinResponse = struct {
@@ -157,7 +181,7 @@ pub const PinUvAuthTokenState = struct {
     /// The PIN/UV auth protocol state
     state: ?AuthProtocolState = null,
     /// Key for encrypting the authenticators secret data
-    pin_key: ?[32]u8 = "\xd8\xab\xc5\x12\x4b\x4f\xba\xb7\xc5\x95\x7d\xab\x12\x46\xa9\xba\xb0\xa7\x8e\x99\x93\x3f\x36\xf7\x53\x0b\x96\x64\xa9\xf7\xa5\xf3".*,
+    pin_key: ?[32]u8 = "\x88\x3c\xd9\xfa\x0d\x1e\x1d\xe9\xf8\xba\xb7\xf1\xf7\x78\x53\xf7\xaa\x54\xa1\xb5\x7f\x2b\xd6\x6e\x7d\xa0\x45\x79\x9f\xd7\x98\x02".*,
 
     /// This function prepares the pinUvAuthToken for use by the platform, which has
     /// invoked one of the pinUvAuthToken-issuing operations, by setting particular

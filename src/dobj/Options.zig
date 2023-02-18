@@ -41,6 +41,7 @@ alwaysUv: ?bool = null,
 credMgmt: ?bool = null,
 /// authenticatorConfig command is supported Y/n
 authnrCfg: ?bool = null,
+bioEnroll: ?bool = null,
 /// present + true: device is capable of accepting a PIN from the client and
 ///                 PIN has been set
 /// present + false: device is capable of accepting a PIN from the client and

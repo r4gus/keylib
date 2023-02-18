@@ -86,6 +86,16 @@ pub const StatusCodes = enum(u8) {
     ctap2_err_action_timeout = 0x3a,
     /// User presence is required for the requested operation.
     ctap2_err_up_required = 0x3b,
+    /// built-in user verification is disabled.
+    ctap2_err_uv_blocked = 0x3c,
+    /// A checksum did not match.
+    ctap2_err_integrity_failure = 0x3d,
+    /// The requested subcommand is either invalid or not implemented.
+    ctap2_err_invalid_subcommand = 0x3e,
+    /// built-in user verification unsuccessful. The platform SHOULD retry.
+    ctap2_err_uv_invalid = 0x3f,
+    /// The permissions parameter contains an unauthorized permission.
+    ctap2_err_unauthorized_permission = 0x40,
     /// Other unspecified error.
     ctap1_err_other = 0x7f,
     /// CTAP 2 spac last error.

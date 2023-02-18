@@ -168,7 +168,7 @@ pub fn Auth(comptime impl: type) type {
             public_data.meta.pin_retries = 8;
 
             // Derive key from pin
-            const key = Hkdf.extract(public_data.meta.salt[0..], default_pin);
+            const key = Hkdf.extract(public_data.meta.salt[0..], secret_data.pin_hash[0..]);
 
             // Encrypt secret data
             public_data.c = data_module.encryptSecretData(
@@ -241,10 +241,7 @@ pub fn Auth(comptime impl: type) type {
                     data.tag[0..],
                     key,
                     data.meta.nonce_ctr,
-                ) catch {
-                    res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
-                    return res.toOwnedSlice(); // TODO: handle properly
-                };
+                ) catch null;
             }
             defer {
                 if (write_back) {
@@ -762,6 +759,55 @@ pub fn Auth(comptime impl: type) type {
                                 return res.toOwnedSlice();
                             }
 
+                            // Check if all requested premissions are valid
+                            const options = self.info.@"4".?;
+                            const cm = cpp.cmPermissionSet() and (options.credMgmt == null or options.credMgmt.? == false);
+                            const be = cpp.bePermissionSet() and (options.bioEnroll == null);
+                            const lbw = cpp.lbwPermissionSet() and (options.largeBlobs == null or options.largeBlobs.? == false);
+                            const acfg = cpp.acfgPermissionSet() and (options.authnrCfg == null or options.authnrCfg.? == false);
+                            const mc = cpp.mcPermissionSet() and (options.noMcGaPermissionsWithClientPin == true);
+                            const ga = cpp.gaPermissionSet() and (options.noMcGaPermissionsWithClientPin == true);
+                            if (cm or be or lbw or acfg or mc or ga) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_unauthorized_permission);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Check if the pin is blocked
+                            if (data.meta.pin_retries == 0) {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_blocked);
+                                return res.toOwnedSlice();
+                            }
+
+                            // Obtain the shared secret
+                            const shared_secret = S.state.ecdh(cpp.@"3".?) catch {
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                                return res.toOwnedSlice();
+                            };
+
+                            // decrement pin retries
+                            data.meta.pin_retries -= 1;
+
+                            // Decrypt pinHashEnc and match against stored pinHash
+                            var pinHash: [16]u8 = undefined;
+                            PinUvAuthTokenState.decrypt(
+                                shared_secret,
+                                pinHash[0..],
+                                cpp.@"6".?[0..],
+                            );
+                            if (!std.mem.eql(u8, pinHash[0..], secret_data.?.pin_hash[0..])) {
+                                // The pin hashes don't match
+                                S.state.regenerate(getBlock);
+
+                                res.items[0] = if (data.meta.pin_retries == 0)
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_blocked)
+                                    // TODO: reset authenticator -> DOOMSDAY
+                                else
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
+                                return res.toOwnedSlice();
+                            }
                         },
                         else => {},
                     }
