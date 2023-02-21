@@ -15,11 +15,9 @@ pub const GetAssertionParam = struct {
     // TODO: add remaining fields (extensions 0x4)
     /// options: Parameters to influence authenticator operation.
     @"5": ?dobj.AuthenticatorOptions = null,
-    /// pinAuth: First 16 bytes of HMAC-SHA-256 of clientDataHash using pinToken
-    /// which platform got from the authenticator:
-    /// HMAC-SHA-256(pinToken, clientDataHash).
+    /// pinUvAuthParam: Result of calling authenticate(pinUvAuthToken, clientDataHash)
     @"6": ?[32]u8 = null,
-    /// pinProtocol: PIN protocol version selected by client.
+    /// pinUvAuthProtocol: PIN protocol version selected by client.
     @"7": ?u8 = null,
 
     pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {

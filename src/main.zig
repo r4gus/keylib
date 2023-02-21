@@ -457,7 +457,71 @@ pub fn Auth(comptime impl: type) type {
                     };
                     defer gap.deinit(allocator);
 
-                    // 1. locate all denoted credentials present on this
+                    // Return error if a zero length pinUvAuthParam is receieved
+                    if (gap.@"6" == null) {
+                        if (!requestPermission(null, null)) {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
+                            return res.toOwnedSlice();
+                        } else {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
+                            return res.toOwnedSlice();
+                        }
+                    }
+
+                    // Check for supported pinUvAuthProtocol version
+                    if (gap.@"7" == null) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_missing_parameter);
+                        return res.toOwnedSlice();
+                    } else if (gap.@"7".? != 2) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_invalid_parameter);
+                        return res.toOwnedSlice();
+                    }
+
+                    if (gap.@"5") |opt| {
+                        // pinUvAuthParam takes precedence over uv, so uv can be true as long
+                        // as pinUvAuthParam is present.
+                        if ((opt.uv and gap.@"6" == null) or !opt.up) {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_invalid_option);
+                            return res.toOwnedSlice();
+                        } else if (opt.rk) {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_unsupported_option);
+                            return res.toOwnedSlice();
+                        }
+                    }
+
+                    // Enforce user verification
+                    if (!S.state.in_use) { // TODO: maybe just switch with getUserVerifiedFlagValue() call
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_token_expired);
+                        return res.toOwnedSlice();
+                    }
+                    
+                    if (!PinUvAuthTokenState.verify(S.state.state.?.pin_token, gap.@"2", gap.@"6".?)) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                        return res.toOwnedSlice();
+                    }
+
+                    if (S.state.permissions & 0x02 == 0) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                        return res.toOwnedSlice();
+                    }
+
+                    if (S.state.rp_id) |rpId| {
+                        const rpId2 = gap.@"1";
+                        if (!std.mem.eql(u8, rpId, rpId2)) {
+                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                            return res.toOwnedSlice();
+                        }
+                    }
+
+                    if (!S.state.getUserVerifiedFlagValue()) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
+                        return res.toOwnedSlice();
+                    }
+
+                    // TODO: If the pinUvAuthToken does not have a permissions RP ID associated:
+                    // Associate the request’s rp.id parameter value with the pinUvAuthToken as its permissions RP ID.
+
+                    // locate all denoted credentials present on this
                     // authenticator and bound to the specified rpId.
                     var ctx_and_mac: ?[]const u8 = null;
                     if (gap.@"3") |creds| {
@@ -471,89 +535,25 @@ pub fn Auth(comptime impl: type) type {
                         }
                     }
 
-                    // 2. If pinAuth parameter is present and pinProtocol is 1,
-                    // verify it by matching it against first 16 bytes of
-                    // HMAC-SHA-256 of clientDataHash parameter using pinToken:
-                    // HMAC-SHA-256(pinToken, clientDataHash).
-                    //   - If the verification succeeds, set the "uv" bit to 1
-                    //     in the response.
-                    //   - If the verification fails, return
-                    //     CTAP2_ERR_PIN_AUTH_INVALID error.
-                    // TODO: implement
-
-                    // 3. If pinAuth parameter is present and the pinProtocol is
-                    // not supported, return CTAP2_ERR_PIN_AUTH_INVALID.
-                    if (gap.@"6" != null) {
-                        // for now pinAuth is not supported
-                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_auth_invalid);
-                        return res.toOwnedSlice();
-                    }
-
-                    // 4. If pinAuth parameter is not present and clientPin has
-                    // been set on the authenticator, set the "uv" bit to 0 in
-                    // the response.
-                    // TODO: implement
-
-                    // 5. If the options parameter is present, process all the
-                    // options. If the option is known but not supported,
-                    // terminate this procedure and return
-                    // CTAP2_ERR_UNSUPPORTED_OPTION. If the option is known but
-                    // not valid for this command, terminate this procedure and
-                    // return CTAP2_ERR_INVALID_OPTION. Ignore any options that
-                    // are not understood. Note that because this specification
-                    // defines normative behaviors for them, all authenticators
-                    // MUST understand the "rk", "up", and "uv" options.
-                    if (gap.@"5") |opt| {
-                        if (opt.uv or !opt.up) { // currently no uv supported
-                            res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_invalid_option);
-                            return res.toOwnedSlice();
-                        }
-                    }
-
-                    // 7. Collect user consent if required. This step MUST
-                    // happen before the following steps due to privacy reasons
-                    // (i.e., authenticator cannot disclose existence of a
-                    // credential until the user interacted with the device):
-                    if (!requestPermission(null, null)) {
-                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
-                        return res.toOwnedSlice();
-                    }
-
-                    // 8. If no credentials were located in step 1, return
-                    // CTAP2_ERR_NO_CREDENTIALS.
                     if (ctx_and_mac == null) {
                         res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_no_credentials);
                         return res.toOwnedSlice();
                     }
 
-                    // 10. If authenticator does not have a display:
-                    //   - Remember the authenticatorGetAssertion parameters.
-                    //   - Create a credential counter(credentialCounter) and
-                    //     set it 1. This counter signifies how many credentials
-                    //     are sent to the platform by the authenticator.
-                    //   - Start a timer. This is used during
-                    //     authenticatorGetNextAssertion command. This step is
-                    //     optional if transport is done over NFC.
-                    //   - Update the response to include the first credential’s
-                    //     publicKeyCredentialUserEntity information and
-                    //     numberOfCredentials. User identifiable information
-                    //     (name, DisplayName, icon) inside
-                    //     publicKeyCredentialUserEntity MUST not be returned if
-                    //     user verification is not done by the authenticator.
-                    // TODO: implement???
+                    // Check user presence
+                    var up: bool = S.state.user_present;
+                    if (!up) {
+                        up = requestPermission(null, null);
+                    }
+                    if (!up) {
+                        res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_operation_denied);
+                        return res.toOwnedSlice();
+                    }
 
-                    // 11. If authenticator has a display:
-                    //   - Display all these credentials to the user, using
-                    //     their friendly name along with other stored account
-                    //     information.
-                    //   - Also, display the rpId of the requester (specified
-                    //     in the request) and ask the user to select a
-                    //     credential.
-                    //   - If the user declines to select a credential or takes
-                    //     too long (as determined by the authenticator),
-                    //     terminate this procedure and return the
-                    //     CTAP2_ERR_OPERATION_DENIED error.
-                    // TODO: implement???
+                    // clear permissions
+                    S.state.user_present = false;
+                    S.state.user_verified = false;
+                    S.state.permissions = 0x10;
 
                     // Return signature
                     var ad = dobj.AuthData{
@@ -561,7 +561,7 @@ pub fn Auth(comptime impl: type) type {
                         .flags = dobj.Flags{
                             .up = 1,
                             .rfu1 = 0,
-                            .uv = 0,
+                            .uv = 1,
                             .rfu2 = 0,
                             .at = 0,
                             .ed = 0,
