@@ -188,7 +188,7 @@ pub const PinUvAuthTokenState = struct {
     /// The PIN/UV auth protocol state
     state: ?AuthProtocolState = null,
     /// Key for encrypting the authenticators secret data
-    pin_key: ?[32]u8 = "\x88\x3c\xd9\xfa\x0d\x1e\x1d\xe9\xf8\xba\xb7\xf1\xf7\x78\x53\xf7\xaa\x54\xa1\xb5\x7f\x2b\xd6\x6e\x7d\xa0\x45\x79\x9f\xd7\x98\x02".*,
+    pin_key: ?[32]u8 = null, //"\x88\x3c\xd9\xfa\x0d\x1e\x1d\xe9\xf8\xba\xb7\xf1\xf7\x78\x53\xf7\xaa\x54\xa1\xb5\x7f\x2b\xd6\x6e\x7d\xa0\x45\x79\x9f\xd7\x98\x02".*,
 
     /// This function prepares the pinUvAuthToken for use by the platform, which has
     /// invoked one of the pinUvAuthToken-issuing operations, by setting particular
@@ -224,6 +224,7 @@ pub const PinUvAuthTokenState = struct {
             self.user_present = false;
             self.usage_timer = null;
             self.used = false;
+            self.pin_key = null;
             return;
         }
     }

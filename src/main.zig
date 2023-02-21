@@ -166,8 +166,8 @@ pub fn Auth(comptime impl: type) type {
             var public_data: data_module.PublicData = undefined;
             defer public_data.deinit(allocator);
             public_data.meta.valid = 0xF1;
-            //getBlock(public_data.meta.salt[0..]);
-            public_data.meta.salt = "\xcd\xb1\xa6\x1b\xc0\x54\x7a\x3e\x4c\xa7\x61\x88\x4a\xad\x3d\x9f\xfd\x1d\xb1\x16\x77\x71\xf3\x22\x51\x1c\x5a\x42\x16\x2c\x27\xc0".*;
+            getBlock(public_data.meta.salt[0..]);
+            //public_data.meta.salt = "\xcd\xb1\xa6\x1b\xc0\x54\x7a\x3e\x4c\xa7\x61\x88\x4a\xad\x3d\x9f\xfd\x1d\xb1\x16\x77\x71\xf3\x22\x51\x1c\x5a\x42\x16\x2c\x27\xc0".*;
             public_data.meta.nonce_ctr = ctr;
             public_data.meta.pin_retries = 8;
 
@@ -228,6 +228,8 @@ pub fn Auth(comptime impl: type) type {
                 S.state.initialize(getBlock);
                 S.initialized = true;
             }
+
+            S.state.pinUvAuthTokenUsageTimerObserver(self.millis());
 
             // Load authenticator data
             var write_back = true; // This gets overwritten by authReset
@@ -812,7 +814,22 @@ pub fn Auth(comptime impl: type) type {
                                 cpp.@"6".?[0..],
                             );
 
-                            // TODO: derive the key from pinHash and then decrypt secret data
+                            // Derive the key from pinHash and then decrypt secret data
+                            const key = Hkdf.extract(data.meta.salt[0..], pinHash[0..]);
+                            secret_data = data_module.decryptSecretData(
+                                allocator,
+                                data.c,
+                                data.tag[0..],
+                                key,
+                                data.meta.nonce_ctr,
+                            ) catch {
+                                // without valid pin/ pinHash we derive the wrong key, i.e.,
+                                // the encryption will fail.
+                                res.items[0] =
+                                    @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
+                                return res.toOwnedSlice();
+                            };
+                            S.state.pin_key = key;
 
                             if (!std.mem.eql(u8, pinHash[0..], secret_data.?.pin_hash[0..])) {
                                 // The pin hashes don't match
