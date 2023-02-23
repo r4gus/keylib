@@ -233,6 +233,7 @@ pub fn Auth(comptime impl: type) type {
 
             // Load authenticator data
             var write_back = true; // This gets overwritten by authReset
+            var reset_token = false; // This gets overwirtten by changePin
             var data = loadData(allocator) catch {
                 reset(allocator, [_]u8{0} ** 12);
 
@@ -280,6 +281,10 @@ pub fn Auth(comptime impl: type) type {
                 // Free dynamically allocated memory. data must
                 // not be used after this.
                 data.deinit(allocator);
+
+                if (reset_token) {
+                    S.state.resetPinUvAuthToken(getBlock);
+                }
             }
 
             switch (cmdnr) {
@@ -579,7 +584,7 @@ pub fn Auth(comptime impl: type) type {
 
                     // 12. Sign the clientDataHash along with authData with the
                     // selected credential.
-                    const kp = crypt.deriveKeyPair(secret_data.?.master_secret, ctx_and_mac.?[0..32].*) catch unreachable; // TODO: is it???
+                    const kp = crypt.deriveKeyPair(secret_data.?.master_secret, ctx_and_mac.?[0..32].*) catch unreachable;
 
                     const sig = crypt.sign(kp, authData.items, gap.@"2") catch {
                         res.items[0] = @enumToInt(dobj.StatusCodes.ctap1_err_other);
@@ -690,7 +695,7 @@ pub fn Auth(comptime impl: type) type {
 
                             // Verify the data (newPinEnc || pinHashEnc)
                             const new_pin_len = cpp.@"5".?.len;
-                            var msg = try allocator.alloc(u8, new_pin_len + 16);
+                            var msg = try allocator.alloc(u8, new_pin_len + 32);
                             defer allocator.free(msg);
                             std.mem.copy(u8, msg[0..new_pin_len], cpp.@"5".?[0..]);
                             std.mem.copy(u8, msg[new_pin_len..], cpp.@"6".?[0..]);
@@ -716,6 +721,19 @@ pub fn Auth(comptime impl: type) type {
                                 pinHash1[0..],
                                 cpp.@"6".?[0..],
                             );
+
+                            const key = Hkdf.extract(data.meta.salt[0..], pinHash1[0..]);
+                            secret_data = data_module.decryptSecretData(
+                                allocator,
+                                data.c,
+                                data.tag[0..],
+                                key,
+                                data.meta.nonce_ctr,
+                            ) catch {
+                                res.items[0] = @enumToInt(dobj.StatusCodes.ctap2_err_pin_invalid);
+                                return res.toOwnedSlice();
+                            };
+
                             if (!std.mem.eql(u8, pinHash1[0..], secret_data.?.pin_hash[0..])) {
                                 // The pin hashes don't match
                                 S.state.regenerate(getBlock);
@@ -753,9 +771,11 @@ pub fn Auth(comptime impl: type) type {
 
                             // Store new pin
                             secret_data.?.pin_hash = crypt.pinHash(newPin);
+                            secret_data.?.pin_length = @intCast(u8, newPin.len);
+                            S.state.pin_key = Hkdf.extract(data.meta.salt[0..], &secret_data.?.pin_hash);
 
                             // Invalidate pinUvAuthTokens
-                            S.state.resetPinUvAuthToken(getBlock);
+                            reset_token = true;
                         },
                         .getPinUvAuthTokenUsingPin => {
                             // Return error if the authenticator does not receive the
