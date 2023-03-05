@@ -20,7 +20,7 @@ options: ?@import("Options.zig") = null,
 max_msg_size: ?u64 = null,
 
 /// List of supported PIN Protocol versions.
-pin_uv_auth_protocols: ?[]const @import("client_pin/pin_protocol.zig").PinProtocol = null,
+pin_uv_auth_protocols: ?[]const @import("client_pin.zig").PinProtocol = null,
 
 /// Maximum number of credentials supported in credentialID list at a time
 /// by the authenticator. MUST be greater than zero if present.

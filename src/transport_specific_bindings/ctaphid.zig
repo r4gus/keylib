@@ -201,7 +201,7 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
         }
     };
 
-    if (S.begin != null and (auth.millis() - S.begin.?) > S.timeout) {
+    if (S.begin != null and (auth.resources.millis() - S.begin.?) > S.timeout) {
         // the previous transaction has timed out -> reset
         reset(&S);
     }
@@ -215,7 +215,7 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
         }
 
         S.busy = misc.sliceToInt(Cid, packet[0..4]);
-        S.begin = auth.millis();
+        S.begin = auth.resources.millis();
 
         if (!channels.isBroadcast(S.busy.?) and !channels.isValid(S.busy.?)) {
             return S.@"error"(ErrorCodes.invalid_channel);
