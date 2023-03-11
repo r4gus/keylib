@@ -30,7 +30,11 @@ pub fn new_default(aaguid: [16]u8, resources: Resources) @This() {
                 .clientPin = true,
                 .pinUvAuthToken = true,
             },
+            .max_msg_size = 4096,
             .pin_uv_auth_protocols = &[_]data.client_pin.PinProtocol{.v2},
+            .transports = &.{.usb},
+            .min_pin_length = 4,
+            .firmware_version = 0xcafe,
         },
         .attestation_type = .Self,
         .resources = resources,
@@ -42,34 +46,39 @@ pub fn new_default(aaguid: [16]u8, resources: Resources) @This() {
     return auth;
 }
 
-/// Main handler function, that takes a command and returns a response.
-pub fn handle(self: *@This(), allocator: std.mem.Allocator, command: []const u8) ![]u8 {
-    // The response message.
-    // For encodings see: https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html#responses
-    var res = std.ArrayList(u8).init(allocator);
-    var response = res.writer();
+fn handle_error(err: data.Errors, m: *std.ArrayList(u8)) []u8 {
+    m.items[0] = @enumToInt(data.StatusCodes.fromError(err));
+    return m.toOwnedSlice() catch unreachable;
+}
 
-    response.writeByte(0x00) catch { // just overwrite if neccessary
-        res.items[0] = @enumToInt(data.StatusCodes.ctap1_err_other);
-        return res.toOwnedSlice();
+/// Main handler function, that takes a command and returns a response.
+pub fn handle(self: *@This(), command: []const u8) []u8 {
+    const Mem = struct {
+        // The user shouldn't be tasked with deciding how much
+        // memory the app requires.
+        threadlocal var m: [8096]u8 = undefined;
     };
+    var fba = std.heap.FixedBufferAllocator.init(&Mem.m);
+    const a = fba.allocator();
+
+    // The response message.
+    var res = std.ArrayList(u8).init(a);
+    var response = res.writer();
+    response.writeByte(0x00) catch unreachable; // we have enough memory available
 
     // Decode command
     const cmd = commands.getCommand(command) catch |err| {
-        // On error, respond with a error code and return.
-        res.items[0] = @enumToInt(data.StatusCodes.fromError(err));
-        return res.toOwnedSlice();
+        return handle_error(err, &res);
     };
 
     switch (cmd) {
         .authenticator_get_info => {
             commands.get_info(self.settings, response) catch |err| {
-                res.items[0] = @enumToInt(data.StatusCodes.fromError(err));
-                return res.toOwnedSlice();
+                return handle_error(err, &res);
             };
         },
         else => {},
     }
 
-    return res.toOwnedSlice();
+    return res.toOwnedSlice() catch unreachable;
 }

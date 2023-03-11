@@ -275,12 +275,8 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
             },
             .cbor => {
                 var response = resp.CtapHidResponseIterator.new(S.busy.?, S.cmd.?);
-                var fba = std.heap.FixedBufferAllocator.init(&response.raw);
-                const a = fba.allocator();
 
-                var data = auth.handle(a, S.data[0..S.bcnt]) catch {
-                    return S.@"error"(ErrorCodes.other);
-                };
+                var data = auth.handle(S.data[0..S.bcnt]);
 
                 response.data = data;
                 return response;

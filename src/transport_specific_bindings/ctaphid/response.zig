@@ -41,7 +41,6 @@ pub const CtapHidResponseIterator = struct {
     data: []const u8 = &.{},
     cid: misc.Cid,
     cmd: command.Cmd,
-    raw: [2048]u8 = undefined,
 
     pub fn new(
         cid: misc.Cid,
