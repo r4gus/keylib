@@ -9,7 +9,7 @@ pub const ErrorCodes = @import("data/error.zig").ErrorCodes;
 pub const Errors = @import("data/error.zig").Errors;
 pub const StatusCodes = @import("data/status_codes.zig").StatusCodes;
 pub const client_pin = @import("data/client_pin.zig");
-const data = @import("data/data.zig");
+pub const data = @import("data/data.zig");
 pub const PublicData = data.PublicData;
 pub const PrivateData = data.PrivateData;
 

@@ -33,6 +33,35 @@ pub const PublicData = struct {
         allocator.free(self.c);
     }
 
+    pub fn set_secret_data(
+        self: *@This(),
+        sd: *const SecretData,
+        pin_key: [32]u8,
+        allocator: std.mem.Allocator,
+    ) void {
+        // Update nonce counter
+        var nctr: u96 = std.mem.readIntSliceLittle(u96, self.meta.nonce_ctr[0..]);
+        nctr += 1;
+        var nctr_raw: [12]u8 = undefined;
+        std.mem.writeIntSliceLittle(u96, nctr_raw[0..], nctr);
+
+        // Encrypt data
+        var tmp_tag: [16]u8 = undefined;
+        const tmp_c = encryptSecretData(
+            allocator,
+            &tmp_tag,
+            sd,
+            pin_key,
+            nctr_raw,
+        ) catch unreachable;
+
+        self.deinit(allocator);
+
+        self.c = tmp_c;
+        std.mem.copy(u8, self.tag[0..], tmp_tag[0..]);
+        self.meta.nonce_ctr = nctr_raw;
+    }
+
     /// Load the public data from memory.
     pub fn load(
         f: *const fn (a: std.mem.Allocator) Resources.LoadError![]u8,

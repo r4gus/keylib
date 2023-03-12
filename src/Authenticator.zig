@@ -73,7 +73,6 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
         return handle_error(err, &res);
     };
 
-    var write_back: bool = true;
     var public_data = data.PublicData.load(self.resources.load, a) catch {
         data.PublicData.reset(
             self.resources.store,
@@ -84,7 +83,13 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
 
         return handle_error(data.Errors.invalid_cbor, &res);
     };
-    _ = public_data;
+    var write_back = true;
+    defer {
+        // TODO: this might ware out falsh memory
+        if (write_back) {
+            public_data.store(self.resources.store, a);
+        }
+    }
 
     switch (cmd) {
         .authenticator_get_info => {
@@ -107,6 +112,21 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
                 [_]u8{0} ** 12,
             );
             write_back = false;
+        },
+        .authenticator_client_pin => {
+            const status = commands.authenticator_client_pin(
+                self,
+                &public_data,
+                response,
+                command,
+                a,
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+
+            if (status != .ctap1_err_success) {
+                return handle_status(status, &res);
+            }
         },
         else => {},
     }
