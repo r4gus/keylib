@@ -15,7 +15,7 @@ fn rand(b: []u8) void {
     }
 }
 
-pub fn load(allocator: std.mem.Allocator) []u8 {
+pub fn load(allocator: std.mem.Allocator) Resources.LoadError![]u8 {
     var x = allocator.alloc(u8, 0) catch unreachable;
     return x;
 }

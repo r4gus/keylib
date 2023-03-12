@@ -4,6 +4,7 @@ const std = @import("std");
 const data = @import("data.zig");
 const commands = @import("commands.zig");
 const Resources = @import("Resources.zig");
+const cbor = @import("zbor");
 
 /// Authenticator settings.
 settings: data.Settings,
@@ -15,10 +16,11 @@ attestation_type: data.AttestationType,
 /// This is mandatory for user authentication.
 state: data.State = .{},
 
-/// Resources provided by the underlying platform
+/// Resources provided by the underlying platform.
 resources: Resources,
 
-// TODO: sig_alg: []const SignatureAlgorithm
+/// Supported signature algorithms.
+sig_alg: []const cbor.cose.Algorithm,
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // Public
@@ -42,6 +44,7 @@ pub fn new_default(aaguid: [16]u8, resources: Resources) @This() {
         },
         .attestation_type = .Self,
         .resources = resources,
+        .sig_alg = &.{cbor.cose.Algorithm.Es256},
     };
 
     // Initialize the pin protocol state
@@ -70,11 +73,40 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
         return handle_error(err, &res);
     };
 
+    var write_back: bool = true;
+    var public_data = data.PublicData.load(self.resources.load, a) catch {
+        data.PublicData.reset(
+            self.resources.store,
+            self.resources.rand,
+            a,
+            [_]u8{0} ** 12,
+        );
+
+        return handle_error(data.Errors.invalid_cbor, &res);
+    };
+    _ = public_data;
+
     switch (cmd) {
         .authenticator_get_info => {
             commands.get_info(self.settings, response) catch |err| {
                 return handle_error(err, &res);
             };
+        },
+        .authenticator_reset => {
+            // Resetting an authenticator is a destructive operation!
+
+            // Request permission from the user
+            if (!self.resources.request_permission(null, null)) {
+                return handle_status(data.StatusCodes.ctap2_err_operation_denied, &res);
+            }
+
+            data.PublicData.reset(
+                self.resources.store,
+                self.resources.rand,
+                a,
+                [_]u8{0} ** 12,
+            );
+            write_back = false;
         },
         else => {},
     }
@@ -86,7 +118,11 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
 // Private
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-fn handle_error(err: data.Errors, m: *std.ArrayList(u8)) []u8 {
-    m.items[0] = @enumToInt(data.StatusCodes.fromError(err));
+fn handle_status(status: data.StatusCodes, m: *std.ArrayList(u8)) []u8 {
+    m.items[0] = @enumToInt(status);
     return m.toOwnedSlice() catch unreachable;
+}
+
+fn handle_error(err: data.Errors, m: *std.ArrayList(u8)) []u8 {
+    return handle_status(data.StatusCodes.fromError(err), m);
 }
