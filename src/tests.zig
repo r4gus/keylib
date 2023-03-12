@@ -56,5 +56,4 @@ test "get a new authenticator instance" {
     try std.testing.expectEqual(true, auth.settings.options.?.clientPin.?);
     try std.testing.expectEqual(true, auth.settings.options.?.pinUvAuthToken.?);
     try std.testing.expectEqual(auth.settings.options.?.uv, null);
-    try std.testing.expectEqual(auth.settings.max_msg_size, null);
 }

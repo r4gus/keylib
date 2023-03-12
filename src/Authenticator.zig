@@ -20,6 +20,10 @@ resources: Resources,
 
 // TODO: sig_alg: []const SignatureAlgorithm
 
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Public
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 /// Get a new authenticator instance with default values
 pub fn new_default(aaguid: [16]u8, resources: Resources) @This() {
     var auth = @This(){
@@ -44,11 +48,6 @@ pub fn new_default(aaguid: [16]u8, resources: Resources) @This() {
     auth.state.initialize(auth.resources.rand);
 
     return auth;
-}
-
-fn handle_error(err: data.Errors, m: *std.ArrayList(u8)) []u8 {
-    m.items[0] = @enumToInt(data.StatusCodes.fromError(err));
-    return m.toOwnedSlice() catch unreachable;
 }
 
 /// Main handler function, that takes a command and returns a response.
@@ -81,4 +80,13 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
     }
 
     return res.toOwnedSlice() catch unreachable;
+}
+
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Private
+//++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+fn handle_error(err: data.Errors, m: *std.ArrayList(u8)) []u8 {
+    m.items[0] = @enumToInt(data.StatusCodes.fromError(err));
+    return m.toOwnedSlice() catch unreachable;
 }
