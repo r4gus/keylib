@@ -185,6 +185,135 @@ pub fn authenticator_client_pin(
             // Invalidate pinUvAuthTokens
             auth.state.resetPinUvAuthToken(auth.resources.rand);
         },
+        .getPinUvAuthTokenUsingPinWithPermissions => {
+            // Return error if the authenticator does not receive the
+            // mandatory parameters for this command.
+            if (client_pin_param.pinUvAuthProtocol == null or
+                client_pin_param.keyAgreement == null or
+                client_pin_param.pinHashEnc == null or
+                client_pin_param.permissions == null)
+            {
+                return data.StatusCodes.ctap2_err_missing_parameter;
+            }
+
+            // If pinUvAuthProtocol is not supported or the permissions are 0,
+            // return error.
+            var protocol_supported: bool = false;
+            for (auth.settings.pin_uv_auth_protocols) |prot| {
+                if (prot == client_pin_param.pinUvAuthProtocol) {
+                    protocol_supported = true;
+                    break;
+                }
+            }
+
+            if (!protocol_supported or client_pin_param.permissions.? == 0) {
+                return data.StatusCodes.ctap1_err_invalid_parameter;
+            }
+
+            // Check if all requested premissions are valid
+            const options = auth.settings.options.?;
+            const cm = client_pin_param.cmPermissionSet() and (options.credMgmt == null or options.credMgmt.? == false);
+            const be = client_pin_param.bePermissionSet() and (options.bioEnroll == null);
+            const lbw = client_pin_param.lbwPermissionSet() and (options.largeBlobs == null or options.largeBlobs.? == false);
+            const acfg = client_pin_param.acfgPermissionSet() and (options.authnrCfg == null or options.authnrCfg.? == false);
+            const mc = client_pin_param.mcPermissionSet() and (options.noMcGaPermissionsWithClientPin == true);
+            const ga = client_pin_param.gaPermissionSet() and (options.noMcGaPermissionsWithClientPin == true);
+            if (cm or be or lbw or acfg or mc or ga) {
+                return data.StatusCodes.ctap2_err_unauthorized_permission;
+            }
+
+            // Check if the pin is blocked
+            if (public_data.meta.pin_retries == 0) {
+                return data.StatusCodes.ctap2_err_pin_blocked;
+            }
+
+            // Obtain the shared secret
+            const shared_secret = auth.state.ecdh(client_pin_param.keyAgreement.?) catch {
+                return data.StatusCodes.ctap1_err_invalid_parameter;
+            };
+
+            // decrement pin retries
+            public_data.meta.pin_retries -= 1;
+
+            // Decrypt pinHashEnc and match against stored pinHash
+            var pinHash: [16]u8 = undefined;
+            data.State.decrypt(
+                shared_secret,
+                pinHash[0..],
+                client_pin_param.pinHashEnc.?[0..],
+            );
+
+            // Derive the key from pinHash and then decrypt secret data
+            const key = Hkdf.extract(public_data.meta.salt[0..], pinHash[0..]);
+            var secret_data = data.data.decryptSecretData(
+                allocator,
+                public_data.c,
+                public_data.tag[0..],
+                key,
+                public_data.meta.nonce_ctr,
+            ) catch {
+                // without valid pin/ pinHash we derive the wrong key, i.e.,
+                // the encryption will fail.
+                return data.StatusCodes.ctap2_err_pin_invalid;
+            };
+            auth.state.pin_key = key;
+
+            if (!std.mem.eql(u8, pinHash[0..], secret_data.pin_hash[0..])) {
+                // The pin hashes don't match
+                auth.state.regenerate(auth.resources.rand);
+
+                if (public_data.meta.pin_retries == 0) {
+                    return data.StatusCodes.ctap2_err_pin_blocked;
+                    // TODO: reset authenticator -> DOOMSDAY
+                } else {
+                    return data.StatusCodes.ctap2_err_pin_invalid;
+                }
+            }
+
+            // Set retry counter to maximum
+            public_data.meta.pin_retries = 8;
+
+            // Check if user is forced to change the pin
+            if (public_data.forcePINChange) |change| {
+                if (change) {
+                    return data.StatusCodes.ctap2_err_pin_policy_violation;
+                }
+            }
+
+            // Create a new pinUvAuthToken
+            auth.state.resetPinUvAuthToken(auth.resources.rand);
+
+            // Begin using the pin uv auth token
+            auth.state.beginUsingPinUvAuthToken(false, auth.resources.millis());
+
+            // Set permissions
+            auth.state.permissions = client_pin_param.permissions.?;
+
+            // If the rpId parameter is present, associate the permissions RP ID
+            // with the pinUvAuthToken.
+            if (client_pin_param.rpId) |rpId| {
+                const l = if (rpId.len > 64) 64 else rpId.len;
+                std.mem.copy(u8, auth.state.rp_id_raw[0..l], rpId[0..l]);
+                auth.state.rp_id = auth.state.rp_id_raw[0..l];
+            }
+
+            // The authenticator returns the encrypted pinUvAuthToken for the
+            // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
+            var enc_shared_secret = allocator.alloc(u8, 48) catch unreachable;
+            var iv: [16]u8 = undefined;
+            auth.resources.rand(iv[0..]);
+            data.State.encrypt(
+                iv,
+                shared_secret,
+                enc_shared_secret[0..],
+                auth.state.pin_token.?[0..],
+            );
+
+            // Response
+            client_pin_response = .{
+                .pinUvAuthToken = enc_shared_secret,
+            };
+        },
         else => {},
     }
 
