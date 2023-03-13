@@ -73,6 +73,10 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
         return handle_error(err, &res);
     };
 
+    // Update pin token state based on time-outs
+    self.state.pinUvAuthTokenUsageTimerObserver(self.resources.millis());
+
+    // Load required authenticator data from memory
     var public_data = data.PublicData.load(self.resources.load, a) catch {
         data.PublicData.reset(
             self.resources.store,
