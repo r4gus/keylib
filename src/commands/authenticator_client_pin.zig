@@ -65,7 +65,6 @@ pub fn authenticator_client_pin(
                 .keyAgreement = auth.state.getPublicKey(),
             };
         },
-        .setPIN => {},
         .changePIN => {
             // Return error if the authenticator does not receive the
             // mandatory parameters for this command.
@@ -314,7 +313,9 @@ pub fn authenticator_client_pin(
                 .pinUvAuthToken = enc_shared_secret,
             };
         },
-        else => {},
+        else => {
+            return data.StatusCodes.ctap2_err_invalid_subcommand;
+        },
     }
 
     // Serialize response and return
