@@ -12,6 +12,10 @@ pub const client_pin = @import("data/client_pin.zig");
 pub const data = @import("data/data.zig");
 pub const PublicData = data.PublicData;
 pub const PrivateData = data.PrivateData;
+pub const make_credential = @import("data/make_credential.zig");
+pub const CredParam = @import("data/CredParam.zig");
+pub const PublicKeyCredentialDescriptor = @import("data/PublicKeyCredentialDescriptor.zig");
+pub const AuthenticatorOptions = @import("data/AuthenticatorOptions.zig");
 
 test "data tests" {
     _ = AttestationType;
@@ -21,4 +25,6 @@ test "data tests" {
     _ = State;
     _ = client_pin;
     _ = data;
+    _ = make_credential;
+    _ = PublicKeyCredentialDescriptor;
 }
