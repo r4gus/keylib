@@ -3,12 +3,12 @@ const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 
 const cose = @import("zbor");
 
-const EcdsaP256Sha256 = @import("ecdsa.zig").EcdsaP256Sha256;
+pub const EcdsaP256Sha256 = @import("ecdsa.zig").EcdsaP256Sha256;
 
-const MasterSecret = @import("master_secret.zig").MasterSecret;
+pub const MasterSecret = @import("master_secret.zig").MasterSecret;
 
 const context = @import("context.zig");
-const Context = context.Context;
+pub const Context = context.Context;
 
 pub const SignatureAlgorithmKeyPair = union(cose.Algorithm) {
     Es256: struct {
