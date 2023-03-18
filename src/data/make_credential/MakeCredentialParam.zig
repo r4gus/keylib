@@ -7,6 +7,7 @@ const CredParam = @import("../CredParam.zig");
 const PublicKeyCredentialDescriptor = @import("../PublicKeyCredentialDescriptor.zig");
 const AuthenticatorOptions = @import("../AuthenticatorOptions.zig");
 const PinUvAuthParam = @import("../../crypto.zig").pin.PinUvAuthParam;
+const PinProtocol = @import("../client_pin/pin_protocol.zig").PinProtocol;
 
 /// Hash of the ClientData contextual binding
 clientDataHash: []const u8,
@@ -26,7 +27,7 @@ options: ?AuthenticatorOptions,
 /// Result of calling authenticate(pinUvAuthToken, clientDataHash)
 pinUvAuthParam: ?PinUvAuthParam,
 /// PIN protocol version chosen by the client.
-pinUvAuthProtocol: ?u8,
+pinUvAuthProtocol: ?PinProtocol,
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     allocator.free(self.clientDataHash);
@@ -97,4 +98,29 @@ test "make credential" {
     try std.testing.expectEqualSlices(u8, "jsmith", mcp.user.displayName.?);
     try std.testing.expectEqual(mcp.pubKeyCredParams[0].alg, cbor.cose.Algorithm.Es256);
     try std.testing.expectEqualSlices(u8, "public-key", mcp.pubKeyCredParams[0].type);
+}
+
+test "make credential 2" {
+    const allocator = std.testing.allocator;
+
+    const payload = "\xa6\x01\x58\x20\x1c\x3b\x3a\x65\xb3\x12\xa1\xa0\xea\xcb\xc0\x8b\x90\x02\x2d\x36\xcc\x03\x25\xb9\x6e\x85\xb6\x4f\xf5\x8d\xb0\x59\x15\x2e\x1a\xbb\x02\xa2\x62\x69\x64\x6b\x77\x65\x62\x61\x75\x74\x68\x6e\x2e\x69\x6f\x64\x6e\x61\x6d\x65\x6b\x77\x65\x62\x61\x75\x74\x68\x6e\x2e\x69\x6f\x03\xa3\x62\x69\x64\x44\x59\x6d\x39\x69\x64\x6e\x61\x6d\x65\x63\x62\x6f\x62\x6b\x64\x69\x73\x70\x6c\x61\x79\x4e\x61\x6d\x65\x63\x62\x6f\x62\x04\x82\xa2\x63\x61\x6c\x67\x26\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79\xa2\x63\x61\x6c\x67\x39\x01\x00\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79\x08\x58\x20\xe2\x85\xdd\xd9\x06\x17\x50\xb9\xb3\x63\x5c\xc6\xa1\x00\x90\x10\x44\xc2\x19\x88\x5c\xfd\xdf\xb0\xc0\x66\x6a\xd5\xe3\x1f\xcd\xac\x09\x02";
+
+    const di = try cbor.DataItem.new(payload);
+
+    const mcp = try cbor.parse(@This(), di, .{
+        .allocator = allocator,
+        .field_settings = &.{
+            .{ .name = "clientDataHash", .alias = "1", .options = .{} },
+            .{ .name = "rp", .alias = "2", .options = .{} },
+            .{ .name = "user", .alias = "3", .options = .{} },
+            .{ .name = "pubKeyCredParams", .alias = "4", .options = .{} },
+            .{ .name = "excludeList", .alias = "5", .options = .{} },
+            .{ .name = "options", .alias = "7", .options = .{} },
+            .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
+            .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
+        },
+    });
+    defer mcp.deinit(allocator);
+
+    try std.testing.expectEqualSlices(u8, "", mcp.rp.id);
 }

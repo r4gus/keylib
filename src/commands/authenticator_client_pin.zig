@@ -305,7 +305,7 @@ pub fn authenticator_client_pin(
                 iv,
                 shared_secret,
                 enc_shared_secret[0..],
-                auth.state.pin_token.?[0..],
+                auth.state.pin_token[0..],
             );
 
             // Response

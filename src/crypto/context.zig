@@ -23,7 +23,7 @@ pub const CredId = [cred_id_len]u8;
 ///
 /// The context consists of a (4 byte) COSE algorithm identifier followed
 /// by 28 random bytes.
-pub fn newContext(comptime rand: fn ([]u8) void, alg: cose.Algorithm) Context {
+pub fn newContext(rand: *const fn ([]u8) void, alg: cose.Algorithm) Context {
     var ctx: Context = undefined;
     // The first four bytes encode the algorithm
     std.mem.copy(u8, ctx[0..4], alg.to_raw()[0..]);
@@ -51,7 +51,7 @@ pub fn make_cred_id(ms: MasterSecret, ctx: Context, rp_id: []const u8) CredId {
     std.mem.copy(u8, cred_id[0..context_len], ctx[0..]);
     const key = derive_mac_key(ms);
     var m = Hmac.init(&key);
-    m.update(ctx);
+    m.update(&ctx);
     m.update(rp_id);
     m.final(cred_id[context_len..]);
 

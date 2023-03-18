@@ -2,6 +2,7 @@ const data = @import("data.zig");
 
 pub const get_info = @import("commands/get_info.zig").get_info;
 pub const authenticator_client_pin = @import("commands/authenticator_client_pin.zig").authenticator_client_pin;
+pub const authenticator_make_credential = @import("commands/authenticator_make_credential.zig").authenticator_make_credential;
 
 /// Commands supported by the CTAP protocol.
 pub const Commands = enum(u8) {

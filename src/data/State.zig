@@ -53,7 +53,7 @@ authenticator_key_agreement_key: ?EcdhP256.KeyPair = null,
 
 /// A random integer of length which is multiple of 16 bytes
 /// (AES block length).
-pin_token: ?[32]u8 = null,
+pin_token: [32]u8 = undefined,
 
 /// Key for encrypting the authenticators secret data
 pin_key: ?[32]u8 = null, //"\x88\x3c\xd9\xfa\x0d\x1e\x1d\xe9\xf8\xba\xb7\xf1\xf7\x78\x53\xf7\xaa\x54\xa1\xb5\x7f\x2b\xd6\x6e\x7d\xa0\x45\x79\x9f\xd7\x98\x02".*,
@@ -136,7 +136,7 @@ pub fn regenerate(self: *@This(), rand: *const fn ([]u8) void) void {
 
 /// Generate a fresh 32 bytes pinUvAuthToken.
 pub fn resetPinUvAuthToken(self: *@This(), rand: *const fn ([]u8) void) void {
-    rand(self.pin_token.?[0..]);
+    rand(self.pin_token[0..]);
 }
 
 pub fn getUserVerifiedFlagValue(self: *@This()) bool {

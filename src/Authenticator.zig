@@ -74,7 +74,7 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
     };
 
     // Update pin token state based on time-outs
-    self.state.pinUvAuthTokenUsageTimerObserver(self.resources.millis());
+    //self.state.pinUvAuthTokenUsageTimerObserver(self.resources.millis());
 
     // Load required authenticator data from memory
     var public_data = data.PublicData.load(self.resources.load, a) catch {
@@ -96,6 +96,21 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
     }
 
     switch (cmd) {
+        .authenticator_make_credential => {
+            const status = commands.authenticator_make_credential(
+                self,
+                &public_data,
+                response,
+                command,
+                a,
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+
+            if (status != .ctap1_err_success) {
+                return handle_status(status, &res);
+            }
+        },
         .authenticator_get_info => {
             commands.get_info(self.settings, response) catch |err| {
                 return handle_error(err, &res);
