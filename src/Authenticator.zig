@@ -74,7 +74,7 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
     };
 
     // Update pin token state based on time-outs
-    //self.state.pinUvAuthTokenUsageTimerObserver(self.resources.millis());
+    self.state.pinUvAuthTokenUsageTimerObserver(self.resources.millis());
 
     // Load required authenticator data from memory
     var public_data = data.PublicData.load(self.resources.load, a) catch {
@@ -97,11 +97,49 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
 
     switch (cmd) {
         .authenticator_make_credential => {
-            const status = commands.authenticator_make_credential(
+            var di = cbor.DataItem.new(command[1..]) catch {
+                return handle_status(data.StatusCodes.ctap2_err_invalid_cbor, &res);
+            };
+
+            const make_credential_param = cbor.parse(
+                data.make_credential.MakeCredentialParam,
+                di,
+                .{
+                    .allocator = a,
+                    .field_settings = &.{
+                        .{ .name = "clientDataHash", .alias = "1", .options = .{} },
+                        .{ .name = "rp", .alias = "2", .options = .{} },
+                        .{ .name = "user", .alias = "3", .options = .{} },
+                        .{ .name = "pubKeyCredParams", .alias = "4", .options = .{} },
+                        .{ .name = "excludeList", .alias = "5", .options = .{} },
+                        .{ .name = "options", .alias = "7", .options = .{} },
+                        .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
+                        .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
+                    },
+                },
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+            defer make_credential_param.deinit(a);
+
+            var status: data.StatusCodes = data.StatusCodes.ctap1_err_success;
+
+            status = commands.verify.verify_make_credential(
+                self,
+                &make_credential_param,
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+
+            if (status != .ctap1_err_success) {
+                return handle_status(status, &res);
+            }
+
+            status = commands.authenticator_make_credential(
                 self,
                 &public_data,
+                &make_credential_param,
                 response,
-                command,
                 a,
             ) catch |err| {
                 return handle_error(err, &res);
