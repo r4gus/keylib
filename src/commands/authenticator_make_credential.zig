@@ -37,8 +37,6 @@ pub fn authenticator_make_credential(
         }
     }
 
-    // TODO: check exclude list
-
     // Request permission from the user
     if (!auth.state.user_present and !auth.resources.request_permission(
         &make_credential_param.user,
@@ -57,6 +55,21 @@ pub fn authenticator_make_credential(
     ) catch {
         return data.StatusCodes.ctap2_err_pin_invalid;
     };
+
+    // check exclude list: don't allow to create two credentials for the same service
+    if (make_credential_param.excludeList) |excludes| {
+        for (excludes) |cred| {
+            if (cred.id.len < crypto.context.cred_id_len) continue;
+
+            if (crypto.context.verify_cred_id(
+                secret_data.master_secret,
+                cred.id[0..crypto.context.cred_id_len].*,
+                make_credential_param.rp.id,
+            )) {
+                return data.StatusCodes.ctap2_err_credential_excluded;
+            }
+        }
+    }
 
     // Generate a new credential key pair for the algorithm specified.
     const context = crypto.context.newContext(auth.resources.rand, alg.?);
