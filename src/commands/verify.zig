@@ -6,6 +6,7 @@ const Authenticator = @import("../Authenticator.zig");
 const PinProtocol = data.client_pin.PinProtocol;
 const PinUvAuthParam = @import("../crypto.zig").pin.PinUvAuthParam;
 const MakeCredentialParam = data.make_credential.MakeCredentialParam;
+const GetAssertionParam = data.get_assertion.GetAssertionParam;
 
 pub fn verify_make_credential(
     auth: *Authenticator,
@@ -36,6 +37,38 @@ pub fn verify_make_credential(
         make_credential_param.clientDataHash,
         make_credential_param.rp.id,
         0x01,
+    );
+}
+
+pub fn verify_get_assertion(
+    auth: *Authenticator,
+    get_assertion_param: *const GetAssertionParam,
+) !data.StatusCodes {
+    // Return error if the authenticator does not receive the
+    // mandatory parameters for this command.
+    if (get_assertion_param.pinUvAuthProtocol == null) {
+        return data.StatusCodes.ctap2_err_missing_parameter;
+    }
+
+    // Return error if a zero length pinUvAuthParam is receieved
+    if (get_assertion_param.pinUvAuthParam == null) {
+        if (!auth.resources.request_permission(
+            null,
+            null,
+        )) {
+            return data.StatusCodes.ctap2_err_operation_denied;
+        } else {
+            return data.StatusCodes.ctap2_err_pin_invalid;
+        }
+    }
+
+    return verify(
+        auth,
+        get_assertion_param.pinUvAuthProtocol.?,
+        get_assertion_param.pinUvAuthParam.?,
+        get_assertion_param.clientDataHash,
+        get_assertion_param.rpId,
+        0x02,
     );
 }
 

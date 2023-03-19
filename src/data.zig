@@ -16,6 +16,7 @@ pub const make_credential = @import("data/make_credential.zig");
 pub const CredParam = @import("data/CredParam.zig");
 pub const PublicKeyCredentialDescriptor = @import("data/PublicKeyCredentialDescriptor.zig");
 pub const AuthenticatorOptions = @import("data/AuthenticatorOptions.zig");
+pub const get_assertion = @import("data/get_assertion.zig");
 
 test "data tests" {
     _ = AttestationType;

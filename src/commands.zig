@@ -3,6 +3,7 @@ const data = @import("data.zig");
 pub const get_info = @import("commands/get_info.zig").get_info;
 pub const authenticator_client_pin = @import("commands/authenticator_client_pin.zig").authenticator_client_pin;
 pub const authenticator_make_credential = @import("commands/authenticator_make_credential.zig").authenticator_make_credential;
+pub const authenticator_get_assertion = @import("commands/authenticator_get_assertion.zig").authenticator_get_assertion;
 pub const verify = @import("commands/verify.zig");
 
 /// Commands supported by the CTAP protocol.

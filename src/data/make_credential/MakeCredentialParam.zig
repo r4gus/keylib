@@ -122,5 +122,5 @@ test "make credential 2" {
     });
     defer mcp.deinit(allocator);
 
-    try std.testing.expectEqualSlices(u8, "", mcp.rp.id);
+    try std.testing.expectEqualSlices(u8, "webauthn.io", mcp.rp.id);
 }

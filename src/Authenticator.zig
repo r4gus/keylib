@@ -149,6 +149,57 @@ pub fn handle(self: *@This(), command: []const u8) []u8 {
                 return handle_status(status, &res);
             }
         },
+        .authenticator_get_assertion => {
+            var di = cbor.DataItem.new(command[1..]) catch {
+                return handle_status(data.StatusCodes.ctap2_err_invalid_cbor, &res);
+            };
+
+            const get_assertion_param = cbor.parse(
+                data.get_assertion.GetAssertionParam,
+                di,
+                .{
+                    .allocator = a,
+                    .field_settings = &.{
+                        .{ .name = "rpId", .alias = "1", .options = .{} },
+                        .{ .name = "clientDataHash", .alias = "2", .options = .{} },
+                        .{ .name = "allowList", .alias = "3", .options = .{} },
+                        .{ .name = "options", .alias = "5", .options = .{} },
+                        .{ .name = "pinUvAuthParam", .alias = "6", .options = .{} },
+                        .{ .name = "pinUvAuthProtocol", .alias = "7", .options = .{} },
+                    },
+                },
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+            defer get_assertion_param.deinit(a);
+
+            var status: data.StatusCodes = data.StatusCodes.ctap1_err_success;
+
+            status = commands.verify.verify_get_assertion(
+                self,
+                &get_assertion_param,
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+
+            if (status != .ctap1_err_success) {
+                return handle_status(status, &res);
+            }
+
+            status = commands.authenticator_get_assertion(
+                self,
+                &public_data,
+                &get_assertion_param,
+                response,
+                a,
+            ) catch |err| {
+                return handle_error(err, &res);
+            };
+
+            if (status != .ctap1_err_success) {
+                return handle_status(status, &res);
+            }
+        },
         .authenticator_get_info => {
             commands.get_info(self.settings, response) catch |err| {
                 return handle_error(err, &res);
