@@ -1,10 +1,8 @@
-const data = @import("data.zig");
+const dobj = @import("dobj.zig");
 
-pub const get_info = @import("commands/get_info.zig").get_info;
-pub const authenticator_client_pin = @import("commands/authenticator_client_pin.zig").authenticator_client_pin;
-pub const authenticator_make_credential = @import("commands/authenticator_make_credential.zig").authenticator_make_credential;
-pub const authenticator_get_assertion = @import("commands/authenticator_get_assertion.zig").authenticator_get_assertion;
-pub const verify = @import("commands/verify.zig");
+pub const make_credential = @import("commands/make_credential.zig");
+pub const get_assertion = @import("commands/get_assertion.zig");
+pub const client_pin = @import("commands/client_pin.zig");
 
 /// Commands supported by the CTAP protocol.
 pub const Commands = enum(u8) {
@@ -41,7 +39,7 @@ pub const Commands = enum(u8) {
     /// Vendor specific implementation.
     authenticator_vendor_last = 0xbf,
 
-    pub fn fromRaw(byte: u8) data.ErrorCodes!Commands {
+    pub fn fromRaw(byte: u8) dobj.ErrorCodes!Commands {
         switch (byte) {
             0x01 => return .authenticator_make_credential,
             0x02 => return .authenticator_get_assertion,
@@ -56,16 +54,22 @@ pub const Commands = enum(u8) {
             0x0d => return .authenticator_config,
             0x40 => return .authenticator_vendor_first,
             0xbf => return .authenticator_vendor_last,
-            else => return data.ErrorCodes.invalid_command,
+            else => return dobj.ErrorCodes.invalid_command,
         }
     }
 };
 
 /// Determine the command encoded by `data`.
-pub fn getCommand(d: []const u8) data.ErrorCodes!Commands {
-    if (d.len < 1) {
-        return data.ErrorCodes.invalid_length;
+pub fn getCommand(data: []const u8) dobj.ErrorCodes!Commands {
+    if (data.len < 1) {
+        return dobj.ErrorCodes.invalid_length;
     }
 
-    return Commands.fromRaw(d[0]);
+    return Commands.fromRaw(data[0]);
+}
+
+test "command tests" {
+    _ = make_credential;
+    _ = get_assertion;
+    _ = client_pin;
 }
