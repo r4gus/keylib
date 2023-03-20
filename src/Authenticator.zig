@@ -35,6 +35,7 @@ pub fn new_default(aaguid: [16]u8, resources: Resources) @This() {
             .options = .{
                 .clientPin = true,
                 .pinUvAuthToken = true,
+                .alwaysUv = true,
             },
             .max_msg_size = 4096,
             .pin_uv_auth_protocols = &[_]data.client_pin.PinProtocol{.v2},
