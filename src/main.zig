@@ -1,21 +1,29 @@
-/// Transport specific bindings
-pub const transport_specific_bindings = @import("transport_specific_bindings.zig");
+const std = @import("std");
 
-/// Resources that must be provided by the platform
-pub const Resources = @import("Resources.zig");
+const hidapi = @cImport({
+    @cInclude("hidapi/hidapi.h");
+});
 
-/// FIDO2 Authenticator
-pub const Authenticator = @import("Authenticator.zig");
+const ALL_VENDORS = 0;
+const ALL_PRODUCTS = 0;
 
-/// CTAP2 data types
-pub const data = @import("data.zig");
+pub fn main() !void {
+    _ = hidapi.hid_init();
 
-const tests = @import("tests.zig");
+    var devices = hidapi.hid_enumerate(ALL_VENDORS, ALL_PRODUCTS);
+    defer hidapi.hid_free_enumeration(devices);
 
-test "main" {
-    _ = transport_specific_bindings;
-    _ = Resources;
-    _ = Authenticator;
-    _ = data;
-    _ = tests;
+    while (devices != null) {
+        if (devices.*.usage_page == 0xF1D0 and devices.*.usage == 0x01) {
+            std.debug.print("{s}\n", .{devices.*.path});
+        }
+        devices = devices.*.next;
+    }
+}
+
+test "simple test" {
+    var list = std.ArrayList(i32).init(std.testing.allocator);
+    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
+    try list.append(42);
+    try std.testing.expectEqual(@as(i32, 42), list.pop());
 }

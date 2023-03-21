@@ -1,16 +1,12 @@
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
+pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
-
-    // Standard optimization options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
-    // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+
+    // ++++++++++++++++++++++++++++++++++++++++++++
+    // Module
+    // ++++++++++++++++++++++++++++++++++++++++++++
 
     const zbor_dep = b.dependency("zbor", .{
         .target = target,
@@ -18,22 +14,54 @@ pub fn build(b: *std.build.Builder) void {
     });
     const zbor_module = zbor_dep.module("zbor");
 
-    const lib = b.addStaticLibrary(.{
-        .name = "fido",
+    const fido_module = b.addModule("fido", .{
+        .source_file = .{ .path = "src/main.zig" },
+        .dependencies = &.{
+            .{ .name = "zbor", .module = zbor_module },
+        },
+    });
+
+    try b.modules.put(b.dupe("fido"), fido_module);
+
+    // ++++++++++++++++++++++++++++++++++++++++++++
+    // Command Line Tool
+    // ++++++++++++++++++++++++++++++++++++++++++++
+
+    const hidapi_dep = b.dependency("hidapi", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "fido-tool",
         .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
-    lib.addModule("zbor", zbor_module);
 
-    // This declares intent for the library to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    lib.install();
+    exe.addModule("fido", fido_module);
+    exe.linkLibrary(hidapi_dep.artifact("hidapi"));
+
+    exe.install();
+    const run_cmd = exe.run();
+    run_cmd.step.dependOn(b.getInstallStep());
+
+    // This allows the user to pass arguments to the application in the build
+    // command itself, like this: `zig build run -- arg1 arg2 etc`
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Run the app");
+    run_step.dependOn(&run_cmd.step);
+
+    // ++++++++++++++++++++++++++++++++++++++++++++
+    // Tests
+    // ++++++++++++++++++++++++++++++++++++++++++++
 
     // Creates a step for unit testing.
     const lib_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "lib/main.zig" },
         .target = target,
         .optimize = optimize,
     });
