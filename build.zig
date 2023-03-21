@@ -12,9 +12,11 @@ pub fn build(b: *std.build.Builder) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    var zbor_module = b.createModule(.{
-        .source_file = .{ .path = "libs/zbor/src/main.zig" },
+    const zbor_dep = b.dependency("zbor", .{
+        .target = target,
+        .optimize = optimize,
     });
+    const zbor_module = zbor_dep.module("zbor");
 
     const lib = b.addStaticLibrary(.{
         .name = "fido",

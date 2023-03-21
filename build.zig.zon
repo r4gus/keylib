@@ -1,0 +1,11 @@
+.{
+    .name = "fido2",
+    .version = "0.11.2",
+
+    .dependencies = .{
+        .zbor = .{
+            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.11.3-alpha.tar.gz",
+            .hash = "1220e4d26c4707bb1b3883107b5f3a99866017136cd0b611ba30f9b04a967574fc7e",
+        },
+    },
+}
