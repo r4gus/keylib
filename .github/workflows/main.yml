@@ -26,7 +26,6 @@ jobs:
         with:
           version: master
       - run: |
-          sh pull-deps.sh
           zig build test
           #  lint:
           #    runs-on: ubuntu-latest
