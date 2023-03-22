@@ -59,7 +59,7 @@ var fido_module = b.createModule(.{
 exe.addModule("fido", fido_module);
 ```
 
-</summary>
+</details>
 
 <details>
 <summary><ins>FIDO2 authenticator</ins></summary>
