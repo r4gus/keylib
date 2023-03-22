@@ -155,22 +155,22 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
     const S = struct {
         // Authenticator is currently busy handling a request with the given
         // Cid. `null` means not busy.
-        threadlocal var busy: ?Cid = null;
+        var busy: ?Cid = null;
         // Time in ms the initialization packet was received.
-        threadlocal var begin: ?u32 = null;
+        var begin: ?u32 = null;
         // Command to be executed.
-        threadlocal var cmd: ?Cmd = null;
+        var cmd: ?Cmd = null;
         // The ammount of expected data bytes (max is: 64 - 7 + 128 * (64 - 5) = 7609).
-        threadlocal var bcnt_total: u16 = 0;
+        var bcnt_total: u16 = 0;
         // Data bytes already received.
-        threadlocal var bcnt: u16 = 0;
+        var bcnt: u16 = 0;
         // Last sequence number (continuation packet).
-        threadlocal var seq: ?u8 = 0;
+        var seq: ?u8 = 0;
         // Data buffer.
         // All clients (CIDs) share the same buffer, i.e. only one request
         // can be handled at a time. This buffer is also used for some of
         // the response data.
-        threadlocal var data: [7609]u8 = undefined;
+        var data: [7609]u8 = undefined;
 
         const timeout: u32 = 250; // 250 milli second timeout
 
