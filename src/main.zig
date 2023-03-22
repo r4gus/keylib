@@ -4,12 +4,44 @@ const hidapi = @cImport({
     @cInclude("hidapi/hidapi.h");
 });
 
-const fido = @import("fido");
-
 const misc = @import("misc.zig");
+
+const fido = @import("fido");
+const Authenticator = fido.client.device.Authenticator;
+const Transport = fido.client.device.Transport;
+const TransportTag = fido.client.device.TransportTag;
+const IOError = fido.client.device.IOError;
 
 const ALL_VENDORS = 0;
 const ALL_PRODUCTS = 0;
+
+pub fn open(transport: *const Transport) IOError!*anyopaque {
+    switch (transport.*) {
+        .usb => |t| {
+            var device = hidapi.hid_open_path(t.path);
+            if (device == null) return IOError.Open;
+            return @ptrCast(*anyopaque, device);
+        },
+        .nfc, .bluetooth => return IOError.UnexpectedTransport,
+    }
+}
+
+pub fn close(dev: *anyopaque) void {
+    hidapi.hid_close(@ptrCast(*hidapi.hid_device, dev));
+}
+
+pub fn write(dev: *anyopaque, data: []const u8) IOError!void {
+    _ = dev;
+    _ = data;
+    return IOError.Write;
+}
+
+pub fn read_timeout(dev: *anyopaque, buffer: []u8, millis: i32) IOError!void {
+    _ = dev;
+    _ = buffer;
+    _ = millis;
+    return IOError.Write;
+}
 
 /// Enumerate all given usb devices on the system, looking for usage page 0xF1D0 and usage 1
 ///
@@ -20,6 +52,11 @@ pub fn find_authenticator(allocator: std.mem.Allocator) ![]fido.client.device.Au
     defer hidapi.hid_free_enumeration(devices);
 
     var authenticators = std.ArrayList(fido.client.device.Authenticator).init(allocator);
+    errdefer {
+        for (authenticators.items) |*auth| {
+            auth.deinit();
+        }
+    }
 
     while (devices != null) {
         if (devices.*.usage_page == 0xF1D0 and devices.*.usage == 0x01) {
@@ -34,6 +71,12 @@ pub fn find_authenticator(allocator: std.mem.Allocator) ![]fido.client.device.Au
                     .product_string = try misc.copy_wchar_t_string(allocator, devices.*.product_string),
                     .interface_number = devices.*.interface_number,
                 } },
+                .io = .{
+                    .open = open,
+                    .close = close,
+                    .write = write,
+                    .read_timeout = read_timeout,
+                },
                 .allocator = allocator,
             };
 
