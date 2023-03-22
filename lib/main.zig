@@ -10,6 +10,9 @@ pub const Authenticator = @import("Authenticator.zig");
 /// CTAP2 data types
 pub const data = @import("data.zig");
 
+/// Client specific code
+pub const client = @import("client.zig");
+
 const tests = @import("tests.zig");
 
 test "main" {
