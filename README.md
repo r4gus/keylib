@@ -8,6 +8,60 @@
 A library wich allows you to implement FIDO2 authenticators and client applications. 
 
 <details>
+<summary><ins>Getting started</ins></summary>
+To use this library you can either add it directly as a module or use the Zig package manager to fetch it as a dependency.
+
+### Zig package manager
+
+First add this library as dependency to your build.zig.zon file:
+
+```zon
+.{
+    .name = "your-project",
+    .version = 0.0.1,
+
+    .dependencies = .{
+        .fido = .{
+            .url = "https://github.com/r4gus/fido2/archive/main.tar.gz",
+            .hash = "122036646fd5c72c265f2eb4dfc4b9891696a38e7c614b234b3ea65795eb2584d052",
+        }
+    },
+}
+```
+
+#### Hash
+
+To calculate the hash you can use the following [script](https://github.com/r4gus/zig-package-hash/blob/main/hash.sh).
+
+> Note: The Zig core team might alter the hashing algorithm used, i.e., the script might
+> not always calculate the correct result in the future.
+
+### As a module
+
+First add the library to your project, e.g., as a submodule:
+
+```
+your-project$ mkdir libs
+your-project$ git submodule add https://github.com/r4gus/fido2.git libs/fido
+```
+
+Then add the following line to your `build.zig` file.
+
+```zig
+// Create a new module
+var fido_module = b.createModule(.{
+    .source_file = .{ .path = "libs/fido/lib/main.zig" },
+});
+
+// create your exe ...
+
+// Add the module to your exe/ lib
+exe.addModule("fido", fido_module);
+```
+
+</summary>
+
+<details>
 <summary><ins>FIDO2 authenticator</ins></summary>
 
 You can use this library to implement roaming and platform FIDO2 authenticators. It makes no assumptions about the
@@ -17,8 +71,8 @@ underlying hardware, instead the user of this library is responsible to provide 
 
 The following steps are required to get started:
 
-1. Add this repository to your project (make sure you call the `pull-deps.sh` script to fetch the required cbor library)
-2. Implement a basic application that acts as a raw usb hid device
+1. Add this repository to your project
+2. Implement a basic application that acts as a raw usb hid device (nfc and bluetooth are currently not supported)
 3. Define the following functions (take a look at the example [here](https://github.com/r4gus/candy-stick-nrf/blob/master/src/auth_descriptor.zig)):
   - `pub fn rand() u32` - Get a 32 bit (true) random number
   - `pub fn millis() u32` - The time in milliseconds since startup (or something similar)
