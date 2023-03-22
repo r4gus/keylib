@@ -15,7 +15,7 @@ pub fn build(b: *std.build.Builder) !void {
     const zbor_module = zbor_dep.module("zbor");
 
     const fido_module = b.addModule("fido", .{
-        .source_file = .{ .path = "src/main.zig" },
+        .source_file = .{ .path = "lib/main.zig" },
         .dependencies = &.{
             .{ .name = "zbor", .module = zbor_module },
         },
