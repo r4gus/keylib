@@ -5,8 +5,13 @@
 
 > _Warning_: NOT PRODUCTION READY!
 
+A library wich allows you to implement FIDO2 authenticators and client applications. 
+
 <details>
-<summary>## FIDO2 authenticator support</summary>
+<summary><ins>FIDO2 authenticator</ins></summary>
+
+You can use this library to implement roaming and platform FIDO2 authenticators. It makes no assumptions about the
+underlying hardware, instead the user of this library is responsible to provide the necessary resources (see below).
 
 ### Getting started
 
@@ -87,6 +92,10 @@ if (response != null) {
 
 TODO: rewrite this section
 
+</details>
+
+<details>
+<summary><ins>FIDO2 tooling</ins></summary>
 </details>
 
 ## Resources
