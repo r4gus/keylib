@@ -14,18 +14,18 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const command = @import("ctaphid/command.zig");
-const Cmd = command.Cmd;
-const CMD_LENGTH = command.CMD_LENGTH;
+pub const Cmd = command.Cmd;
+pub const CMD_LENGTH = command.CMD_LENGTH;
 
-const misc = @import("ctaphid/misc.zig");
-const Cid = misc.Cid;
-const Nonce = misc.Nonce;
-const CID_LENGTH = misc.CID_LENGTH;
-const NONCE_LENGTH = misc.NONCE_LENGTH;
-const BCNT_LENGTH = misc.BCNT_LENGTH;
+pub const misc = @import("ctaphid/misc.zig");
+pub const Cid = misc.Cid;
+pub const Nonce = misc.Nonce;
+pub const CID_LENGTH = misc.CID_LENGTH;
+pub const NONCE_LENGTH = misc.NONCE_LENGTH;
+pub const BCNT_LENGTH = misc.BCNT_LENGTH;
 
 const resp = @import("ctaphid/response.zig");
-const CtapHidMessageIterator = resp.CtapHidMessageIterator;
+pub const CtapHidMessageIterator = resp.CtapHidMessageIterator;
 
 pub const INIT_DATA_LENGTH: u16 = @sizeOf(InitResponse);
 

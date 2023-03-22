@@ -31,16 +31,21 @@ pub fn close(dev: *anyopaque) void {
 }
 
 pub fn write(dev: *anyopaque, data: []const u8) IOError!void {
-    _ = dev;
-    _ = data;
-    return IOError.Write;
+    if (hidapi.hid_write(@ptrCast(*hidapi.hid_device, dev), &data[0], data.len) == -1) {
+        return IOError.Write;
+    }
 }
 
-pub fn read_timeout(dev: *anyopaque, buffer: []u8, millis: i32) IOError!void {
-    _ = dev;
-    _ = buffer;
-    _ = millis;
-    return IOError.Write;
+pub fn read_timeout(dev: *anyopaque, buffer: []u8, millis: i32) IOError!usize {
+    const read = hidapi.hid_read_timeout(@ptrCast(*hidapi.hid_device, dev), &buffer[0], buffer.len, millis);
+
+    if (read == -1) {
+        return IOError.Write;
+    } else if (read == 0) {
+        return IOError.Timeout;
+    }
+
+    return @intCast(usize, read);
 }
 
 /// Enumerate all given usb devices on the system, looking for usage page 0xF1D0 and usage 1
@@ -109,6 +114,16 @@ pub fn main() !void {
             auth.transport.usb.manufacturer_string,
             auth.transport.usb.product_string,
         });
+        auth.open() catch {
+            std.debug.print("can't open device\n", .{});
+        };
+        const cid = fido.client.device.ctaphid_init(auth, allocator) catch {
+            std.debug.print("couldn't send init request\n", .{});
+            auth.close();
+            return;
+        };
+        std.debug.print("cid: {x}\n", .{cid});
+        auth.close();
     }
 }
 
