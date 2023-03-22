@@ -1,11 +1,14 @@
-# fido2 authenticator library
+# fido2 library
 
 ![GitHub](https://img.shields.io/github/license/r4gus/ztap?style=flat-square)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/r4gus/fido2/main.yml?style=flat-square)
 
 > _Warning_: NOT PRODUCTION READY!
 
-## Getting started
+<details>
+<summary>## FIDO2 authenticator support</summary>
+
+### Getting started
 
 The following steps are required to get started:
 
@@ -49,13 +52,13 @@ if (response != null) {
 }
 ```
 
-### Examples
+#### Examples
 
 | Platform | Architecture | Link |
 |:--------:|:------------:|:----:|
 | nRF52840-MDK USB Dongle | Arm | [candy-stick-nrf](https://github.com/r4gus/candy-stick-nrf) |
 
-## Supported transport specific bindings
+### Supported transport specific bindings
 
 | binding           | supported? |
 |:-----------------:|:----------:|
@@ -64,7 +67,7 @@ if (response != null) {
 | Bluetooth |   |
 
 
-## Supported commands
+### Supported commands
 
 | command           | supported? |
 |:-----------------:|:----------:|
@@ -80,9 +83,11 @@ if (response != null) {
 | `authenticatorLargeBlobs`         |    |
 | `authenticatorConfig`             |    |
 
-## Crypto
+### Crypto
 
 TODO: rewrite this section
+
+</details>
 
 ## Resources
 
