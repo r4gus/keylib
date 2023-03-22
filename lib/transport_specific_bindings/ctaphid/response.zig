@@ -29,12 +29,12 @@ const CP_DATA_OFFSET = SEQ_OFFSET + misc.SEQ_LENGTH;
 // be set to mark a initialization packet.
 const COMMAND_ID = 0x80;
 
-/// Iterator for a CTAPHID response.
+/// Iterator for a CTAPHID message.
 ///
-/// The iterator acts as a view into a data slice (the bytes to be sent to the client).
+/// The iterator acts as a view into a data slice (the bytes to be sent between client and authenticator).
 ///
 /// The first time `next()` is called, the iterator will return a `u8` slice of size `PACKET_SIZE` (64 Bytes, i.e. USB full speed) which contains a initialization packet, i.e. header plus the first data bytes (`PACKET_SIZE`-7). Every continuous call to `next()` will return a continuation packet until all data bytes have been encoded.
-pub const CtapHidResponseIterator = struct {
+pub const CtapHidMessageIterator = struct {
     cntr: usize = 0,
     seq: misc.Seq = 0,
     buffer: [PACKET_SIZE]u8 = undefined,
@@ -45,7 +45,7 @@ pub const CtapHidResponseIterator = struct {
     pub fn new(
         cid: misc.Cid,
         cmd: command.Cmd,
-    ) CtapHidResponseIterator {
+    ) CtapHidMessageIterator {
         return .{
             .cid = cid,
             .cmd = cmd,
@@ -95,13 +95,13 @@ pub const CtapHidResponseIterator = struct {
     }
 };
 
-/// Create a new `CtapHidResponseIterator`.
+/// Create a new `CtapHidMessageIterator`.
 pub fn iterator(
     cid: misc.Cid,
     cmd: command.Cmd,
     data: []const u8,
-) CtapHidResponseIterator {
-    return CtapHidResponseIterator{
+) CtapHidMessageIterator {
+    return CtapHidMessageIterator{
         .cntr = 0,
         .seq = 0,
         .buffer = undefined,

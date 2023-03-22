@@ -25,7 +25,7 @@ const NONCE_LENGTH = misc.NONCE_LENGTH;
 const BCNT_LENGTH = misc.BCNT_LENGTH;
 
 const resp = @import("ctaphid/response.zig");
-const CtapHidResponseIterator = resp.CtapHidResponseIterator;
+const CtapHidMessageIterator = resp.CtapHidMessageIterator;
 
 pub const INIT_DATA_LENGTH: u16 = @sizeOf(InitResponse);
 
@@ -151,7 +151,7 @@ pub const InitResponse = packed struct {
 // Response Handler
 //--------------------------------------------------------------------+
 
-pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
+pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
     const S = struct {
         // Authenticator is currently busy handling a request with the given
         // Cid. `null` means not busy.
@@ -175,7 +175,7 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
         const timeout: u32 = 250; // 250 milli second timeout
 
         /// Reset the state and return a error response message.
-        pub fn @"error"(e: ErrorCodes) CtapHidResponseIterator {
+        pub fn @"error"(e: ErrorCodes) CtapHidMessageIterator {
             const es = switch (e) {
                 .invalid_cmd => "\x01",
                 .invalid_par => "\x02",
@@ -274,7 +274,7 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidResponseIterator {
                 return S.@"error"(ErrorCodes.invalid_cmd);
             },
             .cbor => {
-                var response = resp.CtapHidResponseIterator.new(S.busy.?, S.cmd.?);
+                var response = resp.CtapHidMessageIterator.new(S.busy.?, S.cmd.?);
 
                 var data = auth.handle(S.data[0..S.bcnt]);
 
