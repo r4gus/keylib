@@ -58,5 +58,5 @@ test "get assertion 1" {
     );
     defer get_assertion_param.deinit(allocator);
 
-    try std.testing.expectEqual(false, get_assertion_param.options.?.up);
+    try std.testing.expectEqual(false, get_assertion_param.options.?.up.?);
 }
