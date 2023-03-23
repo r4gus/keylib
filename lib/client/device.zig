@@ -125,18 +125,6 @@ pub const Authenticator = struct {
     }
 };
 
-pub fn ctaphid_init(auth: *Authenticator, allocator: std.mem.Allocator) !u32 {
-    var msg = CtapHidMessageIterator.new(0xFFFFFFFF, Cmd.init);
-    msg.data = "\x00\x01\x02\x03\x00\x01\x02\x03";
-
-    try auth.ctaphid_write(&msg);
-    const resp = try auth.ctaphid_read(allocator);
-    defer allocator.free(resp);
-    std.debug.print("resp: {s}\n", .{std.fmt.fmtSliceHexLower(resp)});
-
-    return fido.transport_specific_bindings.ctaphid.misc.sliceToInt(u32, resp[8..12]);
-}
-
 pub const TransportTag = enum { usb, nfc, bluetooth };
 
 /// The transport of the authenticator

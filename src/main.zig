@@ -117,12 +117,12 @@ pub fn main() !void {
         auth.open() catch {
             std.debug.print("can't open device\n", .{});
         };
-        const cid = fido.client.device.ctaphid_init(auth, allocator) catch {
+        const r = fido.client.commands.ctaphid.ctaphid_init(auth, 0xffffffff, allocator) catch {
             std.debug.print("couldn't send init request\n", .{});
             auth.close();
             return;
         };
-        std.debug.print("cid: {x}\n", .{cid});
+        std.debug.print("cid: {x}\n", .{r.cid});
         auth.close();
     }
 }
