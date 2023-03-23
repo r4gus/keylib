@@ -40,7 +40,9 @@ pub const InitResponse = packed struct {
     /// Reserved for future use (must be set to 0).
     reserved5: bool = false,
 
-    pub fn from_slice(s: []const u8) @This() {
+    pub fn from_slice(s: []const u8) !@This() {
+        if (s.len < 17) return error.InsufiicientData;
+
         return .{
             .nonce = sliceToInt(u64, s[0..8]),
             .cid = sliceToInt(u32, s[8..12]),
@@ -74,5 +76,5 @@ pub fn ctaphid_init(auth: *Authenticator, cid: u32, allocator: std.mem.Allocator
     defer allocator.free(resp);
     //std.debug.print("resp: {s}\n", .{std.fmt.fmtSliceHexLower(resp)});
 
-    return InitResponse.from_slice(resp);
+    return try InitResponse.from_slice(resp);
 }

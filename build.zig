@@ -32,6 +32,11 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
 
+    const clap_dep = b.dependency("clap", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const exe = b.addExecutable(.{
         .name = "fido-tool",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -40,6 +45,7 @@ pub fn build(b: *std.build.Builder) !void {
     });
 
     exe.addModule("fido", fido_module);
+    exe.addModule("clap", clap_dep.module("clap"));
     exe.linkLibrary(hidapi_dep.artifact("hidapi"));
 
     exe.install();

@@ -11,5 +11,9 @@
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
             .hash = "12208dcd15397362a08601e3e4aba9ea90e8c7ae37df66141cb5baf44907bc0fe906",
         },
+        .clap = .{
+            .url = "https://github.com/Hejsil/zig-clap/archive/d38b13e7bcd5df0edad6e4331a62eb68778a152d.tar.gz",
+            .hash = "1220b3331651daa5a76bd371c727408d7f76b38d8adce3494b8221df73a74faa4214",
+        },
     },
 }

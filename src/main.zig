@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const clap = @import("clap");
+
 const hidapi = @cImport({
     @cInclude("hidapi/hidapi.h");
 });
@@ -52,6 +54,8 @@ pub fn read_timeout(dev: *anyopaque, buffer: []u8, millis: i32) IOError!usize {
 ///
 /// The caller is responsible to call deinit() on all Authenticators returned; he is also
 /// responsible for freeing the returned slice.
+///
+/// TODO: device enumeration should be the libraries job
 pub fn find_authenticator(allocator: std.mem.Allocator) ![]fido.client.device.Authenticator {
     var devices = hidapi.hid_enumerate(ALL_VENDORS, ALL_PRODUCTS);
     defer hidapi.hid_free_enumeration(devices);
@@ -99,32 +103,65 @@ pub fn main() !void {
 
     _ = hidapi.hid_init();
 
-    var authenticators = try find_authenticator(allocator);
-    defer {
-        for (authenticators) |*auth| {
-            auth.deinit();
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help                Display this help and exit.
+        \\-e, --enumerate           Enumerate and list all available fido devices.
+    );
+
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+        .diagnostic = &diag,
+    }) catch |err| {
+        // Report useful error and exit
+        diag.report(std.io.getStdErr().writer(), err) catch {};
+        return err;
+    };
+    defer res.deinit();
+
+    if (res.args.help) {
+        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
+    } else if (res.args.enumerate) {
+        var authenticators = try find_authenticator(allocator);
+        defer {
+            for (authenticators) |*auth| {
+                auth.deinit();
+            }
         }
+
+        for (authenticators) |*auth| {
+            std.debug.print("{s}: vendor={x}, product={x} ({s} {s})\n", .{
+                auth.transport.usb.path,
+                auth.transport.usb.vendor_id,
+                auth.transport.usb.product_id,
+                auth.transport.usb.manufacturer_string,
+                auth.transport.usb.product_string,
+            });
+        }
+    } else {
+        try std.io.getStdErr().writer().writeAll("usage: fido-tool ");
+        try clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
+        try std.io.getStdErr().writer().writeAll("\n");
     }
 
-    for (authenticators) |*auth| {
-        std.debug.print("{s}: vendor={x}, product={x} ({s} {s})\n", .{
-            auth.transport.usb.path,
-            auth.transport.usb.vendor_id,
-            auth.transport.usb.product_id,
-            auth.transport.usb.manufacturer_string,
-            auth.transport.usb.product_string,
-        });
-        auth.open() catch {
-            std.debug.print("can't open device\n", .{});
-        };
-        const r = fido.client.commands.ctaphid.ctaphid_init(auth, 0xffffffff, allocator) catch {
-            std.debug.print("couldn't send init request\n", .{});
-            auth.close();
-            return;
-        };
-        std.debug.print("cid: {x}\n", .{r.cid});
-        auth.close();
-    }
+    //for (authenticators) |*auth| {
+    //    std.debug.print("{s}: vendor={x}, product={x} ({s} {s})\n", .{
+    //        auth.transport.usb.path,
+    //        auth.transport.usb.vendor_id,
+    //        auth.transport.usb.product_id,
+    //        auth.transport.usb.manufacturer_string,
+    //        auth.transport.usb.product_string,
+    //    });
+    //    auth.open() catch {
+    //        std.debug.print("can't open device\n", .{});
+    //    };
+    //    const r = fido.client.commands.ctaphid.ctaphid_init(auth, 0xffffffff, allocator) catch {
+    //        std.debug.print("couldn't send init request\n", .{});
+    //        auth.close();
+    //        return;
+    //    };
+    //    std.debug.print("cid: {x}\n", .{r.cid});
+    //    auth.close();
+    //}
 }
 
 test "simple test" {
