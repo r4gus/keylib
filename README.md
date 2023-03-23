@@ -150,6 +150,14 @@ TODO: rewrite this section
 
 <details>
 <summary><ins>FIDO2 tooling</ins></summary>
+
+This library comes with a (very incomplete) command line tool which lets you interact with
+a fido device connected via usb.
+
+### Enumerating devices
+
+To list all fido devices available run `zig build run -- -e` or `./zig-out/bin/fido-tool -e`.
+
 </details>
 
 ## Resources
