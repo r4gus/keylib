@@ -74,5 +74,5 @@ pub fn build(b: *std.build.Builder) !void {
     lib_tests.addModule("zbor", zbor_module);
 
     const test_step = b.step("test", "Run library tests");
-    test_step.dependOn(&lib_tests.step);
+    test_step.dependOn(&lib_tests.run().step);
 }

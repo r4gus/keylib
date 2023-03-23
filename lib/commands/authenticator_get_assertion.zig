@@ -45,25 +45,33 @@ pub fn authenticator_get_assertion(
         return data.StatusCodes.ctap2_err_no_credentials;
     }
 
-    // Check user presence
+    // Get up flag
+    const opt_up = if (get_assertion_param.options) |options| options.up else true;
     var up: bool = auth.state.user_present;
-    if (!up) {
-        up = auth.resources.request_permission(null, null);
-    }
-    if (!up) {
-        return data.StatusCodes.ctap2_err_operation_denied;
-    }
 
-    // clear permissions
-    auth.state.user_present = false;
-    auth.state.user_verified = false;
-    auth.state.permissions = 0x10;
+    if (opt_up) {
+        // Check user presence
+        if (!up) {
+            up = auth.resources.request_permission(null, null);
+        }
+        if (!up) {
+            return data.StatusCodes.ctap2_err_operation_denied;
+        }
+
+        // clear permissions
+        auth.state.user_present = false;
+        auth.state.user_verified = false;
+        auth.state.permissions = 0x10;
+    } else {
+        // 'pre-flight'
+        up = false;
+    }
 
     // Return signature
     var ad = data.make_credential.attestation.AuthData{
         .rp_id_hash = undefined,
         .flags = .{
-            .up = 1,
+            .up = if (up) 1 else 0,
             .rfu1 = 0,
             .uv = 1,
             .rfu2 = 0,

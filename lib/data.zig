@@ -28,4 +28,5 @@ test "data tests" {
     _ = data;
     _ = make_credential;
     _ = PublicKeyCredentialDescriptor;
+    _ = get_assertion;
 }
