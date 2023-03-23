@@ -32,7 +32,7 @@ pub fn authenticator_make_credential(
     if (make_credential_param.options) |options| {
         // we let the RP store the context for each credential.
         // we also don't support built in user verification
-        if (options.rk or options.uv) {
+        if ((options.rk != null and options.rk.?) or (options.uv != null and options.uv.?)) {
             return data.StatusCodes.ctap2_err_unsupported_option;
         }
     }

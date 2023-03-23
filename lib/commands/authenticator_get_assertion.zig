@@ -46,7 +46,13 @@ pub fn authenticator_get_assertion(
     }
 
     // Get up flag
-    const opt_up = if (get_assertion_param.options) |options| options.up else true;
+    const opt_up = if (get_assertion_param.options) |options|
+        if (options.up) |ou|
+            ou
+        else
+            true
+    else
+        true;
     var up: bool = auth.state.user_present;
 
     if (opt_up) {
