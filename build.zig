@@ -32,11 +32,6 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
 
-    const clap_dep = b.dependency("clap", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
     const exe = b.addExecutable(.{
         .name = "fido-tool",
         .root_source_file = .{ .path = "src/main.zig" },
@@ -45,11 +40,10 @@ pub fn build(b: *std.build.Builder) !void {
     });
 
     exe.addModule("fido", fido_module);
-    exe.addModule("clap", clap_dep.module("clap"));
     exe.linkLibrary(hidapi_dep.artifact("hidapi"));
 
-    exe.install();
-    const run_cmd = exe.run();
+    b.installArtifact(exe);
+    const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
 
     // This allows the user to pass arguments to the application in the build
@@ -74,5 +68,5 @@ pub fn build(b: *std.build.Builder) !void {
     lib_tests.addModule("zbor", zbor_module);
 
     const test_step = b.step("test", "Run library tests");
-    test_step.dependOn(&lib_tests.run().step);
+    test_step.dependOn(&b.addRunArtifact(lib_tests).step);
 }

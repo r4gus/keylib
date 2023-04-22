@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const clap = @import("clap");
-
 const hidapi = @cImport({
     @cInclude("hidapi/hidapi.h");
 });
@@ -103,44 +101,21 @@ pub fn main() !void {
 
     _ = hidapi.hid_init();
 
-    const params = comptime clap.parseParamsComptime(
-        \\-h, --help                Display this help and exit.
-        \\-e, --enumerate           Enumerate and list all available fido devices.
-    );
-
-    var diag = clap.Diagnostic{};
-    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
-        .diagnostic = &diag,
-    }) catch |err| {
-        // Report useful error and exit
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-        return err;
-    };
-    defer res.deinit();
-
-    if (res.args.help) {
-        return clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
-    } else if (res.args.enumerate) {
-        var authenticators = try find_authenticator(allocator);
-        defer {
-            for (authenticators) |*auth| {
-                auth.deinit();
-            }
-        }
-
+    var authenticators = try find_authenticator(allocator);
+    defer {
         for (authenticators) |*auth| {
-            std.debug.print("{s}: vendor={x}, product={x} ({s} {s})\n", .{
-                auth.transport.usb.path,
-                auth.transport.usb.vendor_id,
-                auth.transport.usb.product_id,
-                auth.transport.usb.manufacturer_string,
-                auth.transport.usb.product_string,
-            });
+            auth.deinit();
         }
-    } else {
-        try std.io.getStdErr().writer().writeAll("usage: fido-tool ");
-        try clap.usage(std.io.getStdErr().writer(), clap.Help, &params);
-        try std.io.getStdErr().writer().writeAll("\n");
+    }
+
+    for (authenticators) |*auth| {
+        std.debug.print("{s}: vendor={x}, product={x} ({s} {s})\n", .{
+            auth.transport.usb.path,
+            auth.transport.usb.vendor_id,
+            auth.transport.usb.product_id,
+            auth.transport.usb.manufacturer_string,
+            auth.transport.usb.product_string,
+        });
     }
 
     //for (authenticators) |*auth| {

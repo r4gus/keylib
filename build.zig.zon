@@ -5,15 +5,11 @@
     .dependencies = .{
         .zbor = .{
             .url = "https://github.com/r4gus/zbor/archive/master.tar.gz",
-            .hash = "12209a5083181e4a0d087de4783cfaa6a26b06381ba896508b7c2055e14a2ef70c1e",
+            .hash = "1220edb22af92f29957623d1163a689c7a7f867cec752fc2707705809cf94fdf13f9",
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
-            .hash = "12208dcd15397362a08601e3e4aba9ea90e8c7ae37df66141cb5baf44907bc0fe906",
-        },
-        .clap = .{
-            .url = "https://github.com/Hejsil/zig-clap/archive/d38b13e7bcd5df0edad6e4331a62eb68778a152d.tar.gz",
-            .hash = "1220b3331651daa5a76bd371c727408d7f76b38d8adce3494b8221df73a74faa4214",
+            .hash = "1220905f5a1e792ad8aaf45c570786882faaecee19bf87130324e4a5af090fb70859",
         },
     },
 }
