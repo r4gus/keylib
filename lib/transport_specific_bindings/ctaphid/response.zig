@@ -58,7 +58,7 @@ pub const CtapHidMessageIterator = struct {
     pub fn next(self: *@This()) ?[]const u8 {
         if (self.cntr < self.data.len or (self.data.len == 0 and self.cntr == 0)) {
             // Zero the whole buffer
-            std.mem.set(u8, self.buffer[0..], 0);
+            @memset(self.buffer[0..], 0);
 
             var len: usize = undefined;
             var off: usize = undefined;
@@ -116,7 +116,7 @@ test "Response Iterator 1" {
     var mem = try allocator.alloc(u8, 57);
     defer allocator.free(mem);
 
-    std.mem.set(u8, mem[0..], 'a');
+    @memset(mem[0..], 'a');
 
     var iter = iterator(0x11223344, command.Cmd.init, mem);
 
@@ -132,7 +132,7 @@ test "Response Iterator 2" {
     var mem = try allocator.alloc(u8, 17);
     defer allocator.free(mem);
 
-    std.mem.set(u8, mem[0..], 'a');
+    @memset(mem[0..], 'a');
 
     var iter = iterator(0x11223344, command.Cmd.init, mem);
 
@@ -147,8 +147,8 @@ test "Response Iterator 3" {
     var mem = try allocator.alloc(u8, 74);
     defer allocator.free(mem);
 
-    std.mem.set(u8, mem[0..57], 'a');
-    std.mem.set(u8, mem[57..74], 'b');
+    @memset(mem[0..57], 'a');
+    @memset(mem[57..74], 'b');
 
     var iter = iterator(0xcafebabe, command.Cmd.cbor, mem);
 
@@ -166,9 +166,9 @@ test "Response Iterator 4" {
     var mem = try allocator.alloc(u8, 128);
     defer allocator.free(mem);
 
-    std.mem.set(u8, mem[0..57], 'a');
-    std.mem.set(u8, mem[57..116], 'b');
-    std.mem.set(u8, mem[116..128], 'c');
+    @memset(mem[0..57], 'a');
+    @memset(mem[57..116], 'b');
+    @memset(mem[116..128], 'c');
 
     var iter = iterator(0xcafebabe, command.Cmd.cbor, mem);
 

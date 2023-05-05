@@ -16,137 +16,122 @@ pub const IOError = error{
     /// A timeout occured
     Timeout,
     MissingCallbacks,
+    OutOfMemory,
 };
 
 /// Abstract representation of an authenticator the client communicates with
 pub const Authenticator = struct {
     /// Information about the connected device
     transport: Transport,
-    /// Callbacks for interacting with a device
-    io: ?struct {
-        /// Open a connection to the given device
-        open: *const fn (transport: *const Transport) IOError!*anyopaque,
-        /// Close the connection to a device
-        close: *const fn (dev: *anyopaque) void,
-        /// Write data to the device
-        write: *const fn (dev: *anyopaque, data: []const u8) IOError!void,
-        /// Read data from the device with timeout
-        read_timeout: *const fn (dev: *anyopaque, buffer: []u8, millis: i32) IOError!usize,
-    } = null,
-    /// Opaque pointer to the device struct returned by open and used by close, read and write
-    device: ?*anyopaque = null,
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: *@This()) void {
-        switch (self.transport) {
-            .usb => |usbt| {
-                self.allocator.free(usbt.path);
-                self.allocator.free(usbt.serial_number);
-                self.allocator.free(usbt.manufacturer_string);
-                self.allocator.free(usbt.product_string);
-            },
-            .nfc => {},
-            .bluetooth => {},
+        self.allocator.free(self.transport.path);
+        if (self.transport.info) |info| {
+            self.allocator.free(info);
         }
+        self.transport.close();
     }
 
     /// Open a connection to the given device
     pub fn open(self: *@This()) IOError!void {
-        if (self.io) |io| {
-            self.device = try io.open(&self.transport);
-        } else {
-            return IOError.Open;
-        }
+        self.transport.open();
     }
 
     /// Close the connection to the given device
     pub fn close(self: *@This()) void {
-        if (self.io) |io| {
-            if (self.device) |device| {
-                io.close(device);
-            }
-        }
+        self.transport.close();
     }
 
     /// Sent a CTAPHID request to the device
-    pub fn ctaphid_write(self: *@This(), iter: *CtapHidMessageIterator) IOError!void {
-        var buffer: [65]u8 = undefined;
-
-        // Open device if not already done
-        if (self.device == null) try self.open();
-
-        if (self.io) |io| {
-            while (iter.next()) |r| {
-                buffer[0] = 0;
-                std.mem.copy(u8, buffer[1..], r);
-                try io.write(self.device.?, buffer[0..]);
-            }
-        } else {
-            return IOError.MissingCallbacks;
-        }
+    pub fn write(self: *@This(), iter: *CtapHidMessageIterator) IOError!void {
+        self.transport.write(iter);
     }
 
     /// Read a CTAPHID response from a device
     ///
     /// Timeout is set to 250 ms TODO: expose this???
     pub fn ctaphid_read(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
-        if (self.io) |io| {
-            var data = std.ArrayList(u8).init(allocator);
-            errdefer data.deinit();
-
-            var first: bool = true;
-            // The ammount of expected data bytes
-            var bcnt_total: usize = 0;
-            // Last sequence number
-            var seq: ?u8 = 0;
-
-            while (first or data.items.len < bcnt_total) {
-                //std.debug.print("expected: {x}, actual: {x}\n", .{ bcnt_total, data.items.len });
-                var buffer: [65]u8 = undefined;
-
-                const nr = try io.read_timeout(self.device.?, buffer[0..], 250);
-                const packet = buffer[0..nr];
-
-                if (first) {
-                    bcnt_total = @intCast(usize, packet[5]) << 8 | @intCast(usize, packet[6]);
-                    var l = if (bcnt_total - data.items.len > 57) 57 else bcnt_total - data.items.len;
-                    try data.appendSlice(packet[7 .. l + 7]);
-                    first = false;
-                    std.debug.print("packet: {s}\n", .{std.fmt.fmtSliceHexLower(packet)});
-                } else {
-                    seq = packet[4];
-                }
-            }
-
-            return try data.toOwnedSlice();
-        } else {
-            return IOError.MissingCallbacks;
-        }
+        return self.transport.read(allocator);
     }
 };
 
-pub const TransportTag = enum { usb, nfc, bluetooth };
+pub const TransportType = enum { usb, nfc, bluetooth, ipc };
 
-/// The transport of the authenticator
-pub const Transport = union(TransportTag) {
-    usb: struct {
-        /// Device path, e.g., /dev/hidraw0
-        path: [:0]const u8,
-        /// Device Vendor ID
-        vendor_id: u16,
-        /// Device Product ID
-        product_id: u16,
-        /// Serial Number
-        serial_number: [:0]const u8,
-        /// Device Release Number in binary-coded decimal, also known as Device Version Number
-        release_number: u16,
-        /// Manufacturer string
-        manufacturer_string: [:0]const u8,
-        /// Product string
-        product_string: [:0]const u8,
-        /// The USB interface which this logical device represents.
-        interface_number: i32,
-    },
-    nfc: void,
-    bluetooth: void,
+/// A struct representing a communication transport.
+///
+/// This struct contains information about the communication transport being used, such as
+/// the device path, I/O functions, and the transport type. It provides methods for opening and
+/// closing the transport, as well as reading and writing data over the transport.
+pub const Transport = struct {
+    /// Device path, e.g., /dev/hidraw0
+    path: [:0]const u8,
+    /// An optional info string
+    info: ?[]const u8 = null,
+    /// Input/ output functions
+    io: IO,
+    /// Opaque device pointer
+    device: ?*anyopaque = null,
+    /// Transport type
+    type: TransportType,
+
+    /// Opens the communication transport.
+    pub fn open(self: *@This()) IOError!void {
+        self.device = try self.io.open(self.path);
+    }
+
+    /// Closes the communication transport.
+    pub fn close(self: *@This()) void {
+        if (self.device) |device| {
+            self.io.close(device);
+        }
+    }
+
+    /// Writes data to the communication transport.
+    ///
+    /// This function writes data from an iterator to the communication transport. If the transport
+    /// is not currently open, it will be opened automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `iter`: an iterator over the data to be written
+    ///
+    /// # Errors
+    ///
+    /// If an error occurs while writing to the transport, an `IOError` will be returned.
+    pub fn write(self: *@This(), iter: anytype) IOError!void {
+        if (self.device == null) try self.open();
+
+        while (iter.next()) |r| {
+            try self.io.write(self.device.?, r);
+        }
+    }
+
+    /// Reads data from the communication transport.
+    ///
+    /// This function reads data from the communication transport and returns it as a slice.
+    /// If the transport is not currently open, it will be opened automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `allocator`: an allocator to use for the returned slice
+    ///
+    /// # Returns
+    ///
+    /// A slice containing the data read from the transport, or an error if an I/O error occurred.
+    pub fn read(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
+        if (self.device == null) try self.open();
+        return try self.io.read(self.device.?, allocator);
+    }
+};
+
+pub const IO = struct {
+    /// Open a connection to the given device
+    open: *const fn (path: [:0]const u8) IOError!*anyopaque,
+    /// Close the connection to a device
+    close: *const fn (dev: *anyopaque) void,
+    /// Write data to the device
+    write: *const fn (dev: *anyopaque, data: []const u8) IOError!void,
+    /// Read data from the device with timeout
+    read: *const fn (dev: *anyopaque, allocator: std.mem.Allocator) IOError![]const u8,
 };

@@ -5,7 +5,7 @@ pub fn build(b: *std.build.Builder) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     // ++++++++++++++++++++++++++++++++++++++++++++
-    // Module
+    // Dependencies
     // ++++++++++++++++++++++++++++++++++++++++++++
 
     const zbor_dep = b.dependency("zbor", .{
@@ -13,6 +13,18 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
     const zbor_module = zbor_dep.module("zbor");
+
+    const hidapi_dep = b.dependency("hidapi", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // ++++++++++++++++++++++++++++++++++++++++++++
+    // Module
+    // ++++++++++++++++++++++++++++++++++++++++++++
+
+    // Authenticator Module
+    // ------------------------------------------------
 
     const fido_module = b.addModule("fido", .{
         .source_file = .{ .path = "lib/main.zig" },
@@ -26,11 +38,6 @@ pub fn build(b: *std.build.Builder) !void {
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Command Line Tool
     // ++++++++++++++++++++++++++++++++++++++++++++
-
-    const hidapi_dep = b.dependency("hidapi", .{
-        .target = target,
-        .optimize = optimize,
-    });
 
     const exe = b.addExecutable(.{
         .name = "fido-tool",
