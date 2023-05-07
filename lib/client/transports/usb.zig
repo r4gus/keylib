@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const fido = @import("../../main.zig");
+const sliceToInt = fido.transport_specific_bindings.ctaphid.misc.sliceToInt;
+const CtapHidMessageIterator = fido.transport_specific_bindings.ctaphid.CtapHidMessageIterator;
+const Cmd = fido.transport_specific_bindings.ctaphid.Cmd;
+
 const hidapi = @cImport({
     @cInclude("hidapi/hidapi.h");
 });
@@ -26,10 +31,25 @@ pub fn init() void {
 /// # Returns
 ///
 /// Returns an opaque pointer to the opened device on success, or returns an `IOError` error type on failure.
-pub fn open(path: [:0]const u8) IOError!*anyopaque {
-    var device = hidapi.hid_open_path(path);
+pub fn open(dev: *Transport) IOError!void {
+    // Open usb device
+    var device = hidapi.hid_open_path(dev.path);
     if (device == null) return IOError.Open;
-    return @ptrCast(*anyopaque, device);
+    dev.device = @ptrCast(*anyopaque, device);
+    errdefer {
+        close(dev);
+        dev.device = null;
+    }
+
+    // Allocate channel id
+    const ir = ctaphid_init(dev, 0xffffffff) catch {
+        return error.Open;
+    };
+    var cid_ptr = dev.allocator.create(u32) catch {
+        return error.Open;
+    };
+    cid_ptr.* = ir.cid;
+    dev.state = @ptrCast(*anyopaque, cid_ptr);
 }
 
 /// Closes the specified HID device.
@@ -41,8 +61,12 @@ pub fn open(path: [:0]const u8) IOError!*anyopaque {
 /// # Returns
 ///
 /// This function does not return a value.
-pub fn close(dev: *anyopaque) void {
-    hidapi.hid_close(@ptrCast(*hidapi.hid_device, dev));
+pub fn close(dev: *Transport) void {
+    if (dev.device == null) return;
+    hidapi.hid_close(@ptrCast(*hidapi.hid_device, dev.device.?));
+    if (dev.state) |state| {
+        dev.allocator.destroy(@ptrCast(*u32, @alignCast(4, state)));
+    }
 }
 
 /// Write data to a HID device.
@@ -66,13 +90,21 @@ pub fn close(dev: *anyopaque) void {
 /// var data: [1]u8 = [0];
 /// try write(dev, data);
 /// ```
-pub fn write(dev: *anyopaque, data: []const u8) IOError!void {
-    var buffer: [65]u8 = undefined;
-    buffer[0] = 0;
-    std.mem.copy(u8, buffer[1..], data);
+pub fn write(dev: *Transport, data: []const u8) IOError!void {
+    return write_ctaphid(dev.device.?, data, @ptrCast(*const u32, @alignCast(4, dev.state.?)).*, Cmd.cbor);
+}
 
-    if (hidapi.hid_write(@ptrCast(*hidapi.hid_device, dev), &buffer[0], buffer.len) == -1) {
-        return IOError.Write;
+fn write_ctaphid(dev: *anyopaque, data: []const u8, cid: u32, cmd: Cmd) IOError!void {
+    var msg = CtapHidMessageIterator.new(cid, cmd);
+    msg.data = data;
+
+    while (msg.next()) |m| {
+        var buffer: [65]u8 = undefined;
+        buffer[0] = 0;
+        std.mem.copy(u8, buffer[1..], m);
+        if (hidapi.hid_write(@ptrCast(*hidapi.hid_device, dev), &buffer[0], buffer.len) == -1) {
+            return IOError.Write;
+        }
     }
 }
 
@@ -88,7 +120,7 @@ pub fn write(dev: *anyopaque, data: []const u8) IOError!void {
 /// * `IOError.Write` if there was an error reading from the device.
 /// * `IOError.Timeout` if the read operation timed out.
 /// * The number of bytes read from the device if the operation was successful.
-pub fn read_timeout(dev: *anyopaque, buffer: []u8) IOError!usize {
+fn read_timeout(dev: *anyopaque, buffer: []u8) IOError!usize {
     const r = hidapi.hid_read_timeout(@ptrCast(*hidapi.hid_device, dev), &buffer[0], buffer.len, 1000);
 
     if (r == -1) {
@@ -117,8 +149,8 @@ pub fn read_timeout(dev: *anyopaque, buffer: []u8) IOError!usize {
 /// # Returns
 ///
 /// A slice of bytes containing the data received from the HID device.
-pub fn read(dev: *anyopaque, allocator: std.mem.Allocator) IOError![]const u8 {
-    var data = std.ArrayList(u8).init(allocator);
+pub fn read(dev: *Transport) IOError![]const u8 {
+    var data = std.ArrayList(u8).init(dev.allocator);
     errdefer data.deinit();
 
     var first: bool = true;
@@ -131,7 +163,7 @@ pub fn read(dev: *anyopaque, allocator: std.mem.Allocator) IOError![]const u8 {
         //std.debug.print("expected: {x}, actual: {x}\n", .{ bcnt_total, data.items.len });
         var buffer: [65]u8 = undefined;
 
-        const nr = try read_timeout(dev, buffer[0..]);
+        const nr = try read_timeout(dev.device.?, buffer[0..]);
         const packet = buffer[0..nr];
 
         if (first) {
@@ -188,8 +220,8 @@ pub fn enumerate(allocator: std.mem.Allocator) ![]Authenticator {
                         .read = read,
                     },
                     .type = .usb,
+                    .allocator = allocator,
                 },
-                .allocator = allocator,
             };
 
             // Build info string for usb authenticator
@@ -214,6 +246,89 @@ pub fn enumerate(allocator: std.mem.Allocator) ![]Authenticator {
 
     return try authenticators.toOwnedSlice();
 }
+
+// ++++++++++++++++++++++++++++++++++++++++
+// CTAPHID
+// ++++++++++++++++++++++++++++++++++++++++
+
+/// Device response of an init request
+pub const InitResponse = packed struct {
+    /// The nonce send with the client request.
+    nonce: u64,
+    /// The allocated 4 byte channel id.
+    cid: u32,
+    /// CTAPHID protocol version is 2.
+    version_identifier: u8,
+    /// The meaning and interpretation of the device version number is vendor defined.
+    major_device_version_number: u8,
+    /// The meaning and interpretation of the device version number is vendor defined.
+    minor_device_version_number: u8,
+    /// The meaning and interpretation of the device version number is vendor defined.
+    build_device_version_number: u8,
+    /// If set to 1, authenticator implements CTAPHID_WINK function.
+    wink: bool,
+    /// Reserved for future use (must be set to 0).
+    reserved1: bool = false,
+    /// If set to 1, authenticator implements CTAPHID_CBOR function.
+    cbor: bool,
+    /// If set to 1, authenticator DOES NOT implement CTAPHID_MSG function.
+    nmsg: bool,
+    /// Reserved for future use (must be set to 0).
+    reserved2: bool = false,
+    /// Reserved for future use (must be set to 0).
+    reserved3: bool = false,
+    /// Reserved for future use (must be set to 0).
+    reserved4: bool = false,
+    /// Reserved for future use (must be set to 0).
+    reserved5: bool = false,
+
+    pub fn from_slice(s: []const u8) !@This() {
+        if (s.len < 17) return error.InsufiicientData;
+
+        return .{
+            .nonce = sliceToInt(u64, s[0..8]),
+            .cid = sliceToInt(u32, s[8..12]),
+            .version_identifier = s[12],
+            .major_device_version_number = s[13],
+            .minor_device_version_number = s[14],
+            .build_device_version_number = s[15],
+            .wink = if (s[16] & 0x01 != 0) true else false,
+            .cbor = if (s[16] & 0x04 != 0) true else false,
+            .nmsg = if (s[16] & 0x08 != 0) true else false,
+        };
+    }
+};
+
+/// Initialize/ reset the connection to a device using a logical channel
+///
+/// This command has two functions:
+///
+/// 1. If sent on the broadcast CID (0xffffffff), it requests the device to allocate
+/// a unique 32-bit channel identifier (CID) that can be used by the requesting
+/// application during its lifetime.
+///
+/// 2. If sent on an allocated CID, it synchronizes a channel, discarding the
+/// current transaction, buffers and state as quickly as possible.
+pub fn ctaphid_init(auth: *Transport, cid: u32) !InitResponse {
+    var nonce: [8]u8 = undefined;
+    std.crypto.random.bytes(&nonce);
+
+    std.log.info("[init][->]: {s}", .{std.fmt.fmtSliceHexLower(&nonce)});
+    try write_ctaphid(auth.device.?, &nonce, cid, Cmd.init);
+
+    const resp = try read(auth);
+    defer auth.allocator.free(resp);
+
+    std.log.info("[init][<-]: {s}", .{std.fmt.fmtSliceHexLower(resp)});
+
+    if (resp.len < 8 or !std.mem.eql(u8, &nonce, resp[0..8])) {
+        return error.NonceMismatch;
+    }
+
+    return try InitResponse.from_slice(resp);
+}
+
+// iter: *CtapHidMessageIterator
 
 // ++++++++++++++++++++++++++++++++++++++++
 // Misc

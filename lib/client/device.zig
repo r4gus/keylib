@@ -23,19 +23,14 @@ pub const IOError = error{
 pub const Authenticator = struct {
     /// Information about the connected device
     transport: Transport,
-    allocator: std.mem.Allocator,
 
     pub fn deinit(self: *@This()) void {
-        self.allocator.free(self.transport.path);
-        if (self.transport.info) |info| {
-            self.allocator.free(info);
-        }
-        self.transport.close();
+        self.transport.deinit();
     }
 
     /// Open a connection to the given device
     pub fn open(self: *@This()) IOError!void {
-        self.transport.open();
+        try self.transport.open();
     }
 
     /// Close the connection to the given device
@@ -44,15 +39,12 @@ pub const Authenticator = struct {
     }
 
     /// Sent a CTAPHID request to the device
-    pub fn write(self: *@This(), iter: *CtapHidMessageIterator) IOError!void {
-        self.transport.write(iter);
+    pub fn write(self: *@This(), msg: []const u8) IOError!void {
+        try self.transport.write(msg);
     }
 
-    /// Read a CTAPHID response from a device
-    ///
-    /// Timeout is set to 250 ms TODO: expose this???
-    pub fn ctaphid_read(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
-        return self.transport.read(allocator);
+    pub fn read(self: *@This()) ![]const u8 {
+        return try self.transport.read();
     }
 };
 
@@ -72,18 +64,30 @@ pub const Transport = struct {
     io: IO,
     /// Opaque device pointer
     device: ?*anyopaque = null,
+    /// Optional state, e.g., the channel id
+    state: ?*anyopaque = null,
     /// Transport type
     type: TransportType,
+    allocator: std.mem.Allocator,
+
+    pub fn deinit(self: *@This()) void {
+        self.allocator.free(self.path);
+        if (self.info) |info| {
+            self.allocator.free(info);
+        }
+        self.close();
+    }
 
     /// Opens the communication transport.
     pub fn open(self: *@This()) IOError!void {
-        self.device = try self.io.open(self.path);
+        try self.io.open(self);
     }
 
     /// Closes the communication transport.
     pub fn close(self: *@This()) void {
-        if (self.device) |device| {
-            self.io.close(device);
+        if (self.device != null) {
+            self.io.close(self);
+            self.device = null;
         }
     }
 
@@ -99,12 +103,10 @@ pub const Transport = struct {
     /// # Errors
     ///
     /// If an error occurs while writing to the transport, an `IOError` will be returned.
-    pub fn write(self: *@This(), iter: anytype) IOError!void {
+    pub fn write(self: *@This(), msg: []const u8) IOError!void {
         if (self.device == null) try self.open();
 
-        while (iter.next()) |r| {
-            try self.io.write(self.device.?, r);
-        }
+        try self.io.write(self, msg);
     }
 
     /// Reads data from the communication transport.
@@ -119,19 +121,19 @@ pub const Transport = struct {
     /// # Returns
     ///
     /// A slice containing the data read from the transport, or an error if an I/O error occurred.
-    pub fn read(self: *@This(), allocator: std.mem.Allocator) ![]const u8 {
+    pub fn read(self: *@This()) ![]const u8 {
         if (self.device == null) try self.open();
-        return try self.io.read(self.device.?, allocator);
+        return try self.io.read(self);
     }
 };
 
 pub const IO = struct {
     /// Open a connection to the given device
-    open: *const fn (path: [:0]const u8) IOError!*anyopaque,
+    open: *const fn (dev: *Transport) IOError!void,
     /// Close the connection to a device
-    close: *const fn (dev: *anyopaque) void,
+    close: *const fn (dev: *Transport) void,
     /// Write data to the device
-    write: *const fn (dev: *anyopaque, data: []const u8) IOError!void,
+    write: *const fn (dev: *Transport, data: []const u8) IOError!void,
     /// Read data from the device with timeout
-    read: *const fn (dev: *anyopaque, allocator: std.mem.Allocator) IOError![]const u8,
+    read: *const fn (dev: *Transport) IOError![]const u8,
 };

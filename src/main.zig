@@ -28,6 +28,10 @@ pub fn main() !void {
         std.debug.print("{s}\n", .{
             if (auth.transport.info) |info| info else auth.transport.path,
         });
+
+        auth.open() catch {
+            std.debug.print("can't open device\n", .{});
+        };
     }
 
     //for (authenticators) |*auth| {
