@@ -149,14 +149,53 @@ TODO: rewrite this section
 </details>
 
 <details>
+<summary><ins>FIDO2 Client</ins></summary>
+
+The code found in `fido2.client` can be used to implement FIDO2 clients (WIP). The client library
+defines a `Authenticator` struct that represents an abstract authenticator with basic IO operations
+like `open()`, `close()`, `read()` and `write()`. Those operations use a `Transport` (this can be
+anything, e.g., USB, NFC, or IPC via sockets) to communicate with an authenticator. The specific
+transport implementations can be found in `fido2.client.transports` (The plan is to add different
+transports to the library over time but you should be able to implement your own transports if you
+want).
+
+## Usage
+
+The library can be used as follows:
+
+1.  Choose one or more transports from `fido2.client.transports` (e.g., `usb`) and call `enumerate`
+    to get a list of all possible authenticators connected.
+2.  You can open a connection to a specific authenticator by calling `open()` on a `Authenticator`
+    object returned by `enumerate`. This will establish a connection to the specified authenticator
+    (for USB this will allocate a CID automatically).
+3.  After you have successfully established a connection, you can call the commands in `fido2.client.commands`
+    passing the `Authenticator` object (e.g., `authenticatorGetInfo`).
+
+> Note: This is WIP, i.e., the API may change
+
+## Dependencies
+
+If you want to use certain transports please add the following to your build script:
+
+### USB via hidapi
+
+```zig
+// TODO
+```
+
+### Enumerating devices
+
+To list all fido devices available run `zig build run -- -e` or `./zig-out/bin/fido-tool -e`.
+
+</details>
+
+<details>
 <summary><ins>FIDO2 tooling</ins></summary>
 
 This library comes with a (very incomplete) command line tool which lets you interact with
 a fido device connected via usb.
 
-### Enumerating devices
-
-To list all fido devices available run `zig build run -- -e` or `./zig-out/bin/fido-tool -e`.
+> NOTE: stay tuned for more...
 
 </details>
 
