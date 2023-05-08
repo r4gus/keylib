@@ -183,10 +183,6 @@ If you want to use certain transports please add the following to your build scr
 // TODO
 ```
 
-### Enumerating devices
-
-To list all fido devices available run `zig build run -- -e` or `./zig-out/bin/fido-tool -e`.
-
 </details>
 
 <details>
