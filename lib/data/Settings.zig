@@ -5,8 +5,8 @@
 
 /// List of supported versions.
 versions: []const @import("versions.zig").Versions,
-//TODO: extensions: List of supported extensions.
-// @"2": ?[]const extension.Extensions,
+/// List of supported extensions.
+extensions: ?[]const []const u8 = null,
 /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
 /// indicating the type of the authenticator. Authenticators with the
 /// same capabilities and firmware, can share the same AAGUID.
@@ -20,7 +20,7 @@ options: ?@import("Options.zig") = null,
 max_msg_size: ?u64 = null,
 
 /// List of supported PIN Protocol versions.
-pin_uv_auth_protocols: []const @import("client_pin.zig").PinProtocol,
+pin_uv_auth_protocols: ?[]const @import("client_pin.zig").PinProtocol = null,
 
 /// Maximum number of credentials supported in credentialID list at a time
 /// by the authenticator. MUST be greater than zero if present.
@@ -36,8 +36,17 @@ transports: ?[]const @import("transports.zig").Transports = null,
 /// List of supported algorithms
 algorithms: ?[]const @import("Algorithm.zig") = null,
 
+/// The maximum size, in bytes, of the serialized large-blob array that
+/// this authenticator can store. If the authenticatorLargeBlobs command
+/// is supported, this MUST be specified. Otherwise it MUST NOT be. If
+/// specified, the value MUST be ≥ 1024. Thus, 1024 bytes is the least
+/// amount of storage an authenticator must make available for per-credential
+/// serialized large-blob arrays if it supports the large, per-credential
+/// blobs feature.
+max_serialized_large_blob_array: ?u64 = null,
+
 /// A pin change is required Y/n
-force_pin_change: ?bool = null,
+force_pin_change: ?bool = false,
 
 /// Minimum pin length required
 min_pin_length: ?u64 = null,
@@ -47,6 +56,140 @@ min_pin_length: ?u64 = null,
 /// MUST increase the version.
 firmware_version: ?u64 = null,
 
+/// Maximum credBlob length in bytes supported by the authenticator. Must be present
+/// if, and only if, credBlob is included in the supported extensions list. If present,
+/// this value MUST be at least 32 bytes.
+max_cred_blob_length: ?u64 = null,
+
+/// This specifies the max number of RP IDs that authenticator can set via
+/// setMinPINLength subcommand. This is in addition to pre-configured list
+/// authenticator may have. If the authenticator does not support adding additional
+/// RP IDs, its value is 0. This MUST ONLY be present if, and only if, the
+/// authenticator supports the setMinPINLength subcommand.
+max_prids_for_set_min_pin_length: ?u64 = null,
+
+/// This specifies the preferred number of invocations of the
+/// getPinUvAuthTokenUsingUvWithPermissions subCommand the platform may attempt
+/// before falling back to the getPinUvAuthTokenUsingPinWithPermissions subCommand
+/// or displaying an error. MUST be greater than zero. If the value is 1 then all
+/// uvRetries are internal and the platform MUST only invoke the
+/// getPinUvAuthTokenUsingUvWithPermissions subCommand a single time. If the value
+/// is > 1 the authenticator MUST only decrement uvRetries by 1 for each iteration.
+preferred_platform_uv_attempts: ?u64 = null,
+
+/// This specifies the user verification modality supported by the authenticator
+/// via authenticatorClientPIN's getPinUvAuthTokenUsingUvWithPermissions subcommand.
+/// This is a hint to help the platform construct user dialogs. The values are defined
+/// in [FIDORegistry] Section 3.1 User Verification Methods. Combining multiple
+/// bit-flags from the [FIDORegistry] is allowed. If clientPin is supported it MUST
+/// NOT be included in the bit-flags, as clientPIN is not a built-in user
+/// verification method.
+uv_modality: ?u64 = null,
+
+/// This specifies a list of authenticator certifications.
+certifications: ?@import("certifications.zig") = null,
+
+/// If this member is present it indicates the estimated number of additional
+/// discoverable credentials that can be stored. If this value is zero then
+/// platforms SHOULD create non-discoverable credentials if possible.
+remaining_discoverable_credentials: ?u64 = null,
+
+/// If present the authenticator supports the authenticatorConfig vendorPrototype
+/// subcommand, and its value is a list of authenticatorConfig vendorCommandId
+/// values supported, which MAY be empty.
+vendor_prototype_config_commands: ?[]const u8 = null,
+
+const std = @import("std");
+pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+    allocator.free(self.versions);
+
+    if (self.extensions) |extensions| {
+        for (extensions) |extension| {
+            allocator.free(extension);
+        }
+        allocator.free(extensions);
+    }
+
+    if (self.pin_uv_auth_protocols) |pin_uv_auth_protocols| {
+        allocator.free(pin_uv_auth_protocols);
+    }
+
+    if (self.transports) |transports| {
+        allocator.free(transports);
+    }
+
+    if (self.algorithms) |algorithms| {
+        allocator.free(algorithms);
+    }
+
+    if (self.vendor_prototype_config_commands) |vendor_prototype_config_commands| {
+        allocator.free(vendor_prototype_config_commands);
+    }
+}
+
+pub fn to_string(self: *const @This(), out: anytype) !void {
+    try out.writeAll("versions: ");
+    for (self.versions) |version| {
+        try std.fmt.format(out, "{s} ", .{version.to_string()});
+    }
+
+    if (self.extensions) |extensions| {
+        try out.writeAll("\nextensions: ");
+        for (extensions) |extension| {
+            try std.fmt.format(out, "{s} ", .{extension});
+        }
+    }
+
+    try std.fmt.format(out, "\naaguid: {x} ", .{std.fmt.fmtSliceHexUpper(&self.aaguid)});
+
+    // TODO: options
+
+    if (self.max_msg_size) |max_msg_size| {
+        try std.fmt.format(out, "\nmaxMsgSize: {d} ", .{max_msg_size});
+    }
+
+    if (self.pin_uv_auth_protocols) |pin_uv_auth_protocols| {
+        try out.writeAll("\npinUvAuthProtocols: ");
+        for (pin_uv_auth_protocols) |protocol| {
+            try std.fmt.format(out, "{s} ", .{protocol.to_string()});
+        }
+    }
+
+    if (self.max_credential_count_id_list) |max_credential_count_id_list| {
+        try std.fmt.format(out, "\nmaxCredentialCountIdList: {d} ", .{max_credential_count_id_list});
+    }
+
+    if (self.max_credential_id_length) |max_credential_id_length| {
+        try std.fmt.format(out, "\nmaxCredentialIdLength: {d} ", .{max_credential_id_length});
+    }
+
+    if (self.transports) |transports| {
+        try out.writeAll("\ntransports: ");
+        for (transports) |transport| {
+            try std.fmt.format(out, "{s} ", .{transport.to_string()});
+        }
+    }
+
+    if (self.algorithms) |algorithms| {
+        try out.writeAll("\nalgorithms: ");
+        for (algorithms) |algorithm| {
+            try std.fmt.format(out, "{x} ", .{@enumToInt(algorithm.alg)});
+        }
+    }
+
+    if (self.max_serialized_large_blob_array) |max_serialized_large_blob_array| {
+        try std.fmt.format(out, "\nmaxSerializedLargeBlobArray: {d} ", .{max_serialized_large_blob_array});
+    }
+
+    if (self.force_pin_change) |force_pin_change| {
+        try std.fmt.format(out, "\nforcePinChange: {} ", .{force_pin_change});
+    }
+
+    if (self.min_pin_length) |min_pin_length| {
+        try std.fmt.format(out, "\nminPinLength: {d} ", .{min_pin_length});
+    }
+}
+
 const cbor = @import("zbor");
 pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
     _ = options;
@@ -54,6 +197,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
             .{ .name = "versions", .alias = "1", .options = .{} },
+            .{ .name = "extensions", .alias = "2", .options = .{} },
             .{ .name = "aaguid", .alias = "3", .options = .{} },
             .{ .name = "options", .alias = "4", .options = .{} },
             .{ .name = "max_msg_size", .alias = "5", .options = .{} },
@@ -62,17 +206,23 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
             .{ .name = "max_credential_id_length", .alias = "8", .options = .{} },
             .{ .name = "transports", .alias = "9", .options = .{} },
             .{ .name = "algorithms", .alias = "10", .options = .{ .enum_as_text = false } },
+            .{ .name = "max_serialized_large_blob_array", .alias = "11", .options = .{} },
             .{ .name = "force_pin_change", .alias = "12", .options = .{} },
             .{ .name = "min_pin_length", .alias = "13", .options = .{} },
             .{ .name = "firmware_version", .alias = "14", .options = .{} },
+            .{ .name = "max_cred_blob_length", .alias = "15", .options = .{} },
+            .{ .name = "max_prids_for_set_min_pin_length", .alias = "16", .options = .{} },
+            .{ .name = "preferred_platform_uv_attempts", .alias = "17", .options = .{} },
+            .{ .name = "uv_modality", .alias = "18", .options = .{} },
+            .{ .name = "certifications", .alias = "19", .options = .{} },
+            .{ .name = "remaining_discoverable_credentials", .alias = "20", .options = .{} },
+            .{ .name = "vendor_prototype_config_commands", .alias = "21", .options = .{} },
         },
         .from_cborStringify = true,
     }, out);
 }
 
 test "Serialize authenticator info" {
-    const std = @import("std");
-
     const allocator = std.testing.allocator;
     var str = std.ArrayList(u8).init(allocator);
     defer str.deinit();

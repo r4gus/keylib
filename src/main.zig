@@ -32,6 +32,15 @@ pub fn main() !void {
         auth.open() catch {
             std.debug.print("can't open device\n", .{});
         };
+
+        const info = try fido.client.commands.cbor.authenticatorGetInfo(auth);
+        defer info.deinit(auth.transport.allocator);
+
+        var info_str = std.ArrayList(u8).init(allocator);
+        defer info_str.deinit();
+        try info.to_string(info_str.writer());
+
+        std.debug.print("{s}\n", .{info_str.items});
     }
 
     //for (authenticators) |*auth| {

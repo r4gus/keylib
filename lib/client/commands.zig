@@ -1,1 +1,1 @@
-pub const ctaphid = @import("commands/ctaphid.zig");
+pub const cbor = @import("commands/cbor.zig");

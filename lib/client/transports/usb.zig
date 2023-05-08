@@ -166,14 +166,14 @@ pub fn read(dev: *Transport) IOError![]const u8 {
         const nr = try read_timeout(dev.device.?, buffer[0..]);
         const packet = buffer[0..nr];
 
+        std.log.info("packet: {s}", .{std.fmt.fmtSliceHexUpper(packet)});
         if (first) {
             bcnt_total = @intCast(usize, packet[5]) << 8 | @intCast(usize, packet[6]);
-            var l = if (bcnt_total - data.items.len > 57) 57 else bcnt_total - data.items.len;
-            try data.appendSlice(packet[7 .. l + 7]);
+            try data.appendSlice(packet[7..]);
             first = false;
-            std.debug.print("packet: {s}\n", .{std.fmt.fmtSliceHexLower(packet)});
         } else {
             seq = packet[4];
+            try data.appendSlice(packet[5..]);
         }
     }
 
