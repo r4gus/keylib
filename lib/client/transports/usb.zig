@@ -22,6 +22,29 @@ pub fn init() void {
     _ = hidapi.hid_init();
 }
 
+pub fn open_with_path(path: []const u8, allocator: std.mem.Allocator) !Authenticator {
+    var p = try allocator.allocSentinel(u8, path.len, 0);
+    errdefer allocator.free(p);
+    std.mem.copy(u8, p, path);
+
+    var device = hidapi.hid_open_path(p);
+    if (device == null) return IOError.Open;
+
+    return Authenticator{
+        .transport = .{
+            .path = p,
+            .io = .{
+                .open = open,
+                .close = close,
+                .write = write,
+                .read = read,
+            },
+            .type = .usb,
+            .allocator = allocator,
+        },
+    };
+}
+
 /// Opens a HID device at the specified path and returns an opaque pointer to the device.
 ///
 /// # Arguments

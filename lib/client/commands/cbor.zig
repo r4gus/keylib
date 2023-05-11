@@ -1,5 +1,6 @@
 const root = @import("../../main.zig");
 const data = root.data;
+const StatusCodes = data.StatusCodes;
 
 const cbor = @import("zbor");
 
@@ -13,6 +14,13 @@ pub fn authenticatorGetInfo(auth: *device.Authenticator) !data.Settings {
     try auth.write("\x04");
     const response = try auth.read();
     defer auth.transport.allocator.free(response);
+
+    const status = @intToEnum(StatusCodes, response[0]);
+
+    if (status != .ctap1_err_success) {
+        // TODO: make this more precise
+        return error.Error;
+    }
 
     const info = try cbor.parse(
         data.Settings,
@@ -46,4 +54,26 @@ pub fn authenticatorGetInfo(auth: *device.Authenticator) !data.Settings {
     );
 
     return info;
+}
+
+// ++++++++++++++++++++++++++++++++++++++
+// authenticatorReset
+// ++++++++++++++++++++++++++++++++++++++
+
+/// Reset the given authenticator
+///
+/// Resetting an authenticator is a potentially destructive operation
+pub fn authenticatorReset(auth: *device.Authenticator) !void {
+    try auth.write("\x07");
+    const response = try auth.read();
+    defer auth.transport.allocator.free(response);
+
+    const status = @intToEnum(StatusCodes, response[0]);
+
+    switch (status) {
+        .ctap2_err_operation_denied => return error.OperationDenied,
+        .ctap2_err_user_action_timeout => return error.Timeout,
+        .ctap2_err_not_allowed => return error.NotAllowed,
+        else => {},
+    }
 }

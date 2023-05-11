@@ -19,6 +19,12 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
 
+    const clap_dep = b.dependency("clap", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const clap_module = clap_dep.module("clap");
+
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
     // ++++++++++++++++++++++++++++++++++++++++++++
@@ -47,6 +53,7 @@ pub fn build(b: *std.build.Builder) !void {
     });
 
     exe.addModule("fido", fido_module);
+    exe.addModule("clap", clap_module);
     exe.linkLibrary(hidapi_dep.artifact("hidapi"));
 
     b.installArtifact(exe);
