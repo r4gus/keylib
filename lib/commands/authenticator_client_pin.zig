@@ -50,10 +50,12 @@ pub fn authenticator_client_pin(
 
             // return error if authenticator doesn't support the selected protocol.
             var protocol_supported: bool = false;
-            for (auth.settings.pin_uv_auth_protocols) |prot| {
-                if (prot == protocol) {
-                    protocol_supported = true;
-                    break;
+            if (auth.settings.pin_uv_auth_protocols) |pin_uv_auth_protocols| {
+                for (pin_uv_auth_protocols) |prot| {
+                    if (prot == protocol) {
+                        protocol_supported = true;
+                        break;
+                    }
                 }
             }
 
@@ -79,10 +81,12 @@ pub fn authenticator_client_pin(
 
             // If pinUvAuthProtocol is not supported, return error.
             var protocol_supported: bool = false;
-            for (auth.settings.pin_uv_auth_protocols) |prot| {
-                if (prot == client_pin_param.pinUvAuthProtocol) {
-                    protocol_supported = true;
-                    break;
+            if (auth.settings.pin_uv_auth_protocols) |pin_uv_auth_protocols| {
+                for (pin_uv_auth_protocols) |prot| {
+                    if (prot == client_pin_param.pinUvAuthProtocol) {
+                        protocol_supported = true;
+                        break;
+                    }
                 }
             }
 
@@ -198,10 +202,12 @@ pub fn authenticator_client_pin(
             // If pinUvAuthProtocol is not supported or the permissions are 0,
             // return error.
             var protocol_supported: bool = false;
-            for (auth.settings.pin_uv_auth_protocols) |prot| {
-                if (prot == client_pin_param.pinUvAuthProtocol) {
-                    protocol_supported = true;
-                    break;
+            if (auth.settings.pin_uv_auth_protocols) |pin_uv_auth_protocols| {
+                for (pin_uv_auth_protocols) |prot| {
+                    if (prot == client_pin_param.pinUvAuthProtocol) {
+                        protocol_supported = true;
+                        break;
+                    }
                 }
             }
 

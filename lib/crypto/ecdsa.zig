@@ -326,7 +326,7 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
             const m_x = m[m_v.len + 1 + noise_length ..][0..secret_key.len];
             const m_h = m[m.len - h.len ..];
 
-            mem.set(u8, m_v, 0x01);
+            @memset(m_v, 0x01);
             m_i.* = 0x00;
             if (noise) |n| mem.copy(u8, m_z, &n);
             mem.copy(u8, m_x, &secret_key);

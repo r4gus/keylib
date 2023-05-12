@@ -82,10 +82,12 @@ pub fn verify(
 ) !data.StatusCodes {
     // If pinUvAuthProtocol is not supported, return error.
     var protocol_supported: bool = false;
-    for (auth.settings.pin_uv_auth_protocols) |prot| {
-        if (prot == protocol) {
-            protocol_supported = true;
-            break;
+    if (auth.settings.pin_uv_auth_protocols) |pin_uv_auth_protocols| {
+        for (pin_uv_auth_protocols) |prot| {
+            if (prot == protocol) {
+                protocol_supported = true;
+                break;
+            }
         }
     }
 
