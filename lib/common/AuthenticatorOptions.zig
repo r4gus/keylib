@@ -9,5 +9,6 @@ rk: ?bool = false,
 /// verifies the user to complete the request. Examples of such gestures
 /// are fingerprint scan or a PIN.
 ///
-/// Platforms MUST NOT include the "uv" option parameter if the authenticator does not support built-in user verification.
+/// Platforms MUST NOT include the "uv" option parameter if the authenticator does
+/// not support built-in user verification.
 uv: ?bool = false,

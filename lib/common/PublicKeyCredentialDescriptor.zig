@@ -1,21 +1,22 @@
-//! Contains the attributes that are specified by a caller when referring to a public key credential.
-//! See WebAuthn §5.8.3.
+//! Contains the attributes that are specified by a caller when referring to a
+//! public key credential. See WebAuthn §5.8.3.
+
+const fido = @import("../main.zig");
+
+const AuthenticatorTransports = fido.common.AuthenticatorTransports;
+const PublicKeyCredentialType = fido.common.PublicKeyCredentialType;
 
 /// The credential id
 id: []const u8,
 /// Type of the credential
-type: [:0]const u8,
+type: PublicKeyCredentialType,
 /// Transport methods
-transports: ?[]const [:0]const u8 = null,
+transports: ?[]const AuthenticatorTransports = null,
 
 /// Free all allocated memory of this data structure
 pub fn deinit(self: *const @This(), allocator: @import("std").mem.Allocator) void {
-    allocator.free(self.type);
     allocator.free(self.id);
     if (self.transports) |trans| {
-        for (trans) |t| {
-            allocator.free(t);
-        }
         allocator.free(trans);
     }
 }
@@ -27,7 +28,7 @@ test "serialize PublicKeyCredentialDescriptor" {
     defer str.deinit();
 
     const d = @This(){
-        .type = "public-key",
+        .type = .@"public-key",
         .id = "\x5c\x7b\xc6\x57\x09\xed\xcd\xbc\x8a\x61\x2f\x1f\x5e\x97\xd0\x15\xbd\x0e\xc7\x33\x28\x0b\x5c\xb5\x78\x62\x6d\xba\x37\xa1\xe5\x10\xc3\x9e\x79\xf8\x20\x0e\x95\xf7\x9d\x50\x5c\x44\x35\x61\xac\x07\x1e\xa7\x14\x3a\xd0\x6e\xf4\x8b\x56\xdd\x5d\x71\x22\x79\x77\x51",
     };
 
