@@ -13,6 +13,14 @@ pub const common = struct {
     pub const AuthenticatorTransports = @import("common/AuthenticatorTransports.zig").AuthenticatorTransports;
     /// Parameters to influence authenticator operation
     pub const AuthenticatorOptions = @import("common/AuthenticatorOptions.zig");
+    /// WebAuthn Attestation Statement Format Identifiers
+    pub const AttestationStatementFormatIdentifiers = @import("common/AttestationStatementFormatIdentifiers.zig").AttestationStatementFormatIdentifiers;
+    /// Attested credential data is a byte-array added to the authenticator data when
+    /// generating an attestation object
+    pub const AttestedCredentialData = @import("common/AttestedCredentialData.zig");
+    /// The authenticator data structure encodes contextual bindings made by the authenticator
+    pub const AuthenticatorData = @import("common/AuthenticatorData.zig");
+    pub const AttestationStatement = @import("common/AttestationStatement.zig").AttestationStatement;
 
     test "common tests" {
         _ = RelyingParty;
@@ -22,16 +30,25 @@ pub const common = struct {
         _ = PublicKeyCredentialDescriptor;
         _ = AuthenticatorTransports;
         _ = AuthenticatorOptions;
+        _ = AttestationStatementFormatIdentifiers;
+        _ = AttestedCredentialData;
+        _ = AuthenticatorData;
+        _ = AttestationStatement;
     }
 };
 
-pub const authenticator = struct {
+pub const ctap = struct {
     pub const param = struct {
-        pub const MakeCredential = @import("authenticator/param/MakeCredential.zig");
+        pub const MakeCredential = @import("ctap/param/MakeCredential.zig");
     };
 
-    test "authenticator tests" {
-        _ = param.MakeCredential;
+    pub const response = struct {
+        pub const MakeCredential = @import("ctap/response/MakeCredential.zig");
+    };
+
+    test "ctap tests" {
+        _ = param.MakeCredential; // client -> authenticator
+        _ = response.MakeCredential; // authenticator -> client
     }
 };
 
@@ -66,5 +83,5 @@ pub const pinuv = struct {
 test "library tests" {
     _ = common;
     _ = pinuv;
-    _ = authenticator;
+    _ = ctap;
 }
