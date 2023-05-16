@@ -1,6 +1,35 @@
 //! The authenticatorMakeCredential response structure contains an attestation object
 //! plus additional information
-
+//!
+//! ```
+//! // ATTESTATION OBJECT
+/// ________________________________________________________
+/// | "fmt": "fido-u2f" | "attStmt": ... | "authData": ... |
+/// --------------------------------------------------------
+///                             |               |
+///  ----------------------------               V
+///  |
+///  |     32 bytes      1        4            var             var
+///  |  ____________________________________________________________
+///  |  | RP ID hash | FLAGS | COUNTER | ATTESTED CRED. DATA | EXT |
+///  |  ------------------------------------------------------------
+///  |                    |                      |
+///  |                    V                      |
+///  |          _____________________            |
+///  |          |ED|AT|0|0|0|UV|0|UP|            |
+///  |          ---------------------            |
+///  |                                           V
+///  |          _______________________________________________
+///  |          | AAGUID | L | CREDENTIAL ID | CRED. PUB. KEY |
+///  |          -----------------------------------------------
+///  |           16 bytes  2        L          var len (COSE key)
+///  |
+///  V                      __________________________________
+/// if Basic or Privacy CA: |"alg": ...|"sig": ...|"x5c": ...|
+///                         ----------------------------------
+///                         _______________________________________
+/// if ECDAA:               |"alg": ...|"sig": ...|"ecdaaKeyId": ..|
+/// ```
 const std = @import("std");
 const cbor = @import("zbor");
 const fido = @import("../../main.zig");

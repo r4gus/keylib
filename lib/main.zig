@@ -46,9 +46,22 @@ pub const ctap = struct {
         pub const MakeCredential = @import("ctap/response/MakeCredential.zig");
     };
 
+    pub const crypto = struct {
+        /// Diffie-Hellman key exchange
+        pub const dh = struct {
+            pub const ecdh = @import("ctap/crypto/ecdh.zig");
+            /// Elliptic curve diffie-hellman using the P-256 curve
+            ///
+            /// This is used to exchange a shared secret between client and
+            /// authenticator when using the pinUvAuth protocol versions 1 and 2.
+            pub const EcdhP256 = ecdh.EcdhP256;
+        };
+    };
+
     test "ctap tests" {
         _ = param.MakeCredential; // client -> authenticator
         _ = response.MakeCredential; // authenticator -> client
+        _ = crypto.dh.ecdh;
     }
 };
 
