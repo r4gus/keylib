@@ -51,6 +51,8 @@ pub const ctap = struct {
     pub const response = struct {
         /// authenticatorMakeCredential response data structure (attestation object)
         pub const MakeCredential = @import("ctap/response/MakeCredential.zig");
+        /// authenticatorGetAssertion response data structure
+        pub const GetAssertion = @import("ctap/response/GetAssertion.zig");
     };
 
     /// Algorithms and data types for crypto
@@ -102,6 +104,7 @@ pub const ctap = struct {
         _ = request.MakeCredential; // client -> authenticator
         _ = request.GetAssertion;
         _ = response.MakeCredential; // authenticator -> client
+        _ = response.GetAssertion;
         _ = crypto.dh.ecdh;
         _ = pinuv;
     }
