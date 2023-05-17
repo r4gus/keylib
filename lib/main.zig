@@ -21,6 +21,10 @@ pub const common = struct {
     /// The authenticator data structure encodes contextual bindings made by the authenticator
     pub const AuthenticatorData = @import("common/AuthenticatorData.zig");
     pub const AttestationStatement = @import("common/AttestationStatement.zig").AttestationStatement;
+    /// Authenticator (CTAP) versions
+    pub const AuthenticatorVersions = @import("common/AuthenticatorVersions.zig").AuthenticatorVersions;
+    /// An authenticator’s supported certifications (FIPS, FIDO, ...)
+    pub const Certifications = @import("common/Certifications.zig");
 
     test "common tests" {
         _ = RelyingParty;
@@ -34,6 +38,8 @@ pub const common = struct {
         _ = AttestedCredentialData;
         _ = AuthenticatorData;
         _ = AttestationStatement;
+        _ = AuthenticatorVersions;
+        _ = Certifications;
     }
 };
 
@@ -100,6 +106,14 @@ pub const ctap = struct {
         test "pinuv tests" {}
     };
 
+    /// Authenticator related data structures
+    pub const authenticator = struct {
+        /// Authenticator settings that represent its capabilities
+        pub const Settings = @import("ctap/auth/Settings.zig");
+        /// Authenticator options
+        pub const Options = @import("ctap/auth/Options.zig");
+    };
+
     test "ctap tests" {
         _ = request.MakeCredential; // client -> authenticator
         _ = request.GetAssertion;
@@ -107,6 +121,8 @@ pub const ctap = struct {
         _ = response.GetAssertion;
         _ = crypto.dh.ecdh;
         _ = pinuv;
+        _ = authenticator.Settings;
+        _ = authenticator.Options;
     }
 };
 
