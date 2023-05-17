@@ -25,6 +25,8 @@ pub const common = struct {
     pub const AuthenticatorVersions = @import("common/AuthenticatorVersions.zig").AuthenticatorVersions;
     /// An authenticator’s supported certifications (FIPS, FIDO, ...)
     pub const Certifications = @import("common/Certifications.zig");
+    /// Type of attestation issued (None, Slef, ...)
+    pub const AttestationType = @import("common/AttestationType.zig").AttestationType;
 
     test "common tests" {
         _ = RelyingParty;
@@ -40,6 +42,7 @@ pub const common = struct {
         _ = AttestationStatement;
         _ = AuthenticatorVersions;
         _ = Certifications;
+        _ = AttestationType;
     }
 };
 
@@ -112,6 +115,10 @@ pub const ctap = struct {
         pub const Settings = @import("ctap/auth/Settings.zig");
         /// Authenticator options
         pub const Options = @import("ctap/auth/Options.zig");
+        /// Representation of a credential created by an authenticator
+        pub const Credential = @import("ctap/auth/Credential.zig");
+        /// Callbacks provided by the platform using this library
+        pub const Callbacks = @import("ctap/auth/Callbacks.zig");
     };
 
     test "ctap tests" {
@@ -123,6 +130,8 @@ pub const ctap = struct {
         _ = pinuv;
         _ = authenticator.Settings;
         _ = authenticator.Options;
+        _ = authenticator.Credential;
+        _ = authenticator.Callbacks;
     }
 };
 
