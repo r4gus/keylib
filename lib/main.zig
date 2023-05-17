@@ -37,15 +37,23 @@ pub const common = struct {
     }
 };
 
+/// Client to authenticator protocol
 pub const ctap = struct {
-    pub const param = struct {
-        pub const MakeCredential = @import("ctap/param/MakeCredential.zig");
+    /// Request data structures
+    pub const request = struct {
+        /// authenticatorMakeCredential request data structure
+        pub const MakeCredential = @import("ctap/request/MakeCredential.zig");
+        /// authenticatorGetAssertion request data structure
+        pub const GetAssertion = @import("ctap/request/GetAssertion.zig");
     };
 
+    /// Response data structures
     pub const response = struct {
+        /// authenticatorMakeCredential response data structure (attestation object)
         pub const MakeCredential = @import("ctap/response/MakeCredential.zig");
     };
 
+    /// Algorithms and data types for crypto
     pub const crypto = struct {
         /// Diffie-Hellman key exchange
         pub const dh = struct {
@@ -56,45 +64,50 @@ pub const ctap = struct {
             /// authenticator when using the pinUvAuth protocol versions 1 and 2.
             pub const EcdhP256 = ecdh.EcdhP256;
         };
+
+        /// This is the hash (computed using SHA-256) of the JSON-compatible
+        /// serialization of client data, as constructed by the client
+        pub const ClientDataHash = [32]u8;
+    };
+
+    /// PIN/UV Auth Protocol
+    ///
+    /// A specific PIN/UV auth protocol defines an implementation of two interfaces
+    /// to cryptographic services: one for the authenticator, and one for the platform.
+    pub const pinuv = struct {
+        /// Used by multiple data types
+        pub const common = struct {
+            /// Result of calling authenticate(pinUvAuthToken, clientDataHash)
+            pub const PinUvAuthParam = [32]u8;
+
+            /// PIN protocol versions
+            pub const PinProtocol = enum(u16) {
+                /// Pin protocol version 1
+                V1 = 1,
+                /// Pin Protocol version 2 for FIPS certified authenticators
+                V2 = 2,
+            };
+        };
+
+        /// The authenticator interface
+        pub const authenticator = struct {};
+
+        /// The platform interface
+        pub const platform = struct {};
+
+        test "pinuv tests" {}
     };
 
     test "ctap tests" {
-        _ = param.MakeCredential; // client -> authenticator
+        _ = request.MakeCredential; // client -> authenticator
+        _ = request.GetAssertion;
         _ = response.MakeCredential; // authenticator -> client
         _ = crypto.dh.ecdh;
+        _ = pinuv;
     }
-};
-
-/// PIN/UV Auth Protocol
-///
-/// A specific PIN/UV auth protocol defines an implementation of two interfaces
-/// to cryptographic services: one for the authenticator, and one for the platform.
-pub const pinuv = struct {
-    /// Used by multiple data types
-    pub const common = struct {
-        /// Result of calling authenticate(pinUvAuthToken, clientDataHash)
-        pub const PinUvAuthParam = [32]u8;
-
-        /// PIN protocol versions
-        pub const PinProtocol = enum(u16) {
-            /// Pin protocol version 1
-            V1 = 1,
-            /// Pin Protocol version 2 for FIPS certified authenticators
-            V2 = 2,
-        };
-    };
-
-    /// The authenticator interface
-    pub const authenticator = struct {};
-
-    /// The platform interface
-    pub const platform = struct {};
-
-    test "pinuv tests" {}
 };
 
 test "library tests" {
     _ = common;
-    _ = pinuv;
     _ = ctap;
 }
