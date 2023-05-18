@@ -9,3 +9,4 @@ zbor
 *.o
 *.order
 *.symvers
+*.cmd
