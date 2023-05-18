@@ -18,12 +18,14 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
+    _ = hidapi_dep;
 
     const clap_dep = b.dependency("clap", .{
         .target = target,
         .optimize = optimize,
     });
     const clap_module = clap_dep.module("clap");
+    _ = clap_module;
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
@@ -42,32 +44,77 @@ pub fn build(b: *std.build.Builder) !void {
     try b.modules.put(b.dupe("fido"), fido_module);
 
     // ++++++++++++++++++++++++++++++++++++++++++++
-    // Command Line Tool
+    // Platform Authenticator (linux)
     // ++++++++++++++++++++++++++++++++++++++++++++
 
-    const exe = b.addExecutable(.{
-        .name = "fido-tool",
-        .root_source_file = .{ .path = "src/main.zig" },
+    const LINUX_DIR = "platform-auth/linux/";
+
+    const install_udev_rule = b.addSystemCommand(&[_][]const u8{
+        "sudo", "cp", LINUX_DIR ++ "70-fido-access.rules", "/etc/udev/rules.d/",
+    });
+
+    const reload_rules = b.addSystemCommand(&[_][]const u8{
+        "sudo", "udevadm", "control", "--reload-rules",
+    });
+    reload_rules.step.dependOn(&install_udev_rule.step);
+
+    const trigger_rules = b.addSystemCommand(&[_][]const u8{
+        "sudo", "udevadm", "trigger",
+    });
+    trigger_rules.step.dependOn(&reload_rules.step);
+
+    const install_udev_rule_step = b.step("install-rule", "Install udev rule for usb gadget");
+    install_udev_rule_step.dependOn(&trigger_rules.step);
+
+    const install_usb_gadget = b.addSystemCommand(&[_][]const u8{
+        "sudo", "make", "-C", LINUX_DIR, "install",
+    });
+
+    const install_usb_gadget_step = b.step("install-gadget", "Install usb gadget required for platform authenticator");
+    install_usb_gadget_step.dependOn(&install_usb_gadget.step);
+
+    const uninstall_usb_gadget = b.addSystemCommand(&[_][]const u8{
+        "sudo", "make", "-C", LINUX_DIR, "uninstall",
+    });
+
+    const uninstall_usb_gadget_step = b.step("uninstall-gadget", "Uninstall usb gadget");
+    uninstall_usb_gadget_step.dependOn(&uninstall_usb_gadget.step);
+
+    const authenticator = b.addExecutable(.{
+        .name = "platauth",
+        .root_source_file = .{ .path = "platform-auth/main.zig" },
         .target = target,
         .optimize = optimize,
     });
+    authenticator.addModule("fido", fido_module);
 
-    exe.addModule("fido", fido_module);
-    exe.addModule("clap", clap_module);
-    exe.linkLibrary(hidapi_dep.artifact("hidapi"));
+    // ++++++++++++++++++++++++++++++++++++++++++++
+    // Command Line Tool
+    // ++++++++++++++++++++++++++++++++++++++++++++
 
-    b.installArtifact(exe);
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
+    //const exe = b.addExecutable(.{
+    //    .name = "fido-tool",
+    //    .root_source_file = .{ .path = "src/main.zig" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
 
-    // This allows the user to pass arguments to the application in the build
-    // command itself, like this: `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    //exe.addModule("fido", fido_module);
+    //exe.addModule("clap", clap_module);
+    //exe.linkLibrary(hidapi_dep.artifact("hidapi"));
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    //b.installArtifact(exe);
+    //const run_cmd = b.addRunArtifact(exe);
+    //run_cmd.step.dependOn(b.getInstallStep());
+
+    //// This allows the user to pass arguments to the application in the build
+    //// command itself, like this: `zig build run -- arg1 arg2 etc`
+    //if (b.args) |args| {
+    //    run_cmd.addArgs(args);
+    //}
+
+    //const run_step = b.step("run", "Run the app");
+    //run_step.dependOn(&run_cmd.step);
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Tests

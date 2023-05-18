@@ -119,7 +119,22 @@ pub const ctap = struct {
         pub const Credential = @import("ctap/auth/Credential.zig");
         /// Callbacks provided by the platform using this library
         pub const Callbacks = @import("ctap/auth/Callbacks.zig");
+        /// Authenticator response
+        pub const Response = @import("ctap/auth/Response.zig").Response;
     };
+
+    /// CTAP commands
+    pub const commands = struct {
+        /// CTAP command identifier
+        pub const Commands = @import("ctap/commands/Commands.zig").Commands;
+        /// Authenticator commands
+        pub const authenticator = struct {
+            pub const authenticatorGetInfo = @import("ctap/commands/authenticator/get_info.zig").authenticatorGetInfo;
+        };
+    };
+
+    /// CTAP status codes
+    pub const StatusCodes = @import("ctap/StatusCodes.zig").StatusCodes;
 
     test "ctap tests" {
         _ = request.MakeCredential; // client -> authenticator
