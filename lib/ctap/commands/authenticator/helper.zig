@@ -18,7 +18,7 @@ pub fn verifyPinUvAuthParam(
         const permission = auth.callbacks.up(null, null);
 
         var pin_set = true;
-        _ = auth.callbacks.load_pin_hash() catch {
+        _ = auth.callbacks.loadCurrentStoredPIN() catch {
             pin_set = false;
         };
 

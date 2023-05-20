@@ -102,6 +102,33 @@ pub fn handle(self: *@This(), command: []const u8) Response {
     return Response{ .ok = res.toOwnedSlice() catch unreachable };
 }
 
+/// Returns true if the authenticator supports the given pinUvAuth protocol version
+pub fn pinUvAuthProtocolSupported(
+    self: *const @This(),
+    protocol: fido.ctap.pinuv.common.PinProtocol,
+) bool {
+    if (self.settings.pinUvAuthProtocols == null) return false;
+
+    var supported = false;
+
+    // We must expose this capability via getInfo...
+    for (self.settings.pinUvAuthProtocols.?) |prot| {
+        if (prot == protocol) {
+            supported = true;
+            break;
+        }
+    }
+
+    // ...and also provide the logic
+    if (protocol == .V1 and self.token.one == null) {
+        supported = false;
+    } else if (protocol == .V2 and self.token.two == null) {
+        supported = false;
+    }
+
+    return supported;
+}
+
 pub fn getClientPinOption(self: *const @This()) bool {
     if (self.settings.options) |options| {
         return if (options.clientPin) |cp| cp else false;

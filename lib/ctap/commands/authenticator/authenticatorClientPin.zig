@@ -43,14 +43,7 @@ pub fn authenticatorClientPin(
             };
 
             // return error if authenticator doesn't support the selected protocol.
-            var protocol_supported: bool = false;
-            if (protocol == .V1 and auth.token.one != null) {
-                protocol_supported = true;
-            } else if (protocol == .V2 and auth.token.two != null) {
-                protocol_supported = true;
-            }
-
-            if (!protocol_supported) {
+            if (!auth.pinUvAuthProtocolSupported(client_pin_param.pinUvAuthProtocol.?)) {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             }
 
@@ -62,6 +55,72 @@ pub fn authenticatorClientPin(
             client_pin_response = .{
                 .keyAgreement = prot.getPublicKey(),
             };
+        },
+        .setPIN => {
+            if (client_pin_param.pinUvAuthProtocol == null or
+                client_pin_param.keyAgreement == null or
+                client_pin_param.newPinEnc == null or
+                client_pin_param.pinUvAuthParam == null)
+            {
+                return fido.ctap.StatusCodes.ctap2_err_missing_parameter;
+            }
+
+            if (!auth.pinUvAuthProtocolSupported(client_pin_param.pinUvAuthProtocol.?)) {
+                return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
+            }
+
+            var prot = switch (client_pin_param.pinUvAuthProtocol.?) {
+                .V1 => &auth.token.one.?,
+                .V2 => &auth.token.two.?,
+            };
+
+            var already_set = true;
+            _ = auth.callbacks.loadCurrentStoredPIN() catch |e| {
+                if (e == error.DoesNotExist) {
+                    already_set = false;
+                } else { // unexpected error
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                }
+            };
+
+            if (already_set) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+            }
+
+            // Obtain the shared secret
+            const shared_secret = prot.ecdh(client_pin_param.keyAgreement.?) catch {
+                return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
+            };
+
+            // Verify parameters
+            const verified = fido.ctap.pinuv.PinUvAuth.verify(
+                shared_secret[0..32].*,
+                client_pin_param.newPinEnc.?,
+                client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+            );
+            if (!verified) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+            }
+
+            // Decrypt new pin
+            var paddedNewPin: [64]u8 = undefined;
+            fido.ctap.pinuv.PinUvAuth.decrypt(
+                shared_secret,
+                paddedNewPin[0..],
+                client_pin_param.newPinEnc.?[0..],
+            );
+            var pnp_end: usize = 0;
+            while (paddedNewPin[pnp_end] != 0 and pnp_end < 64) : (pnp_end += 1) {}
+            const newPin = paddedNewPin[0..pnp_end];
+
+            const npl = if (auth.settings.minPINLength) |pl| pl else 4;
+            if (newPin.len < npl) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
+            }
+
+            // Store new pin
+            const ph = fido.ctap.pinuv.hash(newPin);
+            auth.callbacks.storeCurrentStoredPIN(ph);
         },
         .changePIN => {
             // Return error if the authenticator does not receive the
@@ -76,14 +135,7 @@ pub fn authenticatorClientPin(
             }
 
             // If pinUvAuthProtocol is not supported, return error.
-            var protocol_supported: bool = false;
-            if (client_pin_param.pinUvAuthProtocol.? == .V1 and auth.token.one != null) {
-                protocol_supported = true;
-            } else if (client_pin_param.pinUvAuthProtocol.? == .V2 and auth.token.two != null) {
-                protocol_supported = true;
-            }
-
-            if (!protocol_supported) {
+            if (!auth.pinUvAuthProtocolSupported(client_pin_param.pinUvAuthProtocol.?)) {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             }
 
@@ -131,7 +183,9 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            const pinHash2 = try auth.callbacks.load_pin_hash();
+            const pinHash2 = auth.callbacks.loadCurrentStoredPIN() catch {
+                return fido.ctap.StatusCodes.ctap2_err_pin_not_set;
+            };
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
@@ -165,16 +219,29 @@ pub fn authenticatorClientPin(
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
-            // TODO: support forcePINChange
-            // TODO: support 15.
-            // TODO: support 16.
+            const ph = fido.ctap.pinuv.hash(newPin);
+
+            // Validate forePINChange
+            if (auth.settings.forcePINChange) |fpc| {
+                // Hash of new pin must not be the same as the old hash
+                if (fpc and std.mem.eql(u8, pinHash2[0..], &ph)) {
+                    return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
+                }
+            }
+
+            auth.callbacks.storePINCodePointLength(@intCast(u8, pnp_end));
+            auth.settings.forcePINChange = false;
 
             // Store new pin
-            const ph = fido.ctap.pinuv.hash(newPin);
-            auth.callbacks.store_pin_hash(ph);
+            auth.callbacks.storeCurrentStoredPIN(ph);
 
-            // Invalidate pinUvAuthTokens
-            prot.resetPinUvAuthToken(auth.callbacks.rand);
+            // Invalidate all pinUvAuthTokens
+            if (auth.token.one) |*one| {
+                one.resetPinUvAuthToken(auth.callbacks.rand);
+            }
+            if (auth.token.two) |*two| {
+                two.resetPinUvAuthToken(auth.callbacks.rand);
+            }
         },
         .getPinUvAuthTokenUsingPinWithPermissions => {
             // Return error if the authenticator does not receive the
@@ -189,14 +256,7 @@ pub fn authenticatorClientPin(
 
             // If pinUvAuthProtocol is not supported or the permissions are 0,
             // return error.
-            var protocol_supported: bool = false;
-            if (client_pin_param.pinUvAuthProtocol.? == .V1 and auth.token.one != null) {
-                protocol_supported = true;
-            } else if (client_pin_param.pinUvAuthProtocol.? == .V2 and auth.token.two != null) {
-                protocol_supported = true;
-            }
-
-            if (!protocol_supported or client_pin_param.permissions.? == 0) {
+            if (!auth.pinUvAuthProtocolSupported(client_pin_param.pinUvAuthProtocol.?)) {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             }
 
@@ -240,7 +300,7 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            const pinHash2 = try auth.callbacks.load_pin_hash();
+            const pinHash2 = try auth.callbacks.loadCurrentStoredPIN();
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match

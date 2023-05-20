@@ -19,15 +19,33 @@ pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) 
     return true;
 }
 
-var pinHash: [32]u8 = "\x9f\x86\xd0\x81\x88\x4c\x7d\x65\x9a\x2f\xea\xa0\xc5\x5a\xd0\x15\xa3\xbf\x4f\x1b\x2b\x0b\x82\x2c\xd1\x5d\x6c\x15\xb0\xf0\x0a\x08".*;
+var pinHash: ?[32]u8 = null;
 
-pub fn load_pin_hash() LoadError![32]u8 {
-    return pinHash;
+pub fn loadCurrentStoredPIN() LoadError![32]u8 {
+    if (pinHash) |ph| {
+        return ph;
+    } else {
+        return LoadError.DoesNotExist;
+    }
 }
 
-pub fn store_pin_hash(d: [32]u8) void {
+pub fn storeCurrentStoredPIN(d: [32]u8) void {
     pinHash = d;
-    std.debug.print("new pin hash: {x}\n", .{std.fmt.fmtSliceHexUpper(&pinHash)});
+    std.debug.print("new pin hash: {x}\n", .{std.fmt.fmtSliceHexUpper(&pinHash.?)});
+}
+
+var l: ?u8 = null;
+
+pub fn loadPINCodePointLength() LoadError!u8 {
+    if (l) |len| {
+        return len;
+    } else {
+        return LoadError.DoesNotExist;
+    }
+}
+
+pub fn storePINCodePointLength(d: u8) void {
+    l = d;
 }
 
 var retries: u8 = 8;

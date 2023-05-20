@@ -33,14 +33,20 @@ up: *const fn (user: ?*const fido.common.User, rp: ?*const fido.common.RelyingPa
 /// - Pattern
 uv: ?*const fn () bool = null,
 
-/// Load pin hash
+/// Load the full sha256 pin hash
 ///
 /// This operation should fail with `DoesNotExist` if there are no settings
 /// stored.
-load_pin_hash: *const fn () LoadError![32]u8,
+loadCurrentStoredPIN: *const fn () LoadError![32]u8,
 
-/// Store pin hash
-store_pin_hash: *const fn (d: [32]u8) void,
+/// Store the full sha256 pin hash
+storeCurrentStoredPIN: *const fn (d: [32]u8) void,
+
+/// Load the code point length of the password corresponding to the stored pin hash
+loadPINCodePointLength: *const fn () LoadError!u8,
+
+/// Store the code point length of the password corresponding to the stored pin hash
+storePINCodePointLength: *const fn (d: u8) void,
 
 get_retries: *const fn () LoadError!u8,
 set_retries: *const fn (r: u8) void,
