@@ -31,6 +31,7 @@ options: ?AuthenticatorOptions = null,
 pinUvAuthParam: ?PinUvAuthParam = null,
 /// PIN protocol version chosen by the client.
 pinUvAuthProtocol: ?PinProtocol = null,
+enterpriseAttestation: ?u64 = null,
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     self.rp.deinit(allocator);
@@ -57,6 +58,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
             .{ .name = "options", .alias = "7", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
             .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
+            .{ .name = "enterpriseAttestation", .alias = "10", .options = .{} },
         },
     }, out);
 }
@@ -74,6 +76,7 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
             .{ .name = "options", .alias = "7", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
             .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
+            .{ .name = "enterpriseAttestation", .alias = "10", .options = .{} },
         },
     });
 }

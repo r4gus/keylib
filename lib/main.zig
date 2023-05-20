@@ -1,3 +1,5 @@
+const std = @import("std");
+
 /// Used by multiple data types
 pub const common = struct {
     /// Representation of a relying party
@@ -54,6 +56,8 @@ pub const ctap = struct {
         pub const MakeCredential = @import("ctap/request/MakeCredential.zig");
         /// authenticatorGetAssertion request data structure
         pub const GetAssertion = @import("ctap/request/GetAssertion.zig");
+        /// authenticatorClientPin request data structure
+        pub const ClientPin = @import("ctap/request/ClientPin.zig");
     };
 
     /// Response data structures
@@ -62,6 +66,8 @@ pub const ctap = struct {
         pub const MakeCredential = @import("ctap/response/MakeCredential.zig");
         /// authenticatorGetAssertion response data structure
         pub const GetAssertion = @import("ctap/response/GetAssertion.zig");
+        /// authenticatorClientPin response data structure
+        pub const ClientPin = @import("ctap/response/ClientPin.zig");
     };
 
     /// Algorithms and data types for crypto
@@ -98,15 +104,33 @@ pub const ctap = struct {
                 /// Pin Protocol version 2 for FIPS certified authenticators
                 V2 = 2,
             };
+
+            pub const SubCommand = enum(u8) {
+                getPinRetries = 0x01,
+                getKeyAgreement = 0x02,
+                setPIN = 0x03,
+                changePIN = 0x04,
+                getPinToken = 0x05,
+                getPinUvAuthTokenUsingUvWithPermissions = 0x06,
+                getUVRetries = 0x07,
+                getPinUvAuthTokenUsingPinWithPermissions = 0x09,
+            };
         };
 
-        /// The authenticator interface
-        pub const authenticator = struct {};
+        pub fn hash(pin: []const u8) [32]u8 {
+            var ph: [32]u8 = undefined;
+            std.crypto.hash.sha2.Sha256.hash(pin, &ph, .{});
+            return ph;
+        }
+
+        pub const PinUvAuth = @import("ctap/pinuv/PinUvAuth.zig");
 
         /// The platform interface
         pub const platform = struct {};
 
-        test "pinuv tests" {}
+        test "pinuv tests" {
+            _ = PinUvAuth;
+        }
     };
 
     /// Authenticator related data structures
@@ -132,6 +156,8 @@ pub const ctap = struct {
         /// Authenticator commands
         pub const authenticator = struct {
             pub const authenticatorGetInfo = @import("ctap/commands/authenticator/get_info.zig").authenticatorGetInfo;
+            pub const authenticatorMakeCredential = @import("ctap/commands/authenticator/authenticatorMakeCredential.zig").authenticatorMakeCredential;
+            pub const authenticatorClientPin = @import("ctap/commands/authenticator/authenticatorClientPin.zig").authenticatorClientPin;
         };
     };
 
@@ -154,8 +180,10 @@ pub const ctap = struct {
     test "ctap tests" {
         _ = request.MakeCredential; // client -> authenticator
         _ = request.GetAssertion;
+        _ = request.ClientPin;
         _ = response.MakeCredential; // authenticator -> client
         _ = response.GetAssertion;
+        _ = response.ClientPin;
         _ = crypto.dh.ecdh;
         _ = pinuv;
         _ = authenticator.Settings;

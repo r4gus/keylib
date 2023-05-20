@@ -20,7 +20,10 @@ pub fn main() !void {
             .options = .{
                 // This is a platform authenticator even if we use usb for ipc
                 .plat = true,
+                // THe device is capable of accepting a PIN from the client
+                .clientPin = true,
             },
+            .pinUvAuthProtocols = &.{.V2},
             .transports = &.{.usb},
             .algorithms = &.{.{ .alg = .Es256 }},
             .firmwareVersion = 0xcafe,
@@ -29,13 +32,26 @@ pub fn main() !void {
         .callbacks = .{
             .rand = callbacks.rand,
             .millis = callbacks.millis,
-            .load_settings = callbacks.load_settings,
-            .store_settings = callbacks.store_settings,
+            .up = callbacks.up,
+            .load_pin_hash = callbacks.load_pin_hash,
+            .store_pin_hash = callbacks.store_pin_hash,
+            .get_retries = callbacks.get_retries,
+            .set_retries = callbacks.set_retries,
             .load_credential_by_id = callbacks.load_credential_by_id,
             .store_credential_by_id = callbacks.store_credential_by_id,
         },
+        .token = .{
+            .two = fido.ctap.pinuv.PinUvAuth{},
+        },
         .allocator = gpa.allocator(),
     };
+
+    if (authenticator.token.one) |*one| {
+        one.initialize(authenticator.callbacks.rand);
+    }
+    if (authenticator.token.two) |*two| {
+        two.initialize(authenticator.callbacks.rand);
+    }
 
     while (true) {
         const msg = try usb.read();

@@ -38,7 +38,7 @@ maxCredentialIdLength: ?u64 = null,
 /// List of supported transports.
 transports: ?[]const fido.common.AuthenticatorTransports = null,
 /// List of supported algorithms
-algorithms: ?[]const fido.common.PublicKeyCredentialParameters = null,
+algorithms: []const fido.common.PublicKeyCredentialParameters,
 /// The maximum size, in bytes, of the serialized large-blob array that
 /// this authenticator can store. If the authenticatorLargeBlobs command
 /// is supported, this MUST be specified. Otherwise it MUST NOT be. If

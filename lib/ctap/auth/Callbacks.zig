@@ -4,6 +4,7 @@
 //! agnostic.
 
 const std = @import("std");
+const fido = @import("../../main.zig");
 
 pub const LoadError = error{
     DoesNotExist,
@@ -16,14 +17,33 @@ rand: *const fn (b: []u8) void,
 /// Get the time in ms since boot
 millis: *const fn () u64,
 
-/// Load CBOR encoded settings
+/// Request user presence
+up: *const fn (user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) bool,
+
+/// User verification callback
+///
+/// This callback should execute a built-in user verification method.
+///
+/// This callback is optional. Client request with the uv flag set will
+/// fail if this callback isn't provided.
+///
+/// Possible methods are:
+/// - Password
+/// - Finger print sensor
+/// - Pattern
+uv: ?*const fn () bool = null,
+
+/// Load pin hash
 ///
 /// This operation should fail with `DoesNotExist` if there are no settings
 /// stored.
-load_settings: *const fn (a: std.mem.Allocator) LoadError![]const u8,
+load_pin_hash: *const fn () LoadError![32]u8,
 
-/// Store CBOR encoded settings
-store_settings: *const fn (d: []const u8) void,
+/// Store pin hash
+store_pin_hash: *const fn (d: [32]u8) void,
+
+get_retries: *const fn () LoadError!u8,
+set_retries: *const fn (r: u8) void,
 
 /// Load a CBOR encoded credential using the given id
 ///
