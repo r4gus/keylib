@@ -17,12 +17,11 @@ attestation_type: fido.common.AttestationType,
 /// Callbacks provided by the underlying platform
 callbacks: fido.ctap.authenticator.Callbacks,
 
-/// Supported signature algorithms
-algorithms: []const cbor.cose.Algorithm,
+allocator: std.mem.Allocator,
 
-pub fn handle(self: *@This(), command: []const u8, allocator: std.mem.Allocator) Response {
+pub fn handle(self: *@This(), command: []const u8) Response {
     // Buffer for the response message
-    var res = std.ArrayList(u8).init(allocator);
+    var res = std.ArrayList(u8).init(self.allocator);
     var response = res.writer();
     response.writeByte(0x00) catch unreachable;
     errdefer res.deinit();
@@ -41,4 +40,6 @@ pub fn handle(self: *@This(), command: []const u8, allocator: std.mem.Allocator)
         },
         else => return Response{ .err = @enumToInt(StatusCodes.ctap2_err_not_allowed) },
     }
+
+    return Response{ .ok = res.toOwnedSlice() catch unreachable };
 }

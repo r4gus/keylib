@@ -20,7 +20,7 @@ millis: *const fn () u64,
 ///
 /// This operation should fail with `DoesNotExist` if there are no settings
 /// stored.
-load_settings: *const fn (a: std.mem.Allocator) LoadError![]u8,
+load_settings: *const fn (a: std.mem.Allocator) LoadError![]const u8,
 
 /// Store CBOR encoded settings
 store_settings: *const fn (d: []const u8) void,
@@ -29,7 +29,7 @@ store_settings: *const fn (d: []const u8) void,
 ///
 /// This operation should fail with `DoesNotExist` if there is no credential
 /// with the given id.
-load_credential_by_id: *const fn (id: []const u8, a: std.mem.Allocator) LoadError![]u8,
+load_credential_by_id: *const fn (id: []const u8, a: std.mem.Allocator) LoadError![]const u8,
 
 /// Store a CBOR encoded credential using the given id
 ///
@@ -42,7 +42,7 @@ store_credential_by_id: *const fn (id: []const u8, d: []const u8) void,
 ///
 /// This operation should fail with `DoesNotExist` if there is no credential
 /// with the given id.
-load_credential_by_rpid: ?*const fn (rpid: []const u8, a: std.mem.Allocator) LoadError![]u8 = null,
+load_credential_by_rpid: ?*const fn (rpid: []const u8, a: std.mem.Allocator) LoadError![]const u8 = null,
 
 /// Store a CBOR encoded credential using the given rpId
 ///

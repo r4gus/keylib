@@ -121,6 +121,8 @@ pub const ctap = struct {
         pub const Callbacks = @import("ctap/auth/Callbacks.zig");
         /// Authenticator response
         pub const Response = @import("ctap/auth/Response.zig").Response;
+        /// CTAP2 authenticator
+        pub const Authenticator = @import("ctap/auth/Authenticator.zig");
     };
 
     /// CTAP commands
@@ -136,6 +138,19 @@ pub const ctap = struct {
     /// CTAP status codes
     pub const StatusCodes = @import("ctap/StatusCodes.zig").StatusCodes;
 
+    /// Transport specific bindings
+    pub const transports = struct {
+        /// CTAPHID USB bindings
+        pub const ctaphid = struct {
+            /// CTAPHID commands
+            pub const Cmd = @import("ctap/transports/ctaphid/Cmd.zig").Cmd;
+            /// CTAPHID message handling
+            pub const message = @import("ctap/transports/ctaphid/message.zig");
+            /// CTAPHID message handler
+            pub const authenticator = @import("ctap/transports/ctaphid/authenticator.zig");
+        };
+    };
+
     test "ctap tests" {
         _ = request.MakeCredential; // client -> authenticator
         _ = request.GetAssertion;
@@ -147,6 +162,10 @@ pub const ctap = struct {
         _ = authenticator.Options;
         _ = authenticator.Credential;
         _ = authenticator.Callbacks;
+        _ = authenticator.Authenticator;
+        _ = transports.ctaphid.Cmd;
+        _ = transports.ctaphid.message;
+        _ = transports.ctaphid.authenticator;
     }
 };
 

@@ -87,6 +87,7 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
     authenticator.addModule("fido", fido_module);
+    b.installArtifact(authenticator);
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Command Line Tool
