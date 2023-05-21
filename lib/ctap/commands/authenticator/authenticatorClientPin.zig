@@ -90,7 +90,7 @@ pub fn authenticatorClientPin(
             const verified = prot.verify(
                 shared_secret,
                 client_pin_param.newPinEnc.?,
-                &client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+                client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
                 auth.allocator,
             );
             if (!verified) {
@@ -156,7 +156,8 @@ pub fn authenticatorClientPin(
 
             // Verify the data (newPinEnc || pinHashEnc)
             const new_pin_len = client_pin_param.newPinEnc.?.len;
-            var msg = try auth.allocator.alloc(u8, new_pin_len + 32);
+            const pin_hash_enc_len = client_pin_param.pinHashEnc.?.len;
+            var msg = try auth.allocator.alloc(u8, new_pin_len + pin_hash_enc_len);
             defer auth.allocator.free(msg);
             std.mem.copy(u8, msg[0..new_pin_len], client_pin_param.newPinEnc.?[0..]);
             std.mem.copy(u8, msg[new_pin_len..], client_pin_param.pinHashEnc.?[0..]);
@@ -164,7 +165,7 @@ pub fn authenticatorClientPin(
             const verified = prot.verify(
                 shared_secret,
                 msg, // newPinEnc || pinHashEnc
-                &client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+                client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
                 auth.allocator,
             );
             if (!verified) {

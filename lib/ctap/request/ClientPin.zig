@@ -19,13 +19,12 @@ keyAgreement: ?cbor.cose.Key,
 /// pinUvAuth: HMAC-SHA-256 of encrypted contents
 /// using sharedSecret. See Setting a new PIN, Changing existing
 /// PIN and Getting pinToken from the authenticator for more details.
-pinUvAuthParam: ?[Hmac.mac_length]u8,
+pinUvAuthParam: ?[]u8,
 /// newPinEnc: Encrypted new PIN using sharedSecret. Encryption is
 /// done over UTF-8 representation of new PIN.
 newPinEnc: ?[]const u8, // TODO: this should always be 64 bytes
-/// pinHashEnc: Encrypted first 16 bytes of SHA-256 of PIN using
-/// sharedSecret.
-pinHashEnc: ?[32]u8,
+/// pinHashEnc: Encrypted SHA-256 of PIN using sharedSecret.
+pinHashEnc: ?[]u8,
 /// permissions: Bitfield of permissions. If present, MUST NOT be 0.
 permissions: ?u8,
 /// rpId: The RP ID to assign as the permissions RP ID.
@@ -33,6 +32,14 @@ rpId: ?[]const u8,
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     if (self.newPinEnc) |pin| {
+        allocator.free(pin);
+    }
+
+    if (self.pinUvAuthParam) |pin| {
+        allocator.free(pin);
+    }
+
+    if (self.pinHashEnc) |pin| {
         allocator.free(pin);
     }
 
