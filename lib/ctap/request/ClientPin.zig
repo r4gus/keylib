@@ -59,6 +59,23 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
     }, out);
 }
 
+pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+    return try cbor.parse(@This(), item, .{
+        .allocator = options.allocator,
+        .from_cborParse = true, // prevent infinite loops
+        .field_settings = &.{
+            .{ .name = "pinUvAuthProtocol", .alias = "1", .options = .{} },
+            .{ .name = "subCommand", .alias = "2", .options = .{} },
+            .{ .name = "keyAgreement", .alias = "3", .options = .{} },
+            .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
+            .{ .name = "newPinEnc", .alias = "5", .options = .{} },
+            .{ .name = "pinHashEnc", .alias = "6", .options = .{} },
+            .{ .name = "permissions", .alias = "9", .options = .{} },
+            .{ .name = "rpId", .alias = "10", .options = .{} },
+        },
+    });
+}
+
 pub fn mcPermissionSet(self: *const @This()) bool {
     return if (self.permissions) |p| p & 0x01 != 0 else false;
 }

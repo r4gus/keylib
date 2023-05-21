@@ -13,16 +13,6 @@ pub fn authenticatorClientPin(
         try cbor.DataItem.new(command[1..]),
         .{
             .allocator = auth.allocator,
-            .field_settings = &.{
-                .{ .name = "pinUvAuthProtocol", .alias = "1", .options = .{} },
-                .{ .name = "subCommand", .alias = "2", .options = .{} },
-                .{ .name = "keyAgreement", .alias = "3", .options = .{} },
-                .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
-                .{ .name = "newPinEnc", .alias = "5", .options = .{} },
-                .{ .name = "pinHashEnc", .alias = "6", .options = .{} },
-                .{ .name = "permissions", .alias = "9", .options = .{} },
-                .{ .name = "rpId", .alias = "10", .options = .{} },
-            },
         },
     );
     defer client_pin_param.deinit(auth.allocator);
