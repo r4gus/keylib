@@ -8,6 +8,11 @@ pub fn authenticatorClientPin(
     out: anytype,
     command: []const u8,
 ) !fido.ctap.StatusCodes {
+    const retry_state = struct {
+        threadlocal var ctr: u8 = 3;
+        threadlocal var powerCycleState: bool = false;
+    };
+
     const client_pin_param = try cbor.parse(
         fido.ctap.request.ClientPin,
         try cbor.DataItem.new(command[1..]),
@@ -24,7 +29,7 @@ pub fn authenticatorClientPin(
         .getPinRetries => {
             client_pin_response = .{
                 .pinRetries = try auth.callbacks.get_retries(),
-                .powerCycleState = false,
+                .powerCycleState = retry_state.powerCycleState,
             };
         },
         .getKeyAgreement => {
@@ -47,6 +52,10 @@ pub fn authenticatorClientPin(
             };
         },
         .setPIN => {
+            if (retry_state.ctr == 0) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
+            }
+
             if (client_pin_param.pinUvAuthProtocol == null or
                 client_pin_param.keyAgreement == null or
                 client_pin_param.newPinEnc == null or
@@ -118,6 +127,10 @@ pub fn authenticatorClientPin(
             auth.callbacks.storeCurrentStoredPIN(ph);
         },
         .changePIN => {
+            if (retry_state.ctr == 0) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
+            }
+
             // Return error if the authenticator does not receive the
             // mandatory parameters for this command.
             if (client_pin_param.pinUvAuthProtocol == null or
@@ -190,11 +203,14 @@ pub fn authenticatorClientPin(
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
+                if (retry_state.ctr > 0) retry_state.ctr -= 1;
+
                 prot.regenerate(auth.callbacks.rand);
 
                 if (retries == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
-                    // TODO: reset authenticator -> DOOMSDAY
+                } else if (retry_state.ctr == 0) {
+                    return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
                 } else {
                     return fido.ctap.StatusCodes.ctap2_err_pin_invalid;
                 }
@@ -245,6 +261,10 @@ pub fn authenticatorClientPin(
             }
         },
         .getPinUvAuthTokenUsingPinWithPermissions => {
+            if (retry_state.ctr == 0) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
+            }
+
             // Return error if the authenticator does not receive the
             // mandatory parameters for this command.
             if (client_pin_param.pinUvAuthProtocol == null or
@@ -309,11 +329,14 @@ pub fn authenticatorClientPin(
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
+                if (retry_state.ctr > 0) retry_state.ctr -= 1;
+
                 prot.regenerate(auth.callbacks.rand);
 
                 if (retries == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
-                    // TODO: reset authenticator -> DOOMSDAY
+                } else if (retry_state.ctr == 0) {
+                    return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
                 } else {
                     return fido.ctap.StatusCodes.ctap2_err_pin_invalid;
                 }
