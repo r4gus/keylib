@@ -147,7 +147,7 @@ pub fn authenticatorMakeCredential(
                 .V2 => &auth.token.two.?,
             };
 
-            if (!pinuvprot.verify_token(&mcp.clientDataHash, puap)) {
+            if (!pinuvprot.verify_token(&mcp.clientDataHash, &puap, auth.allocator)) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 

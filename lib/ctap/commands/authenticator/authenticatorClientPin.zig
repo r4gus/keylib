@@ -78,15 +78,20 @@ pub fn authenticatorClientPin(
             }
 
             // Obtain the shared secret
-            const shared_secret = prot.ecdh(client_pin_param.keyAgreement.?) catch {
+            const shared_secret = prot.ecdh(
+                client_pin_param.keyAgreement.?,
+                auth.allocator,
+            ) catch {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             };
+            defer auth.allocator.free(shared_secret);
 
             // Verify parameters
-            const verified = fido.ctap.pinuv.PinUvAuth.verify(
-                shared_secret[0..32].*,
+            const verified = prot.verify(
+                shared_secret,
                 client_pin_param.newPinEnc.?,
-                client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+                &client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+                auth.allocator,
             );
             if (!verified) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
@@ -94,7 +99,7 @@ pub fn authenticatorClientPin(
 
             // Decrypt new pin
             var paddedNewPin: [64]u8 = undefined;
-            fido.ctap.pinuv.PinUvAuth.decrypt(
+            prot.decrypt(
                 shared_secret,
                 paddedNewPin[0..],
                 client_pin_param.newPinEnc.?[0..],
@@ -141,9 +146,13 @@ pub fn authenticatorClientPin(
             }
 
             // Obtain the shared secret
-            const shared_secret = prot.ecdh(client_pin_param.keyAgreement.?) catch {
+            const shared_secret = prot.ecdh(
+                client_pin_param.keyAgreement.?,
+                auth.allocator,
+            ) catch {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             };
+            defer auth.allocator.free(shared_secret);
 
             // Verify the data (newPinEnc || pinHashEnc)
             const new_pin_len = client_pin_param.newPinEnc.?.len;
@@ -152,10 +161,11 @@ pub fn authenticatorClientPin(
             std.mem.copy(u8, msg[0..new_pin_len], client_pin_param.newPinEnc.?[0..]);
             std.mem.copy(u8, msg[new_pin_len..], client_pin_param.pinHashEnc.?[0..]);
 
-            const verified = fido.ctap.pinuv.PinUvAuth.verify(
-                shared_secret[0..32].*,
+            const verified = prot.verify(
+                shared_secret,
                 msg, // newPinEnc || pinHashEnc
-                client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+                &client_pin_param.pinUvAuthParam.?, // pinUvAuthParam
+                auth.allocator,
             );
             if (!verified) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
@@ -167,7 +177,7 @@ pub fn authenticatorClientPin(
 
             // Decrypt pinHashEnc and match against stored pinHash
             var pinHash1: [16]u8 = undefined;
-            fido.ctap.pinuv.PinUvAuth.decrypt(
+            prot.decrypt(
                 shared_secret,
                 pinHash1[0..],
                 client_pin_param.pinHashEnc.?[0..],
@@ -195,7 +205,7 @@ pub fn authenticatorClientPin(
 
             // Decrypt new pin
             var paddedNewPin: [64]u8 = undefined;
-            fido.ctap.pinuv.PinUvAuth.decrypt(
+            prot.decrypt(
                 shared_secret,
                 paddedNewPin[0..],
                 client_pin_param.newPinEnc.?[0..],
@@ -274,9 +284,13 @@ pub fn authenticatorClientPin(
             }
 
             // Obtain the shared secret
-            const shared_secret = prot.ecdh(client_pin_param.keyAgreement.?) catch {
+            const shared_secret = prot.ecdh(
+                client_pin_param.keyAgreement.?,
+                auth.allocator,
+            ) catch {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             };
+            defer auth.allocator.free(shared_secret);
 
             // decrement pin retries
             retries = retries - 1;
@@ -284,7 +298,7 @@ pub fn authenticatorClientPin(
 
             // Decrypt pinHashEnc and match against stored pinHash
             var pinHash1: [16]u8 = undefined;
-            fido.ctap.pinuv.PinUvAuth.decrypt(
+            prot.decrypt(
                 shared_secret,
                 pinHash1[0..],
                 client_pin_param.pinHashEnc.?[0..],
@@ -335,10 +349,8 @@ pub fn authenticatorClientPin(
             // The authenticator returns the encrypted pinUvAuthToken for the
             // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
             var enc_shared_secret = auth.allocator.alloc(u8, 48) catch unreachable;
-            var iv: [16]u8 = undefined;
-            auth.callbacks.rand(iv[0..]);
-            fido.ctap.pinuv.PinUvAuth.encrypt(
-                iv,
+            prot.encrypt(
+                prot,
                 shared_secret,
                 enc_shared_secret[0..],
                 prot.pin_token[0..],

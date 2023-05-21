@@ -40,6 +40,30 @@ authenticator_key_agreement_key: ?fido.ctap.crypto.dh.EcdhP256.KeyPair = null,
 /// (AES block length).
 pin_token: [32]u8 = undefined,
 
+rand: *const fn (b: []u8) void,
+// ++++++++++++++++++++++++++++++++++++++++
+// Callbacks that vary from version to version
+// ++++++++++++++++++++++++++++++++++++++++
+
+/// Key derivation function to be used by ECDH
+kdf: *const fn (z: [32]u8, a: std.mem.Allocator) error{AllocationError}![]u8,
+encrypt: *const fn (self: *const @This(), key: []u8, out: []u8, demPlaintext: []const u8) void,
+decrypt: *const fn (key: []u8, out: []u8, demCiphertext: []const u8) void,
+authenticate: *const fn (key: []u8, message: []const u8, a: std.mem.Allocator) error{AllocationError}![]u8,
+verify: *const fn (key: []const u8, message: []const u8, signature: []const u8, a: std.mem.Allocator) bool,
+
+/// Create a new pinUvAuth token version 2 object
+pub fn v2(rand: *const fn (b: []u8) void) @This() {
+    return @This(){
+        .rand = rand,
+        .kdf = kdf_v2,
+        .encrypt = encrypt_v2,
+        .decrypt = decrypt_v2,
+        .authenticate = authenticate_v2,
+        .verify = verify_v2,
+    };
+}
+
 /// This function prepares the pinUvAuthToken for use by the platform, which has
 /// invoked one of the pinUvAuthToken-issuing operations, by setting particular
 /// pinUvAuthToken state variables to given use-case-specific values.
@@ -128,7 +152,11 @@ pub fn getPublicKey(self: *const @This()) cose.Key {
     );
 }
 
-pub fn ecdh(self: *const @This(), peer_cose_key: cose.Key) ![64]u8 {
+pub fn ecdh(
+    self: *const @This(),
+    peer_cose_key: cose.Key,
+    a: std.mem.Allocator,
+) ![]u8 {
     const shared_point = try EcdhP256.scalarmultXY(
         self.authenticator_key_agreement_key.?.secret_key,
         peer_cose_key.P256.x,
@@ -137,9 +165,27 @@ pub fn ecdh(self: *const @This(), peer_cose_key: cose.Key) ![64]u8 {
     // let z be the 32-byte, big-endian encoding of the x-coordinate
     // of the shared point
     const z: [32]u8 = shared_point.toUncompressedSec1()[1..33].*;
+    return try self.kdf(z, a);
+}
 
-    // finalize shared secret
-    var shared: [64]u8 = undefined;
+pub fn verify_token(
+    self: *const @This(),
+    message: []const u8,
+    signature: []const u8,
+    a: std.mem.Allocator,
+) bool {
+    if (!self.in_use) return false;
+    return self.verify(&self.pin_token, message, signature, a);
+}
+
+// ++++++++++++++++++++++++++++++++++++
+// Version 2
+// ++++++++++++++++++++++++++++++++++++
+
+pub fn kdf_v2(z: [32]u8, a: std.mem.Allocator) error{AllocationError}![]u8 {
+    var shared = a.alloc(u8, 64) catch {
+        return error.AllocationError;
+    };
     const salt: [32]u8 = .{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
     const prk = Hkdf.extract(salt[0..], z[0..]);
@@ -149,24 +195,30 @@ pub fn ecdh(self: *const @This(), peer_cose_key: cose.Key) ![64]u8 {
     return shared;
 }
 
-pub fn verify_token(self: *const @This(), message: []const u8, signature: [Hmac.mac_length]u8) bool {
-    if (!self.in_use) return false;
-    return verify(self.pin_token, message, signature);
+pub fn encrypt_v2(
+    self: *const @This(),
+    key: []const u8,
+    out: []u8,
+    demPlaintext: []const u8,
+) void {
+    var iv: [16]u8 = undefined;
+    self.rand(iv[0..]);
+    _encrypt_v2(iv, key, out, demPlaintext);
 }
 
 /// Return the AES-256-CBC encryption of demPlaintext.
 /// The iv must be randomly generated
 /// The result is iv || ct
-pub fn encrypt(
+pub fn _encrypt_v2(
     iv: [16]u8,
-    key: [64]u8,
+    key: []const u8,
     out: []u8,
     demPlaintext: []const u8,
 ) void {
     var _iv: [16]u8 = iv;
     std.mem.copy(u8, out[0..16], _iv[0..]);
 
-    var ctx = Aes256.initEnc(key[32..].*);
+    var ctx = Aes256.initEnc(key[32..64].*);
 
     var i: usize = 0;
     while (i < demPlaintext.len) : (i += 16) {
@@ -188,13 +240,13 @@ pub fn encrypt(
 
 /// Return the AES-256-CBC decryption of demCiphertext.
 /// Expect key to have the form iv || ct
-pub fn decrypt(
-    key: [64]u8,
+pub fn decrypt_v2(
+    key: []const u8,
     out: []u8,
     demCiphertext: []const u8,
 ) void {
     var iv: [16]u8 = demCiphertext[0..16].*;
-    var ctx = Aes256.initDec(key[32..].*);
+    var ctx = Aes256.initDec(key[32..64].*);
 
     var i: usize = 16;
     while (i < demCiphertext.len) : (i += 16) {
@@ -216,16 +268,30 @@ pub fn decrypt(
 }
 
 /// Return the result of computing HMAC-SHA-256 on a 32-byte key and a message.
-pub fn authenticate(key: [32]u8, message: []const u8) [Hmac.mac_length]u8 {
-    var signature: [Hmac.mac_length]u8 = undefined;
-    Hmac.create(&signature, message, key[0..]);
+pub fn authenticate_v2(
+    key: []const u8,
+    message: []const u8,
+    a: std.mem.Allocator,
+) error{AllocationError}![]u8 {
+    var signature = a.alloc(u8, 32) catch {
+        return error.AllocationError;
+    };
+    Hmac.create(signature[0..32], message, key[0..32]);
     return signature;
 }
 
 /// Return true if HMAC(key, message) == signature
 /// If the key is a pinUvAuthToken, it must be IN USE!
-pub fn verify(key: [32]u8, message: []const u8, signature: [Hmac.mac_length]u8) bool {
-    const signature2 = authenticate(key, message);
+pub fn verify_v2(
+    key: []const u8,
+    message: []const u8,
+    signature: []const u8,
+    a: std.mem.Allocator,
+) bool {
+    const signature2 = authenticate_v2(key[0..32], message, a) catch {
+        return false;
+    };
+    defer a.free(signature2);
     return std.mem.eql(u8, signature2[0..], signature[0..]);
 }
 
@@ -235,7 +301,7 @@ test "aes cbc encryption 1" {
     var out: [32]u8 = undefined;
     const in = "abcdefghjklmnopq";
 
-    encrypt(iv, key.*, out[0..], in[0..]);
+    _encrypt_v2(iv, key, out[0..], in[0..]);
 
     try std.testing.expectEqualSlices(u8, iv[0..], out[0..16]);
     try std.testing.expectEqualSlices(u8, "\x2b\x0d\xaf\xde\xc8\xee\x0d\x22\x7d\xe7\x17\x78\xfe\xde\xc5\x31", out[16..]);
@@ -246,7 +312,7 @@ test "aes cbc decryption 1" {
     var out: [16]u8 = undefined;
     const in = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x2b\x0d\xaf\xde\xc8\xee\x0d\x22\x7d\xe7\x17\x78\xfe\xde\xc5\x31";
 
-    decrypt(key.*, out[0..], in[0..]);
+    decrypt_v2(key, out[0..], in[0..]);
 
     try std.testing.expectEqualSlices(u8, "abcdefghjklmnopq", out[0..]);
 }
@@ -257,7 +323,7 @@ test "aes cbc encryption 2" {
     var out: [64]u8 = undefined;
     const in = "\xd2\xcb\xec\x7a\x7e\x0e\x65\x87\x0c\xeb\x7f\x1d\xbb\x98\x4a\x75\xd6\xb2\xce\x33\x2a\xb0\x84\x1b\xa6\xe6\x71\x61\x49\x74\xfd\x65\x08\xf1\xb2\x93\x1a\x25\xeb\xbc\x5b\xe9\xc5\x2c\x27\x92\x32\x99";
 
-    encrypt(iv, key.*, out[0..], in[0..]);
+    _encrypt_v2(iv, key, out[0..], in[0..]);
 
     try std.testing.expectEqualSlices(u8, iv[0..], out[0..16]);
     try std.testing.expectEqualSlices(u8, "\xe1\xec\x5a\x74\x8c\xe3\x32\x5d\x37\x44\x34\x5a\xef\xfa\x93\xd1\xa7\xbb\x19\x00\x08\x6b\x59\xa5\xb4\x7a\x6b\x44\x52\x7a\xb8\xe7\xc3\x62\x4e\xfe\x45\x41\xec\xb0\x5e\xa8\x0f\xa3\xaf\xc8\x06\x1c", out[16..]);
@@ -268,26 +334,30 @@ test "aes cbc decryption 2" {
     var out: [48]u8 = undefined;
     const in = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\xe1\xec\x5a\x74\x8c\xe3\x32\x5d\x37\x44\x34\x5a\xef\xfa\x93\xd1\xa7\xbb\x19\x00\x08\x6b\x59\xa5\xb4\x7a\x6b\x44\x52\x7a\xb8\xe7\xc3\x62\x4e\xfe\x45\x41\xec\xb0\x5e\xa8\x0f\xa3\xaf\xc8\x06\x1c";
 
-    decrypt(key.*, out[0..], in[0..]);
+    decrypt_v2(key, out[0..], in[0..]);
 
     try std.testing.expectEqualSlices(u8, "\xd2\xcb\xec\x7a\x7e\x0e\x65\x87\x0c\xeb\x7f\x1d\xbb\x98\x4a\x75\xd6\xb2\xce\x33\x2a\xb0\x84\x1b\xa6\xe6\x71\x61\x49\x74\xfd\x65\x08\xf1\xb2\x93\x1a\x25\xeb\xbc\x5b\xe9\xc5\x2c\x27\x92\x32\x99", out[0..]);
 }
 
 test "authenticate 1" {
+    var a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
-    const out = authenticate(key.*, "ctap2fido2webauthn");
+    const out = try authenticate_v2(key, "ctap2fido2webauthn", a);
+    defer a.free(out);
 
     try std.testing.expectEqualSlices(u8, "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", out[0..]);
 }
 
 test "verify 1" {
+    var a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
-    const out = verify(key.*, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c".*);
+    const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", a);
     try std.testing.expectEqual(true, out);
 }
 
 test "verify 2" {
+    var a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
-    const out = verify(key.*, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x09\x4e\x4c\xe8\x45\x7c".*);
+    const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x09\x4e\x4c\xe8\x45\x7c", a);
     try std.testing.expectEqual(false, out);
 }

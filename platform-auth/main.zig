@@ -43,7 +43,7 @@ pub fn main() !void {
             .store_credential_by_id = callbacks.store_credential_by_id,
         },
         .token = .{
-            .two = fido.ctap.pinuv.PinUvAuth{},
+            .two = fido.ctap.pinuv.PinUvAuth.v2(callbacks.rand),
         },
         .allocator = gpa.allocator(),
     };
