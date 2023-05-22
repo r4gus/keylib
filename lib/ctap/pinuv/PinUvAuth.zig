@@ -53,6 +53,14 @@ decrypt: *const fn (key: []u8, out: []u8, demCiphertext: []const u8) void,
 authenticate: *const fn (key: []u8, message: []const u8, a: std.mem.Allocator) error{AllocationError}![]u8,
 verify: *const fn (key: []const u8, message: []const u8, signature: []const u8, a: std.mem.Allocator) bool,
 
+/// Associate the given relying party id with the pinUvAuthToken
+/// as permission RP ID
+pub fn setRpId(self: *@This(), id: []const u8) void {
+    const l = if (id.len > 128) 128 else id.len;
+    std.mem.copy(u8, self.rp_id_raw[0..l], id[0..l]);
+    self.rp_id = self.rp_id_raw[0..l];
+}
+
 /// Create a new pinUvAuth token version 1 object
 pub fn v1(rand: *const fn (b: []u8) void) @This() {
     return @This(){

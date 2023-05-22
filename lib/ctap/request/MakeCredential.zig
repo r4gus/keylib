@@ -25,6 +25,7 @@ pubKeyCredParams: []const PublicKeyCredentialParameters,
 /// The authenticator returns an error if the authenticator already contains
 /// one of the credentials enumerated in this sequence.
 excludeList: ?[]const PublicKeyCredentialDescriptor = null,
+extensions: ?fido.ctap.extensions.Extensions = null,
 /// authenticator options: Parameters to influence authenticator operation.
 options: ?AuthenticatorOptions = null,
 /// Result of calling authenticate(pinUvAuthToken, clientDataHash)
@@ -55,6 +56,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
             .{ .name = "user", .alias = "3", .options = .{} },
             .{ .name = "pubKeyCredParams", .alias = "4", .options = .{} },
             .{ .name = "excludeList", .alias = "5", .options = .{} },
+            .{ .name = "extensions", .alias = "6", .options = .{} },
             .{ .name = "options", .alias = "7", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
             .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
@@ -73,6 +75,7 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
             .{ .name = "user", .alias = "3", .options = .{} },
             .{ .name = "pubKeyCredParams", .alias = "4", .options = .{} },
             .{ .name = "excludeList", .alias = "5", .options = .{} },
+            .{ .name = "extensions", .alias = "6", .options = .{} },
             .{ .name = "options", .alias = "7", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
             .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },

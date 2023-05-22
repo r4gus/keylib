@@ -16,7 +16,7 @@ clientDataHash: ClientDataHash, // 2
 /// present and has 1 or more entries, the authenticator MUST only generate
 /// an assertion using one of the denoted credentials.
 allowList: ?[]const fido.common.PublicKeyCredentialDescriptor = null, // 3
-// TODO: add remaining fields (extensions 0x4)
+extensions: ?fido.ctap.extensions.Extensions = null,
 /// Parameters to influence authenticator operation.
 options: ?fido.common.AuthenticatorOptions = null, // 5
 /// Result of calling authenticate(pinUvAuthToken, clientDataHash)

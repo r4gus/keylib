@@ -2,6 +2,7 @@
 //! to a specific relying party.
 
 const cbor = @import("zbor");
+const fido = @import("../../main.zig");
 
 /// The id of the given credential
 id: []const u8,
@@ -12,6 +13,9 @@ id: []const u8,
 /// by the authenticator directly but derived from a
 /// master secret.
 rpId: ?[:0]const u8 = null,
+
+/// Security policy for the credential
+policy: fido.ctap.extensions.CredentialCreationPolicy,
 
 /// The key in CBOR-COSE format
 key: cbor.cose.Key,

@@ -125,9 +125,6 @@ pub const ctap = struct {
 
         pub const PinUvAuth = @import("ctap/pinuv/PinUvAuth.zig");
 
-        /// The platform interface
-        pub const platform = struct {};
-
         test "pinuv tests" {
             _ = PinUvAuth;
         }
@@ -177,6 +174,14 @@ pub const ctap = struct {
         };
     };
 
+    /// CTAP extensions
+    pub const extensions = struct {
+        /// Map of optional extensions
+        pub const Extensions = @import("ctap/extensions/Extensions.zig");
+        /// Protection level for credentials
+        pub const CredentialCreationPolicy = @import("ctap/extensions/CredentialCreationPolicy.zig");
+    };
+
     test "ctap tests" {
         _ = request.MakeCredential; // client -> authenticator
         _ = request.GetAssertion;
@@ -194,6 +199,8 @@ pub const ctap = struct {
         _ = transports.ctaphid.Cmd;
         _ = transports.ctaphid.message;
         _ = transports.ctaphid.authenticator;
+        _ = extensions.CredentialCreationPolicy;
+        _ = extensions.Extensions;
     }
 };
 

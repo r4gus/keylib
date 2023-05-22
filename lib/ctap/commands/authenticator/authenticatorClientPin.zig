@@ -365,9 +365,7 @@ pub fn authenticatorClientPin(
             // If the rpId parameter is present, associate the permissions RP ID
             // with the pinUvAuthToken.
             if (client_pin_param.rpId) |rpId| {
-                const l = if (rpId.len > 64) 64 else rpId.len;
-                std.mem.copy(u8, prot.rp_id_raw[0..l], rpId[0..l]);
-                prot.rp_id = prot.rp_id_raw[0..l];
+                prot.setRpId(rpId);
             }
 
             // The authenticator returns the encrypted pinUvAuthToken for the

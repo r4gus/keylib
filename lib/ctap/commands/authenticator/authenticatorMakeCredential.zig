@@ -37,6 +37,8 @@ pub fn authenticatorMakeCredential(
     // 4. we'll create the response struct later on!
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var uv_response = false;
+    var up_response = false;
+    _ = up_response;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate options
@@ -166,17 +168,29 @@ pub fn authenticatorMakeCredential(
 
             if (!pinuvprot.getUserVerifiedFlagValue()) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+            } else {
+                uv_response = true;
             }
 
-            uv_response = true;
-
-            // TODO: associate the rpId with the token
-
+            // associate the rpId with the token
+            if (pinuvprot.rp_id == null) {
+                pinuvprot.setRpId(mcp.rp.id);
+            }
         } else if (uv) {
             // TODO: performBuiltInUv(internalRetry)
+            return fido.ctap.StatusCodes.ctap2_err_uv_invalid;
         } else {
-            unreachable;
+            // This should be unreachable but we'll return an error
+            // just in case.
+            return fido.ctap.StatusCodes.ctap1_err_other;
         }
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 12. Check exclude list
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    if (mcp.excludeList) |ecllist| {
+        _ = ecllist;
     }
 
     return status;

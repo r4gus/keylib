@@ -40,6 +40,7 @@ signCount: u32,
 /// One could say this is the most important chunk of data because it contains
 /// the credential (public key + cred_id) to be stored by the RP
 attestedCredentialData: ?fido.common.AttestedCredentialData,
+extensions: ?fido.ctap.extensions.Extensions = null,
 
 /// Encode the given AuthenticatorData as byte array
 pub fn encode(self: *const @This(), out: anytype) !void {
