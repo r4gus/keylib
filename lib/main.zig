@@ -179,7 +179,7 @@ pub const ctap = struct {
         /// Map of optional extensions
         pub const Extensions = @import("ctap/extensions/Extensions.zig");
         /// Protection level for credentials
-        pub const CredentialCreationPolicy = @import("ctap/extensions/CredentialCreationPolicy.zig");
+        pub const CredentialCreationPolicy = @import("ctap/extensions/CredentialCreationPolicy.zig").CredentialCreationPolicy;
     };
 
     test "ctap tests" {

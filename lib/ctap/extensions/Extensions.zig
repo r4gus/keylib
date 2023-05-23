@@ -3,7 +3,7 @@ const cbor = @import("zbor");
 
 /// This registration extension allows relying parties to specify a credential
 /// protection policy when creating a credential.
-credProtect: fido.ctap.extensions.CredentialCreationPolicy,
+credProtect: ?fido.ctap.extensions.CredentialCreationPolicy = null,
 
 pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
     return cbor.stringify(self, .{

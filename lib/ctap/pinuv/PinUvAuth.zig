@@ -129,6 +129,14 @@ pub fn clearPinUvAuthTokenPermissionsExceptLbw(self: *@This()) void {
     self.permissions &= 0x10;
 }
 
+pub fn clearUserPresentFlag(self: *@This()) void {
+    self.user_present = false;
+}
+
+pub fn clearUserVerifiedFlag(self: *@This()) void {
+    self.user_verified = false;
+}
+
 pub fn stopUsingPinUvAuthToken(self: *@This()) void {
     self.rp_id = null;
     self.permissions = 0;
@@ -171,6 +179,10 @@ pub fn getPublicKey(self: *const @This()) cose.Key {
         .EcdhEsHkdf256,
         self.authenticator_key_agreement_key.?,
     );
+}
+
+pub fn getUserPresentFlagValue(self: *const @This()) bool {
+    return self.in_use and self.user_present;
 }
 
 pub fn ecdh(

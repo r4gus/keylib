@@ -8,8 +8,6 @@ pub fn authenticatorMakeCredential(
     mcp: *const fido.ctap.request.MakeCredential,
     out: anytype,
 ) !fido.ctap.StatusCodes {
-    _ = out;
-
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -38,26 +36,38 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var uv_response = false;
     var up_response = false;
-    _ = up_response;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate options
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var uv_supported = false;
+    var rk_supported = false;
+
+    if (auth.settings.options) |options| {
+        if (options.uv != null and options.uv.? and auth.callbacks.uv != null) {
+            uv_supported = true;
+        }
+
+        if (options.rk and auth.callbacks.load_resident_key != null and auth.callbacks.store_resident_key != null) {
+            rk_supported = true;
+        }
+    }
+
     var uv: bool = if (mcp.options != null and mcp.options.?.uv != null) mcp.options.?.uv.? else false;
     uv = if (mcp.pinUvAuthParam != null) false else uv;
-    if (uv and auth.callbacks.uv == null) {
+
+    if (uv and !uv_supported) {
         // If the authenticator does not support a built-in user verification
         // method end the operation by returning CTAP2_ERR_INVALID_OPTION
         return fido.ctap.StatusCodes.ctap2_err_invalid_option;
     }
 
     const rk: bool = if (mcp.options != null and mcp.options.?.rk != null) mcp.options.?.rk.? else false;
-    if (auth.settings.options) |options| {
-        if (!options.rk and rk) {
-            // If the rk option ID is not present in authenticatorGetInfo response,
-            // end the operation by returning CTAP2_ERR_UNSUPPORTED_OPTION.
-            return fido.ctap.StatusCodes.ctap2_err_invalid_option;
-        }
+
+    if (rk and !rk_supported) {
+        // If the rk option ID is not present in authenticatorGetInfo response,
+        // end the operation by returning CTAP2_ERR_UNSUPPORTED_OPTION.
+        return fido.ctap.StatusCodes.ctap2_err_invalid_option;
     }
 
     const up: bool = if (mcp.options != null and mcp.options.?.up != null) mcp.options.?.up.? else true;
@@ -190,8 +200,265 @@ pub fn authenticatorMakeCredential(
     // 12. Check exclude list
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (mcp.excludeList) |ecllist| {
-        _ = ecllist;
+        for (ecllist) |ecl| {
+            // Try to load the credential with the given id. If
+            // this fails then just continue with the next possible id.
+            const _cred = auth.callbacks.load_credential_by_id(
+                ecl.id,
+                auth.allocator,
+            ) catch {
+                continue;
+            };
+            defer auth.allocator.free(_cred);
+            var di = cbor.DataItem.new(_cred) catch {
+                continue;
+            };
+            const cred = cbor.parse(
+                fido.ctap.authenticator.Credential,
+                di,
+                .{ .allocator = auth.allocator },
+            ) catch {
+                // TODO: This should not fail but who knows...
+                continue;
+            };
+            cred.deinit(auth.allocator);
+
+            if (cred.policy != .userVerificationRequired) {
+                var userPresentFlagValue = false;
+                if (mcp.pinUvAuthParam) |_| {
+                    var token = switch (mcp.pinUvAuthProtocol.?) {
+                        .V1 => &auth.token.one.?,
+                        .V2 => &auth.token.two.?,
+                    };
+                    userPresentFlagValue = token.getUserPresentFlagValue();
+                } else {
+                    userPresentFlagValue = up_response;
+                }
+
+                if (!userPresentFlagValue) {
+                    _ = auth.callbacks.up(null, null);
+                    return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                } else {
+                    return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                }
+            } else {
+                if (uv_response) {
+                    var userPresentFlagValue = false;
+                    if (mcp.pinUvAuthParam) |_| {
+                        var token = switch (mcp.pinUvAuthProtocol.?) {
+                            .V1 => &auth.token.one.?,
+                            .V2 => &auth.token.two.?,
+                        };
+                        userPresentFlagValue = token.getUserPresentFlagValue();
+                    } else {
+                        userPresentFlagValue = up_response;
+                    }
+
+                    if (!userPresentFlagValue) {
+                        _ = auth.callbacks.up(null, null);
+                        return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                    } else {
+                        return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                    }
+                } else {
+                    // (implying user verification was not collected in Step 11),
+                    // remove the credential from the excludeList and continue parsing
+                    // the rest of the list.
+                    continue;
+                }
+            }
+        }
     }
 
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 13. TODO
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 14. Check user presence
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    if (up) {
+        if (mcp.pinUvAuthParam != null) {
+            var token = switch (mcp.pinUvAuthProtocol.?) {
+                .V1 => &auth.token.one.?,
+                .V2 => &auth.token.two.?,
+            };
+            if (!token.getUserPresentFlagValue()) {
+                if (!auth.callbacks.up(&mcp.user, &mcp.rp)) {
+                    return fido.ctap.StatusCodes.ctap2_err_operation_denied;
+                }
+            }
+        } else {
+            if (!up_response) {
+                if (!auth.callbacks.up(&mcp.user, &mcp.rp)) {
+                    return fido.ctap.StatusCodes.ctap2_err_operation_denied;
+                }
+            }
+        }
+
+        up_response = true;
+
+        if (mcp.pinUvAuthProtocol) |prot| {
+            var token = switch (prot) {
+                .V1 => &auth.token.one.?,
+                .V2 => &auth.token.two.?,
+            };
+            token.clearUserPresentFlag();
+            token.clearUserVerifiedFlag();
+            token.clearPinUvAuthTokenPermissionsExceptLbw();
+        }
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 15. Process extensions
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+
+    // We go with the weakest policy, if one wants to use a higher policy then she can
+    // always provide the `credProtect` extension.
+    var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+    var extensions: ?fido.ctap.extensions.Extensions = null;
+
+    if (mcp.extensions) |ext| {
+        // Set the requested policy
+        if (ext.credProtect) |pol| {
+            policy = pol;
+
+            if (extensions) |*exts| {
+                exts.credProtect = pol;
+            } else {
+                extensions = fido.ctap.extensions.Extensions{
+                    .credProtect = pol,
+                };
+            }
+        }
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 16. Create a new credential
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+
+    const key_pair = switch (alg.?) {
+        .Es256 => blk: {
+            var seed: [32]u8 = undefined;
+            auth.callbacks.rand(&seed);
+            break :blk cbor.cose.Key.es256(seed) catch {
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
+        },
+        else => {
+            return fido.ctap.StatusCodes.ctap2_err_unsupported_algorithm;
+        },
+    };
+    var credential = fido.ctap.authenticator.Credential{
+        .id = undefined,
+        .rpId = mcp.rp.id,
+        .userId = mcp.user.id,
+        .policy = policy,
+        .signCtr = 0,
+        .key = key_pair,
+    };
+    // TODO: verify that the id is unique
+    auth.callbacks.rand(&credential.id);
+    credential.deinit(auth.allocator);
+
+    var serialized_cred = std.ArrayList(u8).init(auth.allocator);
+    cbor.stringify(
+        &credential,
+        .{},
+        serialized_cred.writer(),
+    ) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    defer serialized_cred.deinit();
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 17. + 18. Store credential
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+
+    if (rk) {
+        // We (the authenticator) MUST create a discoverable credential
+        //
+        // NOTE: We've already checked in 5. that the callbacks are provided
+        auth.callbacks.store_resident_key.?(
+            mcp.rp.id,
+            mcp.user.id,
+            serialized_cred.items,
+        ) catch |e| {
+            switch (e) {
+                error.KeyStoreFull => return fido.ctap.StatusCodes.ctap2_err_key_store_full,
+            }
+        };
+    } else {
+        // Create a non-discoverable credential
+        auth.callbacks.store_credential_by_id(
+            &credential.id,
+            serialized_cred.items,
+        );
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 19. Create attestation statement
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var auth_data = fido.common.AuthenticatorData{
+        .rpIdHash = undefined,
+        .flags = .{
+            .up = if (up_response) 1 else 0,
+            .rfu1 = 0,
+            .uv = if (uv_response) 1 else 0,
+            .rfu2 = 0,
+            .at = 1,
+            .ed = 0,
+        },
+        .signCount = credential.signCtr,
+        .attestedCredentialData = .{
+            .aaguid = auth.settings.aaguid,
+            .credential_length = credential.id[0..].len,
+            .credential_id = credential.id[0..],
+            .credential_public_key = credential.key,
+        },
+        .extensions = extensions,
+    };
+    std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
+        mcp.rp.id,
+        &auth_data.rpIdHash,
+        .{},
+    );
+
+    const stmt = switch (auth.attestation_type) {
+        .Self => blk: {
+            var authData = std.ArrayList(u8).init(auth.allocator);
+            defer authData.deinit();
+            try auth_data.encode(authData.writer());
+
+            const sig = credential.key.sign(&.{
+                authData.items,
+                &mcp.clientDataHash,
+            }, auth.allocator) catch unreachable;
+
+            break :blk fido.common.AttestationStatement{ .@"packed" = .{
+                .alg = alg.?,
+                .sig = sig,
+            } };
+        },
+        else => blk: {
+            break :blk fido.common.AttestationStatement{
+                .none = .{},
+            };
+        },
+    };
+
+    const ao = fido.ctap.response.MakeCredential{
+        .fmt = fido.common.AttestationStatementFormatIdentifiers.@"packed",
+        .authData = auth_data,
+        .attStmt = stmt,
+    };
+
+    cbor.stringify(ao, .{ .allocator = auth.allocator }, out) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    // TODO: increase sign counter... maybe a global one?
+
+    status = fido.ctap.StatusCodes.ctap1_err_success;
     return status;
 }

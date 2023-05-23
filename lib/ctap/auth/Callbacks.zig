@@ -11,6 +11,10 @@ pub const LoadError = error{
     NotEnoughMemory,
 };
 
+pub const StoreError = error{
+    KeyStoreFull,
+};
+
 /// Fill the given buffer with (cryptographically secure) random bytes
 rand: *const fn (b: []u8) void,
 
@@ -68,11 +72,11 @@ store_credential_by_id: *const fn (id: []const u8, d: []const u8) void,
 ///
 /// This operation should fail with `DoesNotExist` if there is no credential
 /// with the given id.
-load_credential_by_rpid: ?*const fn (rpid: []const u8, a: std.mem.Allocator) LoadError![]const u8 = null,
+load_resident_key: ?*const fn (rpid: []const u8, userId: []const u8, a: std.mem.Allocator) LoadError![]const u8 = null,
 
 /// Store a CBOR encoded credential using the given rpId
 ///
 /// This callback is optional for discoverable credentials.
 ///
 /// Any existing credential bound to the same rpId should be overwritten.
-store_credential_by_rpid: ?*const fn (rpid: []const u8, d: []const u8) void = null,
+store_resident_key: ?*const fn (rpid: []const u8, userId: []const u8, d: []const u8) StoreError!void = null,
