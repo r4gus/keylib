@@ -7,7 +7,7 @@
 /// is being performed.
 id: []const u8,
 /// Name of the relying party
-name: ?[]const u8,
+name: ?[]const u8 = null,
 
 pub fn deinit(self: *const @This(), allocator: @import("std").mem.Allocator) void {
     allocator.free(self.id);

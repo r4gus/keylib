@@ -76,6 +76,36 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 return Response{ .err = @enumToInt(status) };
             }
         },
+        .authenticatorGetAssertion => {
+            // Parse request
+            var di = cbor.DataItem.new(command[1..]) catch {
+                res.deinit();
+                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_invalid_cbor) };
+            };
+
+            const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
+                .allocator = self.allocator,
+            }) catch {
+                res.deinit();
+                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_invalid_cbor) };
+            };
+            defer gap.deinit(self.allocator);
+
+            // Execute command
+            const status = fido.ctap.commands.authenticator.authenticatorGetAssertion(
+                self,
+                &gap,
+                response,
+            ) catch {
+                res.deinit();
+                return Response{ .err = @enumToInt(StatusCodes.ctap1_err_other) };
+            };
+
+            if (status != .ctap1_err_success) {
+                res.deinit();
+                return Response{ .err = @enumToInt(status) };
+            }
+        },
         .authenticatorGetInfo => {
             fido.ctap.commands.authenticator.authenticatorGetInfo(self.settings, response) catch {
                 res.deinit();
@@ -136,6 +166,40 @@ pub fn getClientPinOption(self: *const @This()) bool {
     return false;
 }
 
+pub fn getUvOption(self: *const @This()) bool {
+    if (self.settings.options) |options| {
+        return if (options.uv) |uv| uv else false;
+    }
+    return false;
+}
+
+pub fn getPinUvAuthTokenOption(self: *const @This()) bool {
+    if (self.settings.options) |options| {
+        return if (options.pinUvAuthToken) |t| t else false;
+    }
+    return false;
+}
+
+pub fn getNoMcGaPermissionsWithClientPinOption(self: *const @This()) bool {
+    if (self.settings.options) |options| {
+        return options.noMcGaPermissionsWithClientPin;
+    }
+    return false;
+}
+
+pub fn getUpOption(self: *const @This()) bool {
+    if (self.settings.options) |options| {
+        return options.up;
+    }
+    return true;
+}
+
 pub fn isProtected(self: *const @This()) bool {
-    return self.callbacks.uv != null or self.token.one != null or self.token.two != null;
+    const uv_support = self.getUvOption() and self.callbacks.uv != null;
+    const token_support = self.getPinUvAuthTokenOption() and (self.token.one != null or self.token.two != null);
+    return uv_support or token_support;
+}
+
+pub fn buildInUvEnabled(self: *const @This()) bool {
+    return self.getUvOption() and self.callbacks.uv != null;
 }

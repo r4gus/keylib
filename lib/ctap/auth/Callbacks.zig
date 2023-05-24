@@ -80,3 +80,6 @@ load_resident_key: ?*const fn (rpid: []const u8, userId: []const u8, a: std.mem.
 ///
 /// Any existing credential bound to the same rpId should be overwritten.
 store_resident_key: ?*const fn (rpid: []const u8, userId: []const u8, d: []const u8) StoreError!void = null,
+
+/// Load all resident keys for the given rpId
+load_resident_keys: ?*const fn (rpid: []const u8, a: std.mem.Allocator) LoadError![]const []const u8 = null,

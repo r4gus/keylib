@@ -352,9 +352,10 @@ pub fn authenticatorMakeCredential(
     var credential = fido.ctap.authenticator.Credential{
         .id = undefined,
         .rpId = mcp.rp.id,
-        .userId = mcp.user.id,
+        .user = mcp.user,
         .policy = policy,
-        .signCtr = 0,
+        .signCtr = 1, // this includes the first signature possibly made below
+        .time_stamp = auth.callbacks.millis(),
         .key = key_pair,
     };
     // TODO: verify that the id is unique
@@ -408,7 +409,7 @@ pub fn authenticatorMakeCredential(
             .at = 1,
             .ed = 0,
         },
-        .signCount = credential.signCtr,
+        .signCount = 0,
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
             .credential_length = credential.id[0..].len,
