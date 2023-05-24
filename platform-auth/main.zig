@@ -22,6 +22,7 @@ pub fn main() !void {
                 .plat = true,
                 // THe device is capable of accepting a PIN from the client
                 .clientPin = true,
+                .pinUvAuthToken = true,
             },
             .pinUvAuthProtocols = &.{.V2},
             .transports = &.{.usb},

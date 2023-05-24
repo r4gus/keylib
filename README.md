@@ -194,6 +194,15 @@ if (response) |*resp| {
 | Es256 (ECDSA-P256-SHA256)  |  ✅  |
 
 
+<details>
+<summary><ins>Capabilities</ins></summary>
+    * If you want to use the `clientPinUv` protocol, make sure to follow these steps:
+        1. In `Settings.options` set `clientPin` and `pinUvAuthToke` both to `true`
+        2. Implement `loadCurrentStoredPIN`, `storeCurrentStoredPIN`, `loadPINCodePointLength` and `storePINCodePointLength`
+        3. Set at least one of the pin protocol versions in `Authenticator.token`, e.g. `.two = fido.ctap.pinuv.PinUvAuth.v2(callbacks.rand)`
+        4. Make sure you call `initialize` after the authenticator instantiation for every pin protocol
+</details>
+
 </details>
 
 <details>

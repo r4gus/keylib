@@ -65,6 +65,8 @@ pub fn load_credential_by_id(id: []const u8, a: std.mem.Allocator) LoadError![]c
 }
 
 pub fn store_credential_by_id(id: []const u8, d: []const u8) void {
-    _ = id;
-    _ = d;
+    std.debug.print("id: {x}, data: {x}\n", .{
+        std.fmt.fmtSliceHexUpper(id),
+        std.fmt.fmtSliceHexUpper(d),
+    });
 }

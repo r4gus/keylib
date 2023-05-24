@@ -10,7 +10,8 @@ pub fn verifyPinUvAuthParam(
     auth: *const fido.ctap.authenticator.Authenticator,
     param: anytype,
 ) fido.ctap.StatusCodes {
-    const pinUvAuthTokenSupport = auth.token.one != null or auth.token.two != null;
+    const token_flag = if (auth.settings.options != null and auth.settings.options.?.pinUvAuthToken != null) auth.settings.options.?.pinUvAuthToken.? else false;
+    const pinUvAuthTokenSupport = token_flag and (auth.token.one != null or auth.token.two != null);
 
     // The authenticator supports pinUvAuthToken but the platform sends
     // a zero length pinUvAuthParam

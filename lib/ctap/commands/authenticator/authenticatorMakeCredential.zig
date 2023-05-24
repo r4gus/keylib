@@ -359,7 +359,6 @@ pub fn authenticatorMakeCredential(
     };
     // TODO: verify that the id is unique
     auth.callbacks.rand(&credential.id);
-    credential.deinit(auth.allocator);
 
     var serialized_cred = std.ArrayList(u8).init(auth.allocator);
     cbor.stringify(
