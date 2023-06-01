@@ -166,6 +166,9 @@ pub fn getClientPinOption(self: *const @This()) bool {
     return false;
 }
 
+/// Get the state of the uv option
+///
+/// Returns false on default
 pub fn getUvOption(self: *const @This()) bool {
     if (self.settings.options) |options| {
         return if (options.uv) |uv| uv else false;
@@ -173,6 +176,9 @@ pub fn getUvOption(self: *const @This()) bool {
     return false;
 }
 
+/// Get the state of the pinUvAuthToken option
+///
+/// Returns false on default
 pub fn getPinUvAuthTokenOption(self: *const @This()) bool {
     if (self.settings.options) |options| {
         return if (options.pinUvAuthToken) |t| t else false;
@@ -180,6 +186,9 @@ pub fn getPinUvAuthTokenOption(self: *const @This()) bool {
     return false;
 }
 
+/// Get the state of the noMcGaPermissionsWithClientPin option
+///
+/// Returns false on default
 pub fn getNoMcGaPermissionsWithClientPinOption(self: *const @This()) bool {
     if (self.settings.options) |options| {
         return options.noMcGaPermissionsWithClientPin;
@@ -187,6 +196,9 @@ pub fn getNoMcGaPermissionsWithClientPinOption(self: *const @This()) bool {
     return false;
 }
 
+/// Get the state of the up option
+///
+/// Returns true on default
 pub fn getUpOption(self: *const @This()) bool {
     if (self.settings.options) |options| {
         return options.up;
@@ -194,12 +206,17 @@ pub fn getUpOption(self: *const @This()) bool {
     return true;
 }
 
+/// Checks weather the authenticator is protected by some form of user verification
 pub fn isProtected(self: *const @This()) bool {
-    const uv_support = self.getUvOption() and self.callbacks.uv != null;
-    const token_support = self.getPinUvAuthTokenOption() and (self.token.one != null or self.token.two != null);
-    return uv_support or token_support;
+    return self.buildInUvEnabled() or self.tokenSupportEnabled();
 }
 
+/// Returns true if build in user verification is enabled
 pub fn buildInUvEnabled(self: *const @This()) bool {
     return self.getUvOption() and self.callbacks.uv != null;
+}
+
+/// Returns true if user verification via pinUvAuth token is enabled
+pub fn tokenSupportEnabled(self: *const @This()) bool {
+    return self.getPinUvAuthTokenOption() and (self.token.one != null or self.token.two != null);
 }
