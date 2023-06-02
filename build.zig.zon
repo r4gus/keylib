@@ -5,7 +5,7 @@
     .dependencies = .{
         .zbor = .{
             .url = "https://github.com/r4gus/zbor/archive/master.tar.gz",
-            .hash = "1220edb22af92f29957623d1163a689c7a7f867cec752fc2707705809cf94fdf13f9",
+            .hash = "12205989ade0a50a7f9641804f6849101a08a68b0589422dde19ef2b2cd3cdad9649",
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",

@@ -13,7 +13,7 @@ To use this library you can either add it directly as a module or use the Zig pa
 
 ### Zig package manager
 
-First add this library as dependency to your build.zig.zon file:
+First add this library as dependency to your build.zig.zon file, e.g.,:
 
 ```zon
 .{
@@ -31,10 +31,8 @@ First add this library as dependency to your build.zig.zon file:
 
 #### Hash
 
-To calculate the hash you can use the following [script](https://github.com/r4gus/zig-package-hash/blob/main/hash.sh).
-
-> Note: The Zig core team might alter the hashing algorithm used, i.e., the script might
-> not always calculate the correct result in the future.
+Currently, the easiest way to get the correct hash value is to flip the last digit and then try to run `zig build`.
+The actual hash will be listed in the error message.
 
 ### As a module
 
@@ -72,41 +70,75 @@ underlying hardware, instead the user of this library is responsible to provide 
 The following steps are required to get started:
 
 1. Add this repository to your project
-2. Implement a basic application that acts as a raw usb hid device (nfc and bluetooth are currently not supported)
-3. Define the following functions (take a look at the example [here](https://github.com/r4gus/candy-stick-nrf/blob/master/src/auth_descriptor.zig)):
-  - `pub fn rand() u32` - Get a 32 bit (true) random number
-  - `pub fn millis() u32` - The time in milliseconds since startup (or something similar)
-  - `pub fn load(allocator: std.mem.Allocator) fido.Resources.LoadError![]u8` - Load data from memory (the first four bytes encode the data length and MUST NOT be returned)
-  - `pub fn store(data: []const u8) void` - Store the given data to memory (the first four bytes encode the length)
-  - `pub fn request_permission(user: ?*const fido.data.User, rp: ?*const fido.data.RelyingParty) bool` - Request permission from the user (e.g., button press)
-4. On startup call `fido.Authenticator.new_default` to instantiate an authenticator
+2. Implement a basic application that acts as a raw usb hid device (nfc and bluetooth are currently not supported, but you could write the transport code yourself)
+3. Define the following callbacks:
+  - `pub fn rand(b: []u8) void` - Fill the given buffer with random bytes 
+  - `pub fn millis() u64` - The time in milliseconds since startup, the epoch time, or something similar
+  - `pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) bool` - Request permission from the user (e.g., button press)
+  - `pub fn uv() bool` - (OPTIONAL): Callback for a built-in user verification method
+  - `pub fn loadCurrentStoredPIN() LoadError![32]u8` - Load the currently stored pin hash (you must take care to store this in a safe way)
+  - `pub fn storeCurrentStoredPIN(d: [32]u8) void` - Store the new pin hash (you must take care to store this in a safe way)
+  - `pub fn loadPINCodePointLength() LoadError!u8` - Load the length of the pin (you must take care to store this in a safe way)
+  - `pub fn storePINCodePointLength(d: u8) void` - Store the new pin length (you must take care to store this in a safe way)
+  - `pub fn get_retries() LoadError!u8` - Load the number of pin retries left (you must take care to store this in a safe way)
+  - `pub fn set_retries(r: u8) void` - Set the number of retries to the given value (you must take care to store this in a safe way)
+  - `pub fn load_credential_by_id(id: []const u8, a: std.mem.Allocator) LoadError![]const u8` - Load the cbor encoded credential with the given id 
+    (you must take care to store this in a safe way)
+  - `pub fn store_credential_by_id(id: []const u8, d: []const u8) void` - Store the given cbor encoded credential with the given id 
+    (you must take care to store this in a safe way)
+4. On startup create a new authenticator instance, defining its capabilities:
 ```zig
-// call this on start up
-auth = fido.Authenticator.new_default(
-    [_]u8{
-        ...      
-    },                                                                          
-    .{                          
-        .rand = Impl.rand,
-        .millis = Impl.millis,
-        .load = Impl.load,     
-        .store = Impl.store,
-        .request_permission = Impl.requestPermission,
+var authenticator = fido.ctap.authenticator.Authenticator{
+    .settings = .{
+        .versions = &.{ .FIDO_2_0, .FIDO_2_1 },
+        .aaguid = "\x7f\x15\x82\x74\xaa\xb6\x44\x3d\x9b\xcf\x8a\x3f\x69\x29\x7c\x88".*,
+        .options = .{
+            // This is a platform authenticator even if we use usb for ipc
+            .plat = true,
+            // THe device is capable of accepting a PIN from the client
+            .clientPin = true,
+        },
+        .pinUvAuthProtocols = &.{.V2},
+        .transports = &.{.usb},
+        .algorithms = &.{.{ .alg = .Es256 }},
+        .firmwareVersion = 0xcafe,
     },
-);
+    .attestation_type = .Self,
+    .callbacks = .{
+        .rand = callbacks.rand,
+        .millis = callbacks.millis,
+        .up = callbacks.up,
+        .loadCurrentStoredPIN = callbacks.loadCurrentStoredPIN,
+        .storeCurrentStoredPIN = callbacks.storeCurrentStoredPIN,
+        .loadPINCodePointLength = callbacks.loadPINCodePointLength,
+        .storePINCodePointLength = callbacks.storePINCodePointLength,
+        .get_retries = callbacks.get_retries,
+        .set_retries = callbacks.set_retries,
+        .load_credential_by_id = callbacks.load_credential_by_id,
+        .store_credential_by_id = callbacks.store_credential_by_id,
+    },
+    .token = .{
+        //.one = fido.ctap.pinuv.PinUvAuth.v1(callbacks.rand),
+        .two = fido.ctap.pinuv.PinUvAuth.v2(callbacks.rand),
+    },
+    .allocator = gpa.allocator(),
+};
+
+// Make sure to call initialize() on every pinUvProtocol you want to use!
+if (authenticator.token.one) |*one| {
+    one.initialize(authenticator.callbacks.rand);
+}
+if (authenticator.token.two) |*two| {
+    two.initialize(authenticator.callbacks.rand);
+}
+
 ```
-6. On receiving a usb packet call `fido.transport_specific_bindings.ctaphid.handle(buffer[0..bufsize], &auth)` where `buffer` contains the raw data and `auth` is the authenticator instance
+6. On receiving a usb packet call `fido.ctap.transports.ctaphid.authenticator.handle(buffer[0..bufsize], &auth)` where `buffer` contains the raw data and `auth` is the authenticator instance
 7. `ctaphid.handle` will either return null (if its still in the process of assembling the request) or an iterator (containing the response). You can call `next()` on the iterator to get the next CTAPHID packet to send to the client.
 ```zig
-// example of sending a CTAPHID response (tinyusb)
-if (response != null) {
-    while (response.?.next()) |r| {
-        while (!tudHidReady()) {
-            tudTask();
-            // wait until ready
-        }
-
-        _ = tudHidReport(0, r);
+if (response) |*resp| {
+    while (resp.next()) |packet| {
+        try usb.write(packet);
     }
 }
 ```
@@ -130,21 +162,46 @@ if (response != null) {
 
 | command           | supported? |
 |:-----------------:|:----------:|
-| `authenticatorMakeCredential`     | ✅ |
-| `authenticatorGetAssertion`       | ✅ |
+| `authenticatorMakeCredential`     | |
+| `authenticatorGetAssertion`       | |
 | `authenticatorGetNextAssertion`   |    |
 | `authenticatorGetInfo`            | ✅ |
 | `authenticatorClientPin`          | ✅ |
-| `authenticatorReset`              | ✅ |
+| `authenticatorReset`              | |
 | `authenticatorBioEnrollment`      |    |
 | `authenticatorCredentialManagement` |    |
 | `authenticatorSelection`          |    |
 | `authenticatorLargeBlobs`         |    |
 | `authenticatorConfig`             |    |
 
-### Crypto
+#### Supported clientPin commands
 
-TODO: rewrite this section
+| sub-command           | supported? |
+|:-----------------:|:----------:|
+| `getPINRetries`     |  ✅  |
+| `getKeyAgreement`     |  ✅  |
+| `setPIN`     |  ✅  |
+| `changePIN`     |  ✅  |
+| `getPinToken`     |  |
+| `getPinUvAuthTokenUsingUvWithPermission`     |  |
+| `getUVRetries`     |  |
+| `getPinUvAuthTokenUsingPinWithPermission`     |  ✅  |
+
+### Supported signature algorithms
+
+| sub-command           | supported? |
+|:-----------------:|:----------:|
+| Es256 (ECDSA-P256-SHA256)  |  ✅  |
+
+
+<details>
+<summary><ins>Capabilities</ins></summary>
+    * If you want to use the `clientPinUv` protocol, make sure to follow these steps:
+        1. In `Settings.options` set `clientPin` and `pinUvAuthToke` both to `true`
+        2. Implement `loadCurrentStoredPIN`, `storeCurrentStoredPIN`, `loadPINCodePointLength` and `storePINCodePointLength`
+        3. Set at least one of the pin protocol versions in `Authenticator.token`, e.g. `.two = fido.ctap.pinuv.PinUvAuth.v2(callbacks.rand)`
+        4. Make sure you call `initialize` after the authenticator instantiation for every pin protocol
+</details>
 
 </details>
 
