@@ -123,6 +123,14 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 return Response{ .err = @enumToInt(status) };
             }
         },
+        .authenticatorSelection => {
+            const status = fido.ctap.commands.authenticator.authenticatorSelection(self);
+
+            if (status != .ctap1_err_success) {
+                res.deinit();
+                return Response{ .err = @enumToInt(status) };
+            }
+        },
         else => {
             res.deinit();
             return Response{ .err = @enumToInt(StatusCodes.ctap2_err_not_allowed) };

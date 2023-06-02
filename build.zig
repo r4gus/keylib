@@ -87,6 +87,7 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
     authenticator.addModule("fido", fido_module);
+    authenticator.addModule("zbor", zbor_module);
     b.installArtifact(authenticator);
 
     // ++++++++++++++++++++++++++++++++++++++++++++

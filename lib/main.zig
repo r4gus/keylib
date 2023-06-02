@@ -156,6 +156,7 @@ pub const ctap = struct {
             pub const authenticatorMakeCredential = @import("ctap/commands/authenticator/authenticatorMakeCredential.zig").authenticatorMakeCredential;
             pub const authenticatorGetAssertion = @import("ctap/commands/authenticator/authenticatorGetAssertion.zig").authenticatorGetAssertion;
             pub const authenticatorClientPin = @import("ctap/commands/authenticator/authenticatorClientPin.zig").authenticatorClientPin;
+            pub const authenticatorSelection = @import("ctap/commands/authenticator/authenticatorSelection.zig").authenticatorSelection;
         };
     };
 
