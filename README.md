@@ -143,7 +143,7 @@ if (response) |*resp| {
 }
 ```
 
-#### Examples
+#### Examples (outdated)
 
 | Platform | Architecture | Link |
 |:--------:|:------------:|:----:|
@@ -162,15 +162,15 @@ if (response) |*resp| {
 
 | command           | supported? |
 |:-----------------:|:----------:|
-| `authenticatorMakeCredential`     | |
-| `authenticatorGetAssertion`       | |
+| `authenticatorMakeCredential`     | ✅ |
+| `authenticatorGetAssertion`       |✅  |
 | `authenticatorGetNextAssertion`   |    |
 | `authenticatorGetInfo`            | ✅ |
 | `authenticatorClientPin`          | ✅ |
 | `authenticatorReset`              | |
 | `authenticatorBioEnrollment`      |    |
 | `authenticatorCredentialManagement` |    |
-| `authenticatorSelection`          |    |
+| `authenticatorSelection`          |  ✅   |
 | `authenticatorLargeBlobs`         |    |
 | `authenticatorConfig`             |    |
 
