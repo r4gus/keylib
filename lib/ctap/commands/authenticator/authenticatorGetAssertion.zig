@@ -60,7 +60,7 @@ pub fn authenticatorGetAssertion(
     std.debug.print("5", .{});
     const alwaysUv = if (auth.settings.options != null and auth.settings.options.?.alwaysUv != null) auth.settings.options.?.alwaysUv.? else false;
 
-    if (alwaysUv and auth.getUpOption()) {
+    if (alwaysUv and up) {
         var skip = false;
 
         if (!auth.isProtected()) {
