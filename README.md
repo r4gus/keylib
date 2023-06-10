@@ -5,7 +5,7 @@
 
 > _Warning_: NOT PRODUCTION READY!
 
-A library wich allows you to implement FIDO2 authenticators and client applications. 
+A library wich allows you to implement FIDO2 authenticators. 
 
 <details>
 <summary><ins>Getting started</ins></summary>
@@ -193,63 +193,27 @@ if (response) |*resp| {
 |:-----------------:|:----------:|
 | Es256 (ECDSA-P256-SHA256)  |  ✅  |
 
+### Linux platform authenticator
 
-<details>
-<summary><ins>Capabilities</ins></summary>
-    * If you want to use the `clientPinUv` protocol, make sure to follow these steps:
-        1. In `Settings.options` set `clientPin` and `pinUvAuthToke` both to `true`
-        2. Implement `loadCurrentStoredPIN`, `storeCurrentStoredPIN`, `loadPINCodePointLength` and `storePINCodePointLength`
-        3. Set at least one of the pin protocol versions in `Authenticator.token`, e.g. `.two = fido.ctap.pinuv.PinUvAuth.v2(callbacks.rand)`
-        4. Make sure you call `initialize` after the authenticator instantiation for every pin protocol
-</details>
+There is a (very incomplete but working) platform authenticator available in `./platform-auth`.
+To set it up you can run the following commands from the command line:
 
-</details>
-
-<details>
-<summary><ins>FIDO2 Client</ins></summary>
-
-The code found in `fido2.client` can be used to implement FIDO2 clients (WIP). The client library
-defines a `Authenticator` struct that represents an abstract authenticator with basic IO operations
-like `open()`, `close()`, `read()` and `write()`. Those operations use a `Transport` (this can be
-anything, e.g., USB, NFC, or IPC via sockets) to communicate with an authenticator. The specific
-transport implementations can be found in `fido2.client.transports` (The plan is to add different
-transports to the library over time but you should be able to implement your own transports if you
-want).
-
-## Usage
-
-The library can be used as follows:
-
-1.  Choose one or more transports from `fido2.client.transports` (e.g., `usb`) and call `enumerate`
-    to get a list of all possible authenticators connected.
-2.  You can open a connection to a specific authenticator by calling `open()` on a `Authenticator`
-    object returned by `enumerate`. This will establish a connection to the specified authenticator
-    (for USB this will allocate a CID automatically).
-3.  After you have successfully established a connection, you can call the commands in `fido2.client.commands`
-    passing the `Authenticator` object (e.g., `authenticatorGetInfo`).
-
-> Note: This is WIP, i.e., the API may change
-
-## Dependencies
-
-If you want to use certain transports please add the following to your build script:
-
-### USB via hidapi
-
-```zig
-// TODO
+1. install udev rules
+```
+zig build install-rule
 ```
 
-</details>
+2. Install a USB gadget. This will emulate a usb device.
+```
+zig build install-gadget
+```
 
-<details>
-<summary><ins>FIDO2 tooling</ins></summary>
-
-This library comes with a (very incomplete) command line tool which lets you interact with
-a fido device connected via usb.
-
-> NOTE: stay tuned for more...
-
+3. Run the authenticator
+```
+zig build
+./zig-out/bin/platauth
+```
+    
 </details>
 
 ## Resources
