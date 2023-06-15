@@ -118,12 +118,20 @@ pub fn authenticatorClientPin(
             const newPin = paddedNewPin[0..pnp_end];
 
             const npl = if (auth.settings.minPINLength) |pl| pl else 4;
-            if (newPin.len < npl) {
+
+            // Count the number of code points. We must then check the required
+            // length of the password against the code point length.
+            const code_points = std.unicode.utf8CountCodepoints(newPin) catch {
+                return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
+            };
+
+            if (code_points < npl) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
             // Store new pin
             const ph = fido.ctap.pinuv.hash(newPin);
+            auth.callbacks.storePINCodePointLength(@intCast(u8, code_points));
             auth.callbacks.storeCurrentStoredPIN(ph);
         },
         .changePIN => {
@@ -232,7 +240,14 @@ pub fn authenticatorClientPin(
             const newPin = paddedNewPin[0..pnp_end];
 
             const npl = if (auth.settings.minPINLength) |pl| pl else 4;
-            if (newPin.len < npl) {
+
+            // Count the number of code points. We must then check the required
+            // length of the password against the code point length.
+            const code_points = std.unicode.utf8CountCodepoints(newPin) catch {
+                return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
+            };
+
+            if (code_points < npl) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
@@ -246,10 +261,8 @@ pub fn authenticatorClientPin(
                 }
             }
 
-            auth.callbacks.storePINCodePointLength(@intCast(u8, pnp_end));
+            auth.callbacks.storePINCodePointLength(@intCast(u8, code_points));
             auth.settings.forcePINChange = false;
-
-            // Store new pin
             auth.callbacks.storeCurrentStoredPIN(ph);
 
             // Invalidate all pinUvAuthTokens
