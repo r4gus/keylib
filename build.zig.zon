@@ -13,7 +13,7 @@
         },
         .clap = .{
             .url = "https://github.com/Hejsil/zig-clap/archive/master.tar.gz",
-            .hash = "12201b9998ae15edcf8f348e69531d650ad4983a94f442d3c228f4171a62e8ec8bf2",
+            .hash = "1220e7a798b05668c6f8d8b86572b9c13ec7232252a3c3a615f64e6f58e6db6515f7",
         },
     },
 }
