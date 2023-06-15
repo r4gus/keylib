@@ -129,6 +129,13 @@ pub fn authenticatorClientPin(
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
+            if (auth.callbacks.validate_pin_constraints) |vpc| {
+                // Check additional PIN constraints
+                if (!vpc(newPin)) {
+                    return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
+                }
+            }
+
             // Store new pin
             const ph = fido.ctap.pinuv.hash(newPin);
             auth.callbacks.storePINCodePointLength(@intCast(u8, code_points));
@@ -257,6 +264,13 @@ pub fn authenticatorClientPin(
             if (auth.settings.forcePINChange) |fpc| {
                 // Hash of new pin must not be the same as the old hash
                 if (fpc and std.mem.eql(u8, pinHash2[0..], &ph)) {
+                    return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
+                }
+            }
+
+            if (auth.callbacks.validate_pin_constraints) |vpc| {
+                // Check additional PIN constraints
+                if (!vpc(newPin)) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
                 }
             }

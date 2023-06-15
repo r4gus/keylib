@@ -66,6 +66,16 @@ load_credential_by_id: *const fn (id: []const u8, a: std.mem.Allocator) LoadErro
 /// This should overwrite any existing credential with the same id
 store_credential_by_id: *const fn (id: []const u8, d: []const u8) void,
 
+// +++++++++++++++++++++++++++++++++++++++
+// Optional
+// +++++++++++++++++++++++++++++++++++++++
+
+/// Callback to add additionla constraints to a PIN.
+///
+/// Those constraints are checked when settings and changing a PIN. Returns true
+/// if all constraints are met, false otherwise.
+validate_pin_constraints: ?*const fn (pin: []const u8) bool = null,
+
 /// Load a CBOR encoded credential using the given rpId
 ///
 /// This callback is optional for discoverable credentials.
