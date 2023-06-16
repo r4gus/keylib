@@ -3,6 +3,7 @@ const fido = @import("fido");
 
 const fs = @import("fs.zig");
 const LoadError = fido.ctap.authenticator.Callbacks.LoadError;
+const UpResult = fido.ctap.authenticator.Callbacks.UpResult;
 
 /// Fill the given buffer with (cryptographically secure) random bytes
 pub fn rand(b: []u8) void {
@@ -14,7 +15,7 @@ pub fn millis() u64 {
     return @intCast(u64, std.time.milliTimestamp());
 }
 
-pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) bool {
+pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
@@ -30,15 +31,15 @@ pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) 
     stdout.print("allow action [Y/n]: ", .{}) catch unreachable;
     if (stdin.readUntilDelimiterOrEof(buf[0..], '\n') catch unreachable) |user_input| {
         if (user_input[0] == 'y' or user_input[0] == 'Y') {
-            return true;
+            return .Accepted;
         } else {
-            return false;
+            return .Denied;
         }
     } else {
-        return false;
+        return .Denied;
     }
 
-    return true;
+    return .Accepted;
 }
 
 pub fn loadCurrentStoredPIN() LoadError![32]u8 {
