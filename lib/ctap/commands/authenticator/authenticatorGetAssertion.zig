@@ -242,19 +242,19 @@ pub fn authenticatorGetAssertion(
                 .V2 => &auth.token.two.?,
             };
             if (!token.getUserPresentFlagValue()) {
-                if (!auth.callbacks.up(
+                if (auth.callbacks.up(
                     null,
                     &fido.common.RelyingParty{ .id = gap.rpId },
-                )) {
+                ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (!auth.callbacks.up(
+                if (auth.callbacks.up(
                     null,
                     &fido.common.RelyingParty{ .id = gap.rpId },
-                )) {
+                ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

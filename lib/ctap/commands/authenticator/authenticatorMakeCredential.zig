@@ -284,13 +284,13 @@ pub fn authenticatorMakeCredential(
                 .V2 => &auth.token.two.?,
             };
             if (!token.getUserPresentFlagValue()) {
-                if (!auth.callbacks.up(&mcp.user, &mcp.rp)) {
+                if (auth.callbacks.up(&mcp.user, &mcp.rp) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (!auth.callbacks.up(&mcp.user, &mcp.rp)) {
+                if (auth.callbacks.up(&mcp.user, &mcp.rp) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

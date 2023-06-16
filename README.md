@@ -221,3 +221,8 @@ zig build
 - [CTAP2](https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-errata-20220621.html#intro) - FIDO Alliance
 - [WebAuthn](https://www.w3.org/TR/webauthn-3/) - W3C
 - [CBOR RFC8949](https://www.rfc-editor.org/rfc/rfc8949.html) - C. Bormann and P. Hoffman
+
+---
+
+- [Passkey test site](https://passkey.org/)
+- [FIDO2 test site](https://webauthn.io/)
