@@ -42,6 +42,7 @@ pub fn main() !void {
             .storePINCodePointLength = callbacks.storePINCodePointLength,
             .get_retries = callbacks.get_retries,
             .set_retries = callbacks.set_retries,
+            .reset = callbacks.reset,
             .load_credential_by_id = callbacks.load_credential_by_id,
             .store_credential_by_id = callbacks.store_credential_by_id,
         },

@@ -85,7 +85,7 @@ store_credential_by_id: *const fn (id: []const u8, d: []const u8) void,
 //// - Resets the serialized large-blob array storage, if any, to the initial serialized large-blob array value
 //// - Disables those features that are denoted as being subject to disablement by authenticatorReset
 //// - Resets those features that are denoted as being subject to reset by authenticatorReset
-//reset: *const fn () void,
+reset: *const fn () void,
 
 // +++++++++++++++++++++++++++++++++++++++
 // Optional

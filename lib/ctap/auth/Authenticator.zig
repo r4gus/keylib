@@ -123,6 +123,26 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 return Response{ .err = @enumToInt(status) };
             }
         },
+        .authenticatorReset => {
+            // TODO: The authenticator instance should have a field that holds a time stamp
+            // marking the point at wich the instance was created. One can then check if
+            // the difference in time is less than 10 s.
+            const up = self.callbacks.up(null, null);
+
+            switch (up) {
+                .Denied => {
+                    res.deinit();
+                    return Response{ .err = @enumToInt(StatusCodes.ctap2_err_operation_denied) };
+                },
+                .Timeout => {
+                    res.deinit();
+                    return Response{ .err = @enumToInt(StatusCodes.ctap2_err_user_action_timeout) };
+                },
+                .Accepted => {},
+            }
+
+            self.callbacks.reset();
+        },
         .authenticatorSelection => {
             const status = fido.ctap.commands.authenticator.authenticatorSelection(self);
 

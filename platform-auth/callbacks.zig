@@ -42,6 +42,8 @@ pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) 
     return .Accepted;
 }
 
+pub fn reset() void {}
+
 pub fn loadCurrentStoredPIN() LoadError![32]u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var allocator = gpa.allocator();

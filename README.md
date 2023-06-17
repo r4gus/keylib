@@ -167,7 +167,7 @@ if (response) |*resp| {
 | `authenticatorGetNextAssertion`   |    |
 | `authenticatorGetInfo`            | ✅ |
 | `authenticatorClientPin`          | ✅ |
-| `authenticatorReset`              | |
+| `authenticatorReset`              | ✅ |
 | `authenticatorBioEnrollment`      |    |
 | `authenticatorCredentialManagement` |    |
 | `authenticatorSelection`          |  ✅   |
