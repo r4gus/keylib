@@ -11,21 +11,18 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("1 and 2", .{});
     var status = helper.verifyPinUvAuthParam(auth, gap);
     if (status != .ctap1_err_success) return status;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 3. we'll create the response struct later on!
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("3", .{});
     var uv_response = false;
     var up_response = false;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 4. Validate options
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("4", .{});
     var uv: bool = false;
     var uv_supported = false;
     var up: bool = true;
@@ -57,7 +54,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate alwaysUv
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("5", .{});
     const alwaysUv = if (auth.settings.options != null and auth.settings.options.?.alwaysUv != null) auth.settings.options.?.alwaysUv.? else false;
 
     if (alwaysUv and up) {
@@ -97,7 +93,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 6. Verify user
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("6", .{});
     if (!auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
             var pinuvprot = switch (gap.pinUvAuthProtocol.?) {
@@ -145,7 +140,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 7. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("7\n", .{});
     var credentials = std.ArrayList(fido.ctap.authenticator.Credential).init(
         auth.allocator,
     );
@@ -157,9 +151,7 @@ pub fn authenticatorGetAssertion(
     }
 
     if (gap.allowList) |allowList| {
-        std.debug.print("allowList\n", .{});
         for (allowList) |desc| {
-            std.debug.print("try load key\n", .{});
             // Try to load credential...
             const cred_cbor = auth.callbacks.load_credential_by_id(
                 desc.id,
@@ -180,11 +172,9 @@ pub fn authenticatorGetAssertion(
                 continue;
             };
 
-            std.debug.print("success\n", .{});
             try credentials.append(cred);
         }
     } else if (auth.callbacks.load_resident_keys != null) {
-        std.debug.print("residentKey\n", .{});
         const resident_keys = try auth.callbacks.load_resident_keys.?(gap.rpId, auth.allocator);
         // TODO: free memory of resident_keys
 
@@ -234,7 +224,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 9. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("9", .{});
     if (up) {
         if (gap.pinUvAuthParam != null) {
             var token = switch (gap.pinUvAuthProtocol.?) {
@@ -276,7 +265,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Process extensions
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("10", .{});
 
     // We go with the weakest policy, if one wants to use a higher policy then she can
     // always provide the `credProtect` extension.
@@ -301,7 +289,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("11 + 12", .{});
     var user: ?fido.common.User = null;
     var cred = if (gap.allowList) |_| blk: {
         break :blk credentials.pop();
@@ -337,7 +324,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("13", .{});
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{

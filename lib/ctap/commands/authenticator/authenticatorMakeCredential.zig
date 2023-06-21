@@ -414,7 +414,7 @@ pub fn authenticatorMakeCredential(
             .aaguid = auth.settings.aaguid,
             .credential_length = credential.id[0..].len,
             .credential_id = credential.id[0..],
-            .credential_public_key = credential.key,
+            .credential_public_key = credential.key.copySecure(),
         },
         .extensions = extensions,
     };
