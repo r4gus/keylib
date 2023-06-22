@@ -238,6 +238,21 @@ zig build
 The reference implementation is currently not designed to be secure, e.g. the file that contains all
 the super important stuff is wirtten in plaintext to the file system. All the stuff here is still
 very experimental!
+
+### Are we yet?
+
+This is all theoretical! At the end it depends on the actual configuration.
+
+#### Are we FIDO\_2\_1 yet?
+
+| requirement           | supported? |
+|:-----------------:|:----------:|
+| MUST support the hmac-secret extension  | |
+| clientPin or uv + resident key  |  ✅  |
+| credMgmt  | |
+| MUST support credProtect extension |  ✅  |
+| pinUvAuthToken  |  ✅  |
+| PIN/UV auth protocol two support |  ✅  |
     
 </details>
 
