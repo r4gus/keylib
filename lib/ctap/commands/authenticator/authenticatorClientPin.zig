@@ -220,7 +220,7 @@ pub fn authenticatorClientPin(
                 // The pin hashes don't match
                 if (retry_state.ctr > 0) retry_state.ctr -= 1;
 
-                prot.regenerate(auth.callbacks.rand);
+                prot.regenerate();
 
                 if (retries == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
@@ -281,10 +281,10 @@ pub fn authenticatorClientPin(
 
             // Invalidate all pinUvAuthTokens
             if (auth.token.one) |*one| {
-                one.resetPinUvAuthToken(auth.callbacks.rand);
+                one.resetPinUvAuthToken();
             }
             if (auth.token.two) |*two| {
-                two.resetPinUvAuthToken(auth.callbacks.rand);
+                two.resetPinUvAuthToken();
             }
         },
         .getPinUvAuthTokenUsingPinWithPermissions => {
@@ -358,7 +358,7 @@ pub fn authenticatorClientPin(
                 // The pin hashes don't match
                 if (retry_state.ctr > 0) retry_state.ctr -= 1;
 
-                prot.regenerate(auth.callbacks.rand);
+                prot.regenerate();
 
                 if (retries == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
@@ -381,7 +381,7 @@ pub fn authenticatorClientPin(
             }
 
             // Create a new pinUvAuthToken
-            prot.resetPinUvAuthToken(auth.callbacks.rand);
+            prot.resetPinUvAuthToken();
 
             // Begin using the pin uv auth token
             prot.beginUsingPinUvAuthToken(false, auth.callbacks.millis());

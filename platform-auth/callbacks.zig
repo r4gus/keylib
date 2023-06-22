@@ -5,11 +5,6 @@ const fs = @import("fs.zig");
 const LoadError = fido.ctap.authenticator.Callbacks.LoadError;
 const UpResult = fido.ctap.authenticator.Callbacks.UpResult;
 
-/// Fill the given buffer with (cryptographically secure) random bytes
-pub fn rand(b: []u8) void {
-    std.crypto.random.bytes(b);
-}
-
 /// Get the epoch time in ms
 pub fn millis() u64 {
     return @intCast(u64, std.time.milliTimestamp());

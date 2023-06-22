@@ -340,7 +340,7 @@ pub fn authenticatorMakeCredential(
     const key_pair = switch (alg.?) {
         .Es256 => blk: {
             var seed: [32]u8 = undefined;
-            auth.callbacks.rand(&seed);
+            auth.callbacks.rand.bytes(&seed);
             break :blk cbor.cose.Key.es256(seed) catch {
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
@@ -359,7 +359,7 @@ pub fn authenticatorMakeCredential(
         .key = key_pair,
     };
     // TODO: verify that the id is unique
-    auth.callbacks.rand(&credential.id);
+    auth.callbacks.rand.bytes(&credential.id);
 
     var serialized_cred = std.ArrayList(u8).init(auth.allocator);
     cbor.stringify(

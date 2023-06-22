@@ -33,7 +33,7 @@ pub fn main() !void {
         },
         .attestation_type = .Self,
         .callbacks = .{
-            .rand = callbacks.rand,
+            .rand = std.crypto.random,
             .millis = callbacks.millis,
             .up = callbacks.up,
             .loadCurrentStoredPIN = callbacks.loadCurrentStoredPIN,
@@ -48,16 +48,16 @@ pub fn main() !void {
         },
         .token = .{
             //.one = fido.ctap.pinuv.PinUvAuth.v1(callbacks.rand),
-            .two = fido.ctap.pinuv.PinUvAuth.v2(callbacks.rand),
+            .two = fido.ctap.pinuv.PinUvAuth.v2(std.crypto.random),
         },
         .allocator = gpa.allocator(),
     };
 
     if (authenticator.token.one) |*one| {
-        one.initialize(authenticator.callbacks.rand);
+        one.initialize();
     }
     if (authenticator.token.two) |*two| {
-        two.initialize(authenticator.callbacks.rand);
+        two.initialize();
     }
 
     while (true) {

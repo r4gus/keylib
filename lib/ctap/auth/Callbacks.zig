@@ -25,8 +25,8 @@ pub const UpResult = enum {
     Timeout,
 };
 
-/// Fill the given buffer with (cryptographically secure) random bytes
-rand: *const fn (b: []u8) void,
+/// Interface for a thread local CSPRNG
+rand: std.rand.Random,
 
 /// Get the time in ms since boot
 millis: *const fn () u64,

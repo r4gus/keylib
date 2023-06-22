@@ -41,7 +41,7 @@ authenticator_key_agreement_key: ?fido.ctap.crypto.dh.EcdhP256.KeyPair = null,
 /// (AES block length).
 pin_token: [32]u8 = undefined,
 
-rand: *const fn (b: []u8) void,
+rand: std.rand.Random,
 // ++++++++++++++++++++++++++++++++++++++++
 // Callbacks that vary from version to version
 // ++++++++++++++++++++++++++++++++++++++++
@@ -62,7 +62,7 @@ pub fn setRpId(self: *@This(), id: []const u8) void {
 }
 
 /// Create a new pinUvAuth token version 1 object
-pub fn v1(rand: *const fn (b: []u8) void) @This() {
+pub fn v1(rand: std.rand.Random) @This() {
     return @This(){
         .rand = rand,
         .kdf = kdf_v1,
@@ -74,7 +74,7 @@ pub fn v1(rand: *const fn (b: []u8) void) @This() {
 }
 
 /// Create a new pinUvAuth token version 2 object
-pub fn v2(rand: *const fn (b: []u8) void) @This() {
+pub fn v2(rand: std.rand.Random) @This() {
     return @This(){
         .rand = rand,
         .kdf = kdf_v2,
@@ -150,23 +150,23 @@ pub fn stopUsingPinUvAuthToken(self: *@This()) void {
     self.used = false;
 }
 
-pub fn initialize(self: *@This(), rand: *const fn ([]u8) void) void {
-    self.regenerate(rand);
-    self.resetPinUvAuthToken(rand);
+pub fn initialize(self: *@This()) void {
+    self.regenerate();
+    self.resetPinUvAuthToken();
 }
 
 /// Generate a fresh, random P-256 private key, x.
-pub fn regenerate(self: *@This(), rand: *const fn ([]u8) void) void {
+pub fn regenerate(self: *@This()) void {
     var seed: [EcdhP256.secret_length]u8 = undefined;
-    rand(seed[0..]);
+    self.rand.bytes(seed[0..]);
 
     self.authenticator_key_agreement_key = EcdhP256.KeyPair.create(seed) catch unreachable;
     self.pin_token = undefined;
 }
 
 /// Generate a fresh 32 bytes pinUvAuthToken.
-pub fn resetPinUvAuthToken(self: *@This(), rand: *const fn ([]u8) void) void {
-    rand(self.pin_token[0..]);
+pub fn resetPinUvAuthToken(self: *@This()) void {
+    self.rand.bytes(self.pin_token[0..]);
 }
 
 pub fn getUserVerifiedFlagValue(self: *@This()) bool {
@@ -317,7 +317,7 @@ pub fn encrypt_v2(
     demPlaintext: []const u8,
 ) void {
     var iv: [16]u8 = undefined;
-    self.rand(iv[0..]);
+    self.rand.bytes(iv[0..]);
     std.mem.copy(u8, out[0..16], iv[0..]);
     _encrypt(iv, key[32..64].*, out[16..], demPlaintext);
 }
