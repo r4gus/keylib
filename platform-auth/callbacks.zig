@@ -139,10 +139,10 @@ pub fn store_credential_by_id(id: []const u8, cred: []const u8) void {
         d.deinit(allocator);
     }
 
-    //std.debug.print("id: {x}, data: {x}\n", .{
-    //    std.fmt.fmtSliceHexUpper(id),
-    //    std.fmt.fmtSliceHexUpper(cred),
-    //});
+    std.debug.print("id: {x}, data: {x}\n", .{
+        std.fmt.fmtSliceHexUpper(id),
+        std.fmt.fmtSliceHexUpper(cred),
+    });
 
     d.set_cred(id, cred, allocator) catch {
         std.debug.print("unable to store credential\n", .{});

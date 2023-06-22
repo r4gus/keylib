@@ -46,6 +46,9 @@ pub fn main() !void {
             .load_credential_by_id = callbacks.load_credential_by_id,
             .store_credential_by_id = callbacks.store_credential_by_id,
         },
+        .algorithms = &.{
+            fido.ctap.crypto.algorithms.Es256,
+        },
         .token = .{
             //.one = fido.ctap.pinuv.PinUvAuth.v1(callbacks.rand),
             .two = fido.ctap.pinuv.PinUvAuth.v2(std.crypto.random),

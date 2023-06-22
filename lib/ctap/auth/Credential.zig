@@ -26,10 +26,16 @@ signCtr: u32,
 /// on the given value (required for resident keys).
 time_stamp: u64,
 
-/// The key in CBOR-COSE format
-key: cbor.cose.Key,
+/// Key material returned from SigAlg.create()
+key: struct {
+    /// Raw key material
+    raw: []const u8,
+    /// Algorithm
+    alg: cbor.cose.Algorithm,
+},
 
 pub fn deinit(self: *const @This(), a: std.mem.Allocator) void {
     a.free(self.rpId);
+    a.free(self.key.raw);
     self.user.deinit(a);
 }

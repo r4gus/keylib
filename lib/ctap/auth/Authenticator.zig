@@ -17,6 +17,11 @@ attestation_type: fido.common.AttestationType,
 /// Callbacks provided by the underlying platform
 callbacks: fido.ctap.authenticator.Callbacks,
 
+/// A list of signature algorithms
+///
+/// This list should match the algorithms defined within the settings.
+algorithms: []const fido.ctap.crypto.SigAlg,
+
 /// Supported pinUvAuth protocols
 token: struct {
     one: ?fido.ctap.pinuv.PinUvAuth = null,

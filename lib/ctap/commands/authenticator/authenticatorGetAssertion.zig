@@ -321,6 +321,19 @@ pub fn authenticatorGetAssertion(
         break :blk _cred;
     };
 
+    // select algorithm based on credential
+    var alg: ?fido.ctap.crypto.SigAlg = null;
+    for (auth.algorithms) |_alg| blk: {
+        if (cred.key.alg == _alg.alg) {
+            alg = _alg;
+            break :blk;
+        }
+    }
+
+    if (alg == null) {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -356,7 +369,11 @@ pub fn authenticatorGetAssertion(
     //                                    |
     //                                    v
     //                           ASSERTION SIGNATURE
-    const sig = try cred.key.sign(&.{ authData.items, &gap.clientDataHash }, auth.allocator);
+    const sig = if (alg.?.sign(
+        cred.key.raw,
+        &.{ authData.items, &gap.clientDataHash },
+        auth.allocator,
+    )) |signature| signature else return fido.ctap.StatusCodes.ctap1_err_other;
     defer auth.allocator.free(sig);
 
     const gar = fido.ctap.response.GetAssertion{

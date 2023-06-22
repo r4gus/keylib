@@ -17,11 +17,11 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 3. Validate pubKeyCredParams
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var alg: ?cbor.cose.Algorithm = null;
+    var alg: ?fido.ctap.crypto.SigAlg = null;
     for (mcp.pubKeyCredParams) |param| outer_alg: {
-        for (auth.settings.algorithms) |algorithm| {
+        for (auth.algorithms) |algorithm| {
             if (param.alg == algorithm.alg) {
-                alg = algorithm.alg;
+                alg = algorithm;
                 break :outer_alg;
             }
         }
@@ -337,18 +337,15 @@ pub fn authenticatorMakeCredential(
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
-    const key_pair = switch (alg.?) {
-        .Es256 => blk: {
-            var seed: [32]u8 = undefined;
-            auth.callbacks.rand.bytes(&seed);
-            break :blk cbor.cose.Key.es256(seed) catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-        },
-        else => {
-            return fido.ctap.StatusCodes.ctap2_err_unsupported_algorithm;
-        },
-    };
+    const key_pair = if (alg.?.create(
+        auth.callbacks.rand,
+        auth.allocator,
+    )) |kp| kp else return fido.ctap.StatusCodes.ctap1_err_other;
+    defer {
+        auth.allocator.free(key_pair.cose_public_key);
+        auth.allocator.free(key_pair.raw_private_key);
+    }
+
     var credential = fido.ctap.authenticator.Credential{
         .id = undefined,
         .rpId = mcp.rp.id,
@@ -356,7 +353,10 @@ pub fn authenticatorMakeCredential(
         .policy = policy,
         .signCtr = 1, // this includes the first signature possibly made below
         .time_stamp = auth.callbacks.millis(),
-        .key = key_pair,
+        .key = .{
+            .raw = key_pair.raw_private_key,
+            .alg = alg.?.alg,
+        },
     };
     // TODO: verify that the id is unique
     auth.callbacks.rand.bytes(&credential.id);
@@ -414,7 +414,7 @@ pub fn authenticatorMakeCredential(
             .aaguid = auth.settings.aaguid,
             .credential_length = credential.id[0..].len,
             .credential_id = credential.id[0..],
-            .credential_public_key = credential.key.copySecure(),
+            .credential_public_key = key_pair.cose_public_key,
         },
         .extensions = extensions,
     };
@@ -430,13 +430,17 @@ pub fn authenticatorMakeCredential(
             defer authData.deinit();
             try auth_data.encode(authData.writer());
 
-            const sig = credential.key.sign(&.{
-                authData.items,
-                &mcp.clientDataHash,
-            }, auth.allocator) catch unreachable;
+            const sig = alg.?.sign(
+                key_pair.raw_private_key,
+                &.{
+                    authData.items,
+                    &mcp.clientDataHash,
+                },
+                auth.allocator,
+            ).?;
 
             break :blk fido.common.AttestationStatement{ .@"packed" = .{
-                .alg = alg.?,
+                .alg = alg.?.alg,
                 .sig = sig,
             } };
         },
@@ -456,8 +460,6 @@ pub fn authenticatorMakeCredential(
     cbor.stringify(ao, .{ .allocator = auth.allocator }, out) catch {
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-
-    // TODO: increase sign counter... maybe a global one?
 
     status = fido.ctap.StatusCodes.ctap1_err_success;
     return status;

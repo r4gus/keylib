@@ -13,7 +13,7 @@ credential_length: u16,
 /// Credential ID
 credential_id: []const u8,
 /// The credential public key encoded in COSE_Key format
-credential_public_key: cbor.cose.Key,
+credential_public_key: []const u8,
 
 /// Encode the given AttestedCredentialData for usage with the AuthenticatorData struct
 pub fn encode(self: *const @This(), out: anytype) !void {
@@ -22,7 +22,7 @@ pub fn encode(self: *const @This(), out: anytype) !void {
     try out.writeByte(@intCast(u8, self.credential_length >> 8));
     try out.writeByte(@intCast(u8, self.credential_length & 0xff));
     try out.writeAll(self.credential_id[0..]);
-    try cbor.stringify(self.credential_public_key, .{ .enum_as_text = false }, out);
+    try out.writeAll(self.credential_public_key[0..]);
 }
 
 test "attestation credential data" {
