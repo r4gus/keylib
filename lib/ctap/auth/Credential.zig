@@ -34,6 +34,12 @@ key: struct {
     alg: cbor.cose.Algorithm,
 },
 
+/// Used for hmac-secret extension
+cred_random: ?struct {
+    CredRandomWithUV: [32]u8,
+    CredRandomWithoutUV: [32]u8,
+} = null,
+
 pub fn deinit(self: *const @This(), a: std.mem.Allocator) void {
     a.free(self.rpId);
     a.free(self.key.raw);

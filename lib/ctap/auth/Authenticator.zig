@@ -253,3 +253,13 @@ pub fn buildInUvEnabled(self: *const @This()) bool {
 pub fn tokenSupportEnabled(self: *const @This()) bool {
     return self.getPinUvAuthTokenOption() and (self.token.one != null or self.token.two != null);
 }
+
+/// Check if the given extension is supported
+pub fn extensionSupported(self: *const @This(), ext: fido.ctap.extensions.Extension) bool {
+    if (self.settings.extensions) |exts| {
+        for (exts) |_ext| {
+            if (_ext == ext) return true;
+        }
+    }
+    return false;
+}

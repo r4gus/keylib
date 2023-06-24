@@ -316,7 +316,19 @@ pub fn authenticatorMakeCredential(
     // We go with the weakest policy, if one wants to use a higher policy then she can
     // always provide the `credProtect` extension.
     var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+    var cred_random: ?struct {
+        CredRandomWithUV: [32]u8,
+        CredRandomWithoutUV: [32]u8,
+    } = null;
     var extensions: ?fido.ctap.extensions.Extensions = null;
+
+    if (auth.extensionSupported(.@"hmac-secret")) {
+        // The authenticator generates two random 32-byte values (called CredRandomWithUV
+        // and CredRandomWithoutUV) and associates them with the credential.
+        cred_random = undefined;
+        auth.callbacks.rand.bytes(cred_random.?.CredRandomWithUV[0..]);
+        auth.callbacks.rand.bytes(cred_random.?.CredRandomWithoutUV[0..]);
+    }
 
     if (mcp.extensions) |ext| {
         // Set the requested policy
@@ -329,6 +341,26 @@ pub fn authenticatorMakeCredential(
                 extensions = fido.ctap.extensions.Extensions{
                     .credProtect = pol,
                 };
+            }
+        }
+
+        // Prepare hmac-secret
+        if (ext.@"hmac-secret") |hsec| {
+            switch (hsec) {
+                .create => |flag| {
+                    // The creation of the two random values will always succeed,
+                    // so we'll always return true.
+                    if (flag) {
+                        if (extensions) |*exts| {
+                            exts.@"hmac-secret" = .{ .create = true };
+                        } else {
+                            extensions = fido.ctap.extensions.Extensions{
+                                .@"hmac-secret" = .{ .create = true },
+                            };
+                        }
+                    }
+                },
+                else => {},
             }
         }
     }
@@ -358,6 +390,11 @@ pub fn authenticatorMakeCredential(
             .alg = alg.?.alg,
         },
     };
+    if (cred_random) |cr| {
+        credential.cred_random = undefined;
+        credential.cred_random.?.CredRandomWithUV = cr.CredRandomWithUV;
+        credential.cred_random.?.CredRandomWithoutUV = cr.CredRandomWithoutUV;
+    }
     // TODO: verify that the id is unique
     auth.callbacks.rand.bytes(&credential.id);
 

@@ -17,7 +17,7 @@ const fido = @import("../../main.zig");
 /// List of supported versions.
 versions: []const fido.common.AuthenticatorVersions,
 /// List of supported extensions.
-extensions: ?[]const []const u8 = null,
+extensions: ?[]const fido.ctap.extensions.Extension = null,
 /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
 /// indicating the type of the authenticator. Authenticators with the
 /// same capabilities and firmware, can share the same AAGUID.
@@ -96,9 +96,6 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     allocator.free(self.versions);
 
     if (self.extensions) |extensions| {
-        for (extensions) |extension| {
-            allocator.free(extension);
-        }
         allocator.free(extensions);
     }
 
