@@ -29,7 +29,7 @@ pub const UpResult = enum {
 rand: std.rand.Random,
 
 /// Get the time in ms since boot
-millis: *const fn () u64,
+millis: *const fn () i64,
 
 /// Request user presence
 up: *const fn (user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult,

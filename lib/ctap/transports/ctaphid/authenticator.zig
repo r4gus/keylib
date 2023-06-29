@@ -157,7 +157,7 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
         // Cid. `null` means not busy.
         var busy: ?Cid = null;
         // Time in ms the initialization packet was received.
-        var begin: ?u64 = null;
+        var begin: ?i64 = null;
         // Command to be executed.
         var cmd: ?Cmd = null;
         // The ammount of expected data bytes (max is: 64 - 7 + 128 * (64 - 5) = 7609).

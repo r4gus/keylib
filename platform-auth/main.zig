@@ -89,7 +89,7 @@ pub fn main() !void {
         .attestation_type = .Self,
         .callbacks = .{
             .rand = std.crypto.random,
-            .millis = callbacks.millis,
+            .millis = std.time.milliTimestamp,
             .up = callbacks.up,
             .loadCurrentStoredPIN = callbacks.loadCurrentStoredPIN,
             .storeCurrentStoredPIN = callbacks.storeCurrentStoredPIN,

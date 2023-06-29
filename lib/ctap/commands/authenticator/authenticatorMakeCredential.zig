@@ -384,7 +384,7 @@ pub fn authenticatorMakeCredential(
         .user = mcp.user,
         .policy = policy,
         .signCtr = 1, // this includes the first signature possibly made below
-        .time_stamp = auth.callbacks.millis(),
+        .time_stamp = @intCast(u64, auth.callbacks.millis()),
         .key = .{
             .raw = key_pair.raw_private_key,
             .alg = alg.?.alg,

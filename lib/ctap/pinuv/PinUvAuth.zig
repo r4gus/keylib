@@ -28,7 +28,7 @@ user_verified: bool = false,
 user_present: bool = false,
 /// The time in ms `beginUsingPinUvAuthToken` was called.
 /// Reference point to check if a time limit has been reached.
-usage_timer: ?u64 = null,
+usage_timer: ?i64 = null,
 /// Token has been used at least once
 used: bool = false,
 pinRetries: u8 = 8,
@@ -88,7 +88,7 @@ pub fn v2(rand: std.rand.Random) @This() {
 /// This function prepares the pinUvAuthToken for use by the platform, which has
 /// invoked one of the pinUvAuthToken-issuing operations, by setting particular
 /// pinUvAuthToken state variables to given use-case-specific values.
-pub fn beginUsingPinUvAuthToken(self: *@This(), user_is_present: bool, start: u64) void {
+pub fn beginUsingPinUvAuthToken(self: *@This(), user_is_present: bool, start: i64) void {
     self.user_present = user_is_present;
     self.user_verified = true;
     self.initial_usage_time_limit = 19000; // 19 s = 19000 ms
@@ -100,7 +100,7 @@ pub fn beginUsingPinUvAuthToken(self: *@This(), user_is_present: bool, start: u6
 }
 
 /// Observes the pinUvAuthToken usage timer and takes appropriate action.
-pub fn pinUvAuthTokenUsageTimerObserver(self: *@This(), time_ms: u64) void {
+pub fn pinUvAuthTokenUsageTimerObserver(self: *@This(), time_ms: i64) void {
     if (self.usage_timer == null) return;
     const delta = time_ms - self.usage_timer.?;
 
