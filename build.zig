@@ -43,6 +43,18 @@ pub fn build(b: *std.build.Builder) !void {
 
     try b.modules.put(b.dupe("fido"), fido_module);
 
+    // Cbor Key Store module
+    // ------------------------------------------------
+
+    const cks_module = b.addModule("cks", .{
+        .source_file = .{ .path = "cks/main.zig" },
+        .dependencies = &.{
+            .{ .name = "zbor", .module = zbor_module },
+        },
+    });
+
+    try b.modules.put(b.dupe("cks"), cks_module);
+
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Platform Authenticator (linux)
     // ++++++++++++++++++++++++++++++++++++++++++++
@@ -133,4 +145,14 @@ pub fn build(b: *std.build.Builder) !void {
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&b.addRunArtifact(lib_tests).step);
+
+    const cks_tests = b.addTest(.{
+        .root_source_file = .{ .path = "cks/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    cks_tests.addModule("zbor", zbor_module);
+
+    const cks_test_step = b.step("test-cks", "Run Cbor Key Store (CKS) library tests");
+    cks_test_step.dependOn(&b.addRunArtifact(cks_tests).step);
 }
