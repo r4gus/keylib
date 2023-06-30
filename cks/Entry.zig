@@ -76,6 +76,24 @@ pub fn getField(self: *@This(), key: []const u8, time: i64) ?[]const u8 {
     return null;
 }
 
+pub fn updateField(self: *@This(), key: []const u8, value: []const u8, time: i64, allocator: std.mem.Allocator) !void {
+    if (self.fields) |fields| {
+        for (fields) |*field| {
+            if (std.mem.eql(u8, field.key, key)) {
+                var mem = try allocator.alloc(u8, value.len);
+                @memcpy(mem, value);
+                const k = field.key;
+                allocator.free(field.value);
+                field.* = .{ .key = k, .value = mem };
+
+                self.times.lastModificationTime = time;
+                return;
+            }
+        }
+    }
+    return error.DoesNotExist;
+}
+
 pub fn removeField(self: *@This(), key: []const u8, time: i64, allocator: std.mem.Allocator) !?Extension {
     if (self.fields) |fields| {
         var i: usize = 0;

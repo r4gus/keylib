@@ -147,14 +147,12 @@ pub const ctap = struct {
         pub const Settings = @import("ctap/auth/Settings.zig");
         /// Authenticator options
         pub const Options = @import("ctap/auth/Options.zig");
-        /// Representation of a credential created by an authenticator
-        pub const Credential = @import("ctap/auth/Credential.zig");
-        /// Callbacks provided by the platform using this library
-        pub const Callbacks = @import("ctap/auth/Callbacks.zig");
         /// Authenticator response
         pub const Response = @import("ctap/auth/Response.zig").Response;
         /// CTAP2 authenticator
         pub const Authenticator = @import("ctap/auth/Authenticator.zig");
+        /// Authenticator callbacks the user must provide
+        pub const Callbacks = @import("ctap/auth/Callbacks.zig");
     };
 
     /// CTAP commands
@@ -216,7 +214,6 @@ pub const ctap = struct {
         _ = pinuv;
         _ = authenticator.Settings;
         _ = authenticator.Options;
-        _ = authenticator.Credential;
         _ = authenticator.Callbacks;
         _ = authenticator.Authenticator;
         _ = transports.ctaphid.Cmd;

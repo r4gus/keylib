@@ -31,18 +31,6 @@ pub fn build(b: *std.build.Builder) !void {
     // Module
     // ++++++++++++++++++++++++++++++++++++++++++++
 
-    // Authenticator Module
-    // ------------------------------------------------
-
-    const fido_module = b.addModule("fido", .{
-        .source_file = .{ .path = "lib/main.zig" },
-        .dependencies = &.{
-            .{ .name = "zbor", .module = zbor_module },
-        },
-    });
-
-    try b.modules.put(b.dupe("fido"), fido_module);
-
     // Cbor Key Store module
     // ------------------------------------------------
 
@@ -54,6 +42,19 @@ pub fn build(b: *std.build.Builder) !void {
     });
 
     try b.modules.put(b.dupe("cks"), cks_module);
+
+    // Authenticator Module
+    // ------------------------------------------------
+
+    const fido_module = b.addModule("fido", .{
+        .source_file = .{ .path = "lib/main.zig" },
+        .dependencies = &.{
+            .{ .name = "zbor", .module = zbor_module },
+            .{ .name = "cks", .module = cks_module },
+        },
+    });
+
+    try b.modules.put(b.dupe("fido"), fido_module);
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Platform Authenticator (linux)
@@ -100,6 +101,7 @@ pub fn build(b: *std.build.Builder) !void {
     });
     authenticator.addModule("fido", fido_module);
     authenticator.addModule("zbor", zbor_module);
+    authenticator.addModule("cks", cks_module);
     authenticator.linkLibC();
     b.installArtifact(authenticator);
 

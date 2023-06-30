@@ -5,6 +5,7 @@
 
 const std = @import("std");
 const fido = @import("../../main.zig");
+const cks = @import("cks");
 
 pub const LoadError = error{
     DoesNotExist,
@@ -47,34 +48,9 @@ up: *const fn (user: ?*const fido.common.User, rp: ?*const fido.common.RelyingPa
 /// - Pattern
 uv: ?*const fn () bool = null,
 
-/// Load the full sha256 pin hash
-///
-/// This operation should fail with `DoesNotExist` if there are no settings
-/// stored.
-loadCurrentStoredPIN: *const fn () LoadError![32]u8,
-
-/// Store the full sha256 pin hash
-storeCurrentStoredPIN: *const fn (d: [32]u8) void,
-
-/// Load the code point length of the password corresponding to the stored pin hash
-loadPINCodePointLength: *const fn () LoadError!u8,
-
-/// Store the code point length of the password corresponding to the stored pin hash
-storePINCodePointLength: *const fn (d: u8) void,
-
-get_retries: *const fn () LoadError!u8,
-set_retries: *const fn (r: u8) void,
-
-/// Load a CBOR encoded credential using the given id
-///
-/// This operation should fail with `DoesNotExist` if there is no credential
-/// with the given id.
-load_credential_by_id: *const fn (id: []const u8, a: std.mem.Allocator) LoadError![]const u8,
-
-/// Store a CBOR encoded credential using the given id
-///
-/// This should overwrite any existing credential with the same id
-store_credential_by_id: *const fn (id: []const u8, d: []const u8) void,
+getEntry: *const fn (id: []const u8) ?*cks.Entry,
+addEntry: *const fn (entry: cks.Entry) cks.Error!void,
+persist: *const fn () error{Fatal}!void,
 
 //// Called on a reset
 ////

@@ -1,6 +1,7 @@
 const std = @import("std");
 const fido = @import("fido");
 const hid = @import("hid.zig");
+const fs = @import("fs.zig");
 
 const uhid = @cImport(
     @cInclude("linux/uhid.h"),
@@ -53,6 +54,16 @@ fn destroy(fd: std.fs.File) !void {
 }
 
 pub fn main() !void {
+    //const stdin = std.io.getStdIn().reader();
+    const stdout = std.io.getStdOut().writer();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var allocator = gpa.allocator();
+
+    const pw = callbacks.password("password");
+    fs.load(allocator, pw.?) catch {
+        try stdout.writeAll("error: unable to open file\n");
+    };
+
     // 1. Open file
     const path = "/dev/uhid";
 
@@ -65,8 +76,6 @@ pub fn main() !void {
     // 2. Create uhid device
     try create(fd);
     defer destroy(fd) catch unreachable;
-
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
     var authenticator = fido.ctap.authenticator.Authenticator{
         .settings = .{
@@ -91,15 +100,10 @@ pub fn main() !void {
             .rand = std.crypto.random,
             .millis = std.time.milliTimestamp,
             .up = callbacks.up,
-            .loadCurrentStoredPIN = callbacks.loadCurrentStoredPIN,
-            .storeCurrentStoredPIN = callbacks.storeCurrentStoredPIN,
-            .loadPINCodePointLength = callbacks.loadPINCodePointLength,
-            .storePINCodePointLength = callbacks.storePINCodePointLength,
-            .get_retries = callbacks.get_retries,
-            .set_retries = callbacks.set_retries,
+            .getEntry = callbacks.getEntry,
+            .addEntry = callbacks.addEntry,
+            .persist = callbacks.persist,
             .reset = callbacks.reset,
-            .load_credential_by_id = callbacks.load_credential_by_id,
-            .store_credential_by_id = callbacks.store_credential_by_id,
         },
         .algorithms = &.{
             fido.ctap.crypto.algorithms.Es256,
@@ -108,7 +112,7 @@ pub fn main() !void {
             //.one = fido.ctap.pinuv.PinUvAuth.v1(callbacks.rand),
             .two = fido.ctap.pinuv.PinUvAuth.v2(std.crypto.random),
         },
-        .allocator = gpa.allocator(),
+        .allocator = allocator,
     };
 
     if (authenticator.token.one) |*one| {

@@ -24,11 +24,14 @@ pub fn authenticatorClientPin(
 
     var client_pin_response: ?fido.ctap.response.ClientPin = null;
 
+    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else return fido.ctap.StatusCodes.ctap1_err_other;
+
     // Handle one of the sub-commands
     switch (client_pin_param.subCommand) {
         .getPinRetries => {
+            var retries = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries else return fido.ctap.StatusCodes.ctap1_err_other;
             client_pin_response = .{
-                .pinRetries = try auth.callbacks.get_retries(),
+                .pinRetries = retries[0],
                 .powerCycleState = retry_state.powerCycleState,
             };
         },
@@ -73,14 +76,7 @@ pub fn authenticatorClientPin(
                 .V2 => &auth.token.two.?,
             };
 
-            var already_set = true;
-            _ = auth.callbacks.loadCurrentStoredPIN() catch |e| {
-                if (e == error.DoesNotExist) {
-                    already_set = false;
-                } else { // unexpected error
-                    return fido.ctap.StatusCodes.ctap1_err_other;
-                }
-            };
+            var already_set = if (settings.getField("Pin", auth.callbacks.millis())) |_| true else false;
 
             if (already_set) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
@@ -121,9 +117,10 @@ pub fn authenticatorClientPin(
 
             // Count the number of code points. We must then check the required
             // length of the password against the code point length.
-            const code_points = std.unicode.utf8CountCodepoints(newPin) catch {
+            const _code_points = std.unicode.utf8CountCodepoints(newPin) catch {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             };
+            const code_points: u8 = @intCast(u8, _code_points);
 
             if (code_points < npl) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
@@ -138,8 +135,9 @@ pub fn authenticatorClientPin(
 
             // Store new pin
             const ph = fido.ctap.pinuv.hash(newPin);
-            auth.callbacks.storePINCodePointLength(@intCast(u8, code_points));
-            auth.callbacks.storeCurrentStoredPIN(ph);
+            try settings.addField(.{ .key = "Pin", .value = &ph }, auth.callbacks.millis(), auth.allocator);
+            try settings.addField(.{ .key = "CodePoints", .value = std.mem.toBytes(code_points)[0..] }, auth.callbacks.millis(), auth.allocator);
+            try auth.callbacks.persist();
         },
         .changePIN => {
             if (retry_state.ctr == 0) {
@@ -168,7 +166,7 @@ pub fn authenticatorClientPin(
             };
 
             // If the pinRetries counter is 0, return error.
-            var retries = try auth.callbacks.get_retries();
+            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else return fido.ctap.StatusCodes.ctap1_err_other;
             if (retries <= 0) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
             }
@@ -202,7 +200,12 @@ pub fn authenticatorClientPin(
 
             // decrement pin retries
             retries = retries - 1;
-            auth.callbacks.set_retries(retries);
+            try settings.updateField(
+                "Retries",
+                &std.mem.toBytes(retries),
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
 
             // Decrypt pinHashEnc and match against stored pinHash
             var pinHash1: [16]u8 = undefined;
@@ -212,9 +215,7 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            const pinHash2 = auth.callbacks.loadCurrentStoredPIN() catch {
-                return fido.ctap.StatusCodes.ctap2_err_pin_not_set;
-            };
+            const pinHash2 = if (settings.getField("Pin", auth.callbacks.millis())) |pin| pin else return fido.ctap.StatusCodes.ctap2_err_pin_not_set;
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
@@ -233,7 +234,12 @@ pub fn authenticatorClientPin(
 
             // Set the pinRetries to maximum
             retries = 8;
-            auth.callbacks.set_retries(retries);
+            try settings.updateField(
+                "Retries",
+                &std.mem.toBytes(retries),
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
 
             // Decrypt new pin
             var paddedNewPin: [64]u8 = undefined;
@@ -250,9 +256,10 @@ pub fn authenticatorClientPin(
 
             // Count the number of code points. We must then check the required
             // length of the password against the code point length.
-            const code_points = std.unicode.utf8CountCodepoints(newPin) catch {
+            const _code_points = std.unicode.utf8CountCodepoints(newPin) catch {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             };
+            const code_points: u8 = @intCast(u8, _code_points);
 
             if (code_points < npl) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
@@ -275,9 +282,21 @@ pub fn authenticatorClientPin(
                 }
             }
 
-            auth.callbacks.storePINCodePointLength(@intCast(u8, code_points));
+            try settings.updateField(
+                "Pin",
+                &ph,
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
+
+            try settings.updateField(
+                "CodePoints",
+                std.mem.toBytes(code_points)[0..],
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
+            try auth.callbacks.persist();
             auth.settings.forcePINChange = false;
-            auth.callbacks.storeCurrentStoredPIN(ph);
 
             // Invalidate all pinUvAuthTokens
             if (auth.token.one) |*one| {
@@ -326,7 +345,7 @@ pub fn authenticatorClientPin(
             }
 
             // Check if the pin is blocked
-            var retries = try auth.callbacks.get_retries();
+            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else return fido.ctap.StatusCodes.ctap1_err_other;
             if (retries == 0) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
             }
@@ -342,7 +361,12 @@ pub fn authenticatorClientPin(
 
             // decrement pin retries
             retries = retries - 1;
-            auth.callbacks.set_retries(retries);
+            try settings.updateField(
+                "Retries",
+                &std.mem.toBytes(retries),
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
 
             // Decrypt pinHashEnc and match against stored pinHash
             var pinHash1: [16]u8 = undefined;
@@ -352,7 +376,7 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            const pinHash2 = try auth.callbacks.loadCurrentStoredPIN();
+            var pinHash2 = if (settings.getField("Pin", auth.callbacks.millis())) |pin| pin else return fido.ctap.StatusCodes.ctap1_err_other;
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
@@ -371,7 +395,13 @@ pub fn authenticatorClientPin(
 
             // Set retry counter to maximum
             retries = 8;
-            auth.callbacks.set_retries(retries);
+            try settings.updateField(
+                "Retries",
+                &std.mem.toBytes(retries),
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
+            try auth.callbacks.persist();
 
             // Check if user is forced to change the pin
             if (auth.settings.forcePINChange) |change| {

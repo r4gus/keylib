@@ -16,4 +16,12 @@ pub const CredentialCreationPolicy = enum(u8) {
     /// This reflects that discovery and usage of the credential MUST be preceded
     /// by some form of user verification.
     userVerificationRequired = 0x03,
+
+    pub fn toString(self: @This()) []const u8 {
+        return switch (self) {
+            .userVerificationOptional => "userVerificationOptional",
+            .userVerificationOptionalWithCredentialIDList => "userVerificationOptionalWithCredentialIDList",
+            .userVerificationRequired => "userVerificationRequired",
+        };
+    }
 };

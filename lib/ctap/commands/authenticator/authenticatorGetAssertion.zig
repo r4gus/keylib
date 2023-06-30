@@ -1,5 +1,6 @@
 const std = @import("std");
 const cbor = @import("zbor");
+const cks = @import("cks");
 const fido = @import("../../../main.zig");
 const helper = @import("helper.zig");
 
@@ -140,70 +141,33 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 7. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var credentials = std.ArrayList(fido.ctap.authenticator.Credential).init(
+    var credentials = std.ArrayList(*cks.Entry).init(
         auth.allocator,
     );
     defer {
-        for (credentials.items) |cred| {
-            cred.deinit(auth.allocator);
-        }
         credentials.deinit();
     }
 
     if (gap.allowList) |allowList| {
         for (allowList) |desc| {
-            // Try to load credential...
-            const cred_cbor = auth.callbacks.load_credential_by_id(
-                desc.id,
-                auth.allocator,
-            ) catch {
-                continue;
-            };
-            defer auth.allocator.free(cred_cbor);
-            var di = cbor.DataItem.new(cred_cbor) catch {
-                continue;
-            };
-            const cred = cbor.parse(
-                fido.ctap.authenticator.Credential,
-                di,
-                .{ .allocator = auth.allocator },
-            ) catch {
-                // TODO: This should not fail but who knows...
-                continue;
-            };
-
-            try credentials.append(cred);
+            var cred = auth.callbacks.getEntry(desc.id);
+            if (cred == null) continue;
+            try credentials.append(cred.?);
         }
     } else if (auth.callbacks.load_resident_keys != null) {
-        const resident_keys = try auth.callbacks.load_resident_keys.?(gap.rpId, auth.allocator);
-        // TODO: free memory of resident_keys
-
-        for (resident_keys) |resident_key| {
-            var di = cbor.DataItem.new(resident_key) catch {
-                continue;
-            };
-            const cred = cbor.parse(
-                fido.ctap.authenticator.Credential,
-                di,
-                .{ .allocator = auth.allocator },
-            ) catch {
-                // TODO: This should not fail but who knows...
-                continue;
-            };
-
-            try credentials.append(cred);
-        }
+        // TODO: load resident keys using the new callbacks
     }
 
     var i: usize = 0;
     while (i < credentials.items.len) : (i += 1) {
+        const policy = credentials.items[i].getField("Policy", auth.callbacks.millis());
+
         // if credential protection for a credential is marked as
         // userVerificationRequired, and the "uv" bit is false in
         // the response, remove that credential from the applicable
         // credentials list
-        if (credentials.items[i].policy == .userVerificationRequired and !uv_response) {
-            const cred = credentials.swapRemove(i);
-            cred.deinit(auth.allocator);
+        if (policy != null and std.mem.eql(u8, fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired.toString(), policy.?) and !uv_response) {
+            _ = credentials.swapRemove(i);
         }
 
         // if credential protection for a credential is marked as
@@ -211,9 +175,8 @@ pub fn authenticatorGetAssertion(
         // is no allowList passed by the client and the "uv" bit is
         // false in the response, remove that credential from the
         // applicable credentials list
-        if (credentials.items[i].policy == .userVerificationOptionalWithCredentialIDList and gap.allowList == null and !uv_response) {
-            const cred = credentials.swapRemove(i);
-            cred.deinit(auth.allocator);
+        if (policy != null and std.mem.eql(u8, fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptionalWithCredentialIDList.toString(), policy.?) and gap.allowList == null and !uv_response) {
+            _ = credentials.swapRemove(i);
         }
     }
 
@@ -300,12 +263,12 @@ pub fn authenticatorGetAssertion(
             // now... but should expand this and adhere to the spec
             var k: usize = 1;
             var j: usize = 0;
-            var max: u64 = credentials.items[0].time_stamp;
+            var max: i64 = credentials.items[0].times.creationTime;
 
             while (k < credentials.items.len) : (k += 1) {
-                if (credentials.items[k].time_stamp > max) {
+                if (credentials.items[k].times.creationTime > max) {
                     j = k;
-                    max = credentials.items[k].time_stamp;
+                    max = credentials.items[k].times.creationTime;
                 }
             }
 
@@ -313,18 +276,23 @@ pub fn authenticatorGetAssertion(
         };
 
         if (uv_response) {
-            // User identifiable information (name, DisplayName, icon)
-            // inside the publicKeyCredentialUserEntity MUST NOT be returned
-            // if user verification is not done by the authenticator
-            user = _cred.user;
+            const user_id = _cred.getField("UserId", auth.callbacks.millis());
+            if (user_id) |uid| {
+                // User identifiable information (name, DisplayName, icon)
+                // inside the publicKeyCredentialUserEntity MUST NOT be returned
+                // if user verification is not done by the authenticator
+                user = .{ .id = uid, .name = null, .displayName = null };
+            }
         }
         break :blk _cred;
     };
 
     // select algorithm based on credential
+    const algorithm = if (cred.getField("Algorithm", auth.callbacks.millis())) |algo| cbor.cose.Algorithm.from_raw(algo[0..4].*) else return fido.ctap.StatusCodes.ctap1_err_other;
+    const private_key = if (cred.getField("PrivateKey", auth.callbacks.millis())) |algo| algo else return fido.ctap.StatusCodes.ctap1_err_other;
     var alg: ?fido.ctap.crypto.SigAlg = null;
     for (auth.algorithms) |_alg| blk: {
-        if (cred.key.alg == _alg.alg) {
+        if (algorithm == _alg.alg) {
             alg = _alg;
             break :blk;
         }
@@ -347,7 +315,7 @@ pub fn authenticatorGetAssertion(
             .at = 0,
             .ed = 0,
         },
-        .signCount = cred.signCtr,
+        .signCount = @intCast(u32, cred.times.usageCount),
         .extensions = extensions,
     };
     std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
@@ -370,7 +338,7 @@ pub fn authenticatorGetAssertion(
     //                                    v
     //                           ASSERTION SIGNATURE
     const sig = if (alg.?.sign(
-        cred.key.raw,
+        private_key,
         &.{ authData.items, &gap.clientDataHash },
         auth.allocator,
     )) |signature| signature else return fido.ctap.StatusCodes.ctap1_err_other;
@@ -379,28 +347,15 @@ pub fn authenticatorGetAssertion(
     const gar = fido.ctap.response.GetAssertion{
         .credential = .{
             .type = .@"public-key",
-            .id = &cred.id,
+            .id = cred.id,
         },
         .authData = authData.items,
         .signature = sig,
         .user = user,
     };
 
-    cred.signCtr += 1;
-
-    var serialized_cred = std.ArrayList(u8).init(auth.allocator);
-    cbor.stringify(
-        &cred,
-        .{},
-        serialized_cred.writer(),
-    ) catch {
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    defer serialized_cred.deinit();
-    auth.callbacks.store_credential_by_id(
-        &cred.id,
-        serialized_cred.items,
-    );
+    cred.times.usageCount += 1;
+    try auth.callbacks.persist();
 
     try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);
 

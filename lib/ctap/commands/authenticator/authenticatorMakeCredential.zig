@@ -1,5 +1,6 @@
 const std = @import("std");
 const cbor = @import("zbor");
+const cks = @import("cks");
 const fido = @import("../../../main.zig");
 const helper = @import("helper.zig");
 
@@ -203,27 +204,12 @@ pub fn authenticatorMakeCredential(
         for (ecllist) |ecl| {
             // Try to load the credential with the given id. If
             // this fails then just continue with the next possible id.
-            const _cred = auth.callbacks.load_credential_by_id(
-                ecl.id,
-                auth.allocator,
-            ) catch {
-                continue;
-            };
-            defer auth.allocator.free(_cred);
-            var di = cbor.DataItem.new(_cred) catch {
-                continue;
-            };
-            const cred = cbor.parse(
-                fido.ctap.authenticator.Credential,
-                di,
-                .{ .allocator = auth.allocator },
-            ) catch {
-                // TODO: This should not fail but who knows...
-                continue;
-            };
-            cred.deinit(auth.allocator);
+            var entry = auth.callbacks.getEntry(ecl.id[0..]);
+            if (entry == null) continue;
 
-            if (cred.policy != .userVerificationRequired) {
+            const cred_policy = entry.?.getField("Policy", auth.callbacks.millis());
+
+            if (cred_policy != null and !std.mem.eql(u8, fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired.toString(), cred_policy.?)) {
                 var userPresentFlagValue = false;
                 if (mcp.pinUvAuthParam) |_| {
                     var token = switch (mcp.pinUvAuthProtocol.?) {
@@ -312,28 +298,45 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 15. Process extensions
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var id = try auth.allocator.alloc(u8, 32);
+    auth.callbacks.rand.bytes(id);
+    var entry = cks.Entry.new(id, auth.callbacks.millis());
 
     // We go with the weakest policy, if one wants to use a higher policy then she can
     // always provide the `credProtect` extension.
-    var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
-    var cred_random: ?struct {
-        CredRandomWithUV: [32]u8,
-        CredRandomWithoutUV: [32]u8,
-    } = null;
+    //var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+    //var cred_random: ?struct {
+    //    CredRandomWithUV: [32]u8,
+    //    CredRandomWithoutUV: [32]u8,
+    //} = null;
     var extensions: ?fido.ctap.extensions.Extensions = null;
 
     if (auth.extensionSupported(.@"hmac-secret")) {
         // The authenticator generates two random 32-byte values (called CredRandomWithUV
         // and CredRandomWithoutUV) and associates them with the credential.
-        cred_random = undefined;
-        auth.callbacks.rand.bytes(cred_random.?.CredRandomWithUV[0..]);
-        auth.callbacks.rand.bytes(cred_random.?.CredRandomWithoutUV[0..]);
+        var random_mem: [32]u8 = undefined;
+        auth.callbacks.rand.bytes(random_mem[0..]);
+        try entry.addField(
+            .{ .key = "CredRandomWithUV", .value = random_mem[0..] },
+            auth.callbacks.millis(),
+            auth.allocator,
+        );
+        auth.callbacks.rand.bytes(random_mem[0..]);
+        try entry.addField(
+            .{ .key = "CredRandomWithoutUV", .value = random_mem[0..] },
+            auth.callbacks.millis(),
+            auth.allocator,
+        );
     }
 
     if (mcp.extensions) |ext| {
         // Set the requested policy
         if (ext.credProtect) |pol| {
-            policy = pol;
+            try entry.addField(
+                .{ .key = "Policy", .value = pol.toString() },
+                auth.callbacks.millis(),
+                auth.allocator,
+            );
 
             if (extensions) |*exts| {
                 exts.credProtect = pol;
@@ -378,60 +381,51 @@ pub fn authenticatorMakeCredential(
         auth.allocator.free(key_pair.raw_private_key);
     }
 
-    var credential = fido.ctap.authenticator.Credential{
-        .id = undefined,
-        .rpId = mcp.rp.id,
-        .user = mcp.user,
-        .policy = policy,
-        .signCtr = 1, // this includes the first signature possibly made below
-        .time_stamp = @intCast(u64, auth.callbacks.millis()),
-        .key = .{
-            .raw = key_pair.raw_private_key,
-            .alg = alg.?.alg,
-        },
-    };
-    if (cred_random) |cr| {
-        credential.cred_random = undefined;
-        credential.cred_random.?.CredRandomWithUV = cr.CredRandomWithUV;
-        credential.cred_random.?.CredRandomWithoutUV = cr.CredRandomWithoutUV;
-    }
-    // TODO: verify that the id is unique
-    auth.callbacks.rand.bytes(&credential.id);
+    try entry.addField(
+        .{ .key = "RpId", .value = mcp.rp.id },
+        auth.callbacks.millis(),
+        auth.allocator,
+    );
 
-    var serialized_cred = std.ArrayList(u8).init(auth.allocator);
-    cbor.stringify(
-        &credential,
-        .{},
-        serialized_cred.writer(),
-    ) catch {
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    defer serialized_cred.deinit();
+    try entry.addField(
+        .{ .key = "UserId", .value = mcp.user.id },
+        auth.callbacks.millis(),
+        auth.allocator,
+    );
+
+    entry.times.usageCount = 1; // This includes the first signature possibly made below
+
+    try entry.addField(
+        .{ .key = "PrivateKey", .value = key_pair.raw_private_key },
+        auth.callbacks.millis(),
+        auth.allocator,
+    );
+
+    try entry.addField(
+        .{ .key = "Algorithm", .value = &alg.?.alg.to_raw() },
+        auth.callbacks.millis(),
+        auth.allocator,
+    );
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 17. + 18. Store credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
     if (rk) {
-        // We (the authenticator) MUST create a discoverable credential
-        //
-        // NOTE: We've already checked in 5. that the callbacks are provided
-        auth.callbacks.store_resident_key.?(
-            mcp.rp.id,
-            mcp.user.id,
-            serialized_cred.items,
-        ) catch |e| {
-            switch (e) {
-                error.KeyStoreFull => return fido.ctap.StatusCodes.ctap2_err_key_store_full,
-            }
+        auth.callbacks.addEntry(entry) catch {
+            return fido.ctap.StatusCodes.ctap2_err_key_store_full;
         };
     } else {
-        // Create a non-discoverable credential
-        auth.callbacks.store_credential_by_id(
-            &credential.id,
-            serialized_cred.items,
-        );
+        // TODO: At the moment there is no difference between discoverable
+        // and non discoverable credentials, i.e. we assume "unlimited" memory.
+        // This is pretty bad for hardware authenticator implementations
+        // but it makes things a little bit simpler for now and the current
+        // focus is more on platform authenticators.
+        auth.callbacks.addEntry(entry) catch {
+            return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+        };
     }
+    try auth.callbacks.persist();
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 19. Create attestation statement
@@ -449,8 +443,8 @@ pub fn authenticatorMakeCredential(
         .signCount = 0,
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
-            .credential_length = credential.id[0..].len,
-            .credential_id = credential.id[0..],
+            .credential_length = @intCast(u16, id[0..].len),
+            .credential_id = id[0..],
             .credential_public_key = key_pair.cose_public_key,
         },
         .extensions = extensions,

@@ -14,6 +14,12 @@ pub const Entry = @import("Entry.zig");
 // DATA
 // TAG
 
+pub const Error = error{
+    OutOfMemory,
+    DoesNotExist,
+    DoesExist,
+};
+
 /// Cbor Key Store
 pub const CKS = struct {
     /// Header with information about the file and how to decrypt it
@@ -33,7 +39,7 @@ pub const CKS = struct {
         self.data.deinit(self.allocator);
     }
 
-    pub fn addEntry(self: *@This(), entry: Entry) !void {
+    pub fn addEntry(self: *@This(), entry: Entry) Error!void {
         try self.data.addEntry(entry, self.time(), self.allocator);
     }
 
@@ -41,7 +47,7 @@ pub const CKS = struct {
         return self.data.getEntry(id, self.time());
     }
 
-    pub fn removeEntry(self: *@This(), id: []const u8) !?Entry {
+    pub fn removeEntry(self: *@This(), id: []const u8) Error!?Entry {
         return self.data.removeEntry(id, self.time(), self.allocator);
     }
 
