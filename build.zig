@@ -14,18 +14,18 @@ pub fn build(b: *std.build.Builder) !void {
     });
     const zbor_module = zbor_dep.module("zbor");
 
-    const hidapi_dep = b.dependency("hidapi", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    _ = hidapi_dep;
+    //const hidapi_dep = b.dependency("hidapi", .{
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //_ = hidapi_dep;
 
-    const clap_dep = b.dependency("clap", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    const clap_module = clap_dep.module("clap");
-    _ = clap_module;
+    //const clap_dep = b.dependency("clap", .{
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //const clap_module = clap_dep.module("clap");
+    //_ = clap_module;
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
@@ -59,39 +59,6 @@ pub fn build(b: *std.build.Builder) !void {
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Platform Authenticator (linux)
     // ++++++++++++++++++++++++++++++++++++++++++++
-
-    const LINUX_DIR = "platform-auth/linux/";
-
-    const install_udev_rule = b.addSystemCommand(&[_][]const u8{
-        "sudo", "cp", LINUX_DIR ++ "70-fido-access.rules", "/etc/udev/rules.d/",
-    });
-
-    const reload_rules = b.addSystemCommand(&[_][]const u8{
-        "sudo", "udevadm", "control", "--reload-rules",
-    });
-    reload_rules.step.dependOn(&install_udev_rule.step);
-
-    const trigger_rules = b.addSystemCommand(&[_][]const u8{
-        "sudo", "udevadm", "trigger",
-    });
-    trigger_rules.step.dependOn(&reload_rules.step);
-
-    const install_udev_rule_step = b.step("install-rule", "Install udev rule for usb gadget");
-    install_udev_rule_step.dependOn(&trigger_rules.step);
-
-    const install_usb_gadget = b.addSystemCommand(&[_][]const u8{
-        "sudo", "make", "-C", LINUX_DIR, "install",
-    });
-
-    const install_usb_gadget_step = b.step("install-gadget", "Install usb gadget required for platform authenticator");
-    install_usb_gadget_step.dependOn(&install_usb_gadget.step);
-
-    const uninstall_usb_gadget = b.addSystemCommand(&[_][]const u8{
-        "sudo", "make", "-C", LINUX_DIR, "uninstall",
-    });
-
-    const uninstall_usb_gadget_step = b.step("uninstall-gadget", "Uninstall usb gadget");
-    uninstall_usb_gadget_step.dependOn(&uninstall_usb_gadget.step);
 
     const authenticator = b.addExecutable(.{
         .name = "platauth",

@@ -133,7 +133,7 @@ pub const InitResponse = packed struct {
         slice[MJDOFF] = self.major_device_version_number;
         slice[MIDOFF] = self.minor_device_version_number;
         slice[BDOFF] = self.build_device_version_number;
-        slice[FOFF] = (@intCast(u8, @boolToInt(self.nmsg)) << 3) + (@intCast(u8, @boolToInt(self.cbor)) << 2) + (@intCast(u8, @boolToInt(self.wink)));
+        slice[FOFF] = (@as(u8, @intCast(@intFromBool(self.nmsg))) << 3) + (@as(u8, @intCast(@intFromBool(self.cbor))) << 2) + (@as(u8, @intCast(@intFromBool(self.wink))));
     }
 
     const NOFF: usize = 0;
@@ -221,12 +221,12 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
             return S.@"error"(ErrorCodes.invalid_channel);
         }
 
-        S.cmd = @intToEnum(Cmd, packet[4] & 0x7f);
+        S.cmd = @as(Cmd, @enumFromInt(packet[4] & 0x7f));
         S.bcnt_total = misc.sliceToInt(u16, packet[5..7]);
 
         const l = packet.len - 7;
         std.mem.copy(u8, S.data[0..l], packet[7..]);
-        S.bcnt = @intCast(u16, l);
+        S.bcnt = @as(u16, @intCast(l));
     } else { // continuation packet
         if (packet.len < 5) {
             return S.@"error"(ErrorCodes.other);
@@ -246,7 +246,7 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
         S.seq = packet[4];
         const l = packet.len - 5;
         std.mem.copy(u8, S.data[S.bcnt .. S.bcnt + l], packet[5..]);
-        S.bcnt += @intCast(u16, l);
+        S.bcnt += @as(u16, @intCast(l));
     }
 
     if (S.bcnt >= S.bcnt_total and S.busy != null and S.cmd != null) {

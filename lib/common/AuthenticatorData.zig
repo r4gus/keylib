@@ -45,13 +45,13 @@ extensions: ?fido.ctap.extensions.Extensions = null,
 /// Encode the given AuthenticatorData as byte array
 pub fn encode(self: *const @This(), out: anytype) !void {
     try out.writeAll(self.rpIdHash[0..]);
-    try out.writeByte(@bitCast(u8, self.flags));
+    try out.writeByte(@as(u8, @bitCast(self.flags)));
 
     // counter is encoded in big-endian format
-    try out.writeByte(@intCast(u8, (self.signCount >> 24) & 0xff));
-    try out.writeByte(@intCast(u8, (self.signCount >> 16) & 0xff));
-    try out.writeByte(@intCast(u8, (self.signCount >> 8) & 0xff));
-    try out.writeByte(@intCast(u8, self.signCount & 0xff));
+    try out.writeByte(@as(u8, @intCast((self.signCount >> 24) & 0xff)));
+    try out.writeByte(@as(u8, @intCast((self.signCount >> 16) & 0xff)));
+    try out.writeByte(@as(u8, @intCast((self.signCount >> 8) & 0xff)));
+    try out.writeByte(@as(u8, @intCast(self.signCount & 0xff)));
 
     if (self.attestedCredentialData) |acd| {
         try acd.encode(out);

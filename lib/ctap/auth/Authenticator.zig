@@ -37,10 +37,10 @@ pub fn handle(self: *@This(), command: []const u8) Response {
     response.writeByte(0x00) catch unreachable;
 
     // Decode the command of the given message
-    if (command.len < 1) return Response{ .err = @enumToInt(StatusCodes.ctap1_err_invalid_length) };
+    if (command.len < 1) return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_length) };
     const cmd = Commands.fromRaw(command[0]) catch {
         res.deinit();
-        return Response{ .err = @enumToInt(StatusCodes.ctap1_err_invalid_command) };
+        return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_command) };
     };
 
     if (self.token.one) |*one| {
@@ -55,14 +55,14 @@ pub fn handle(self: *@This(), command: []const u8) Response {
             // Parse request
             var di = cbor.DataItem.new(command[1..]) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_invalid_cbor) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
             };
 
             const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{
                 .allocator = self.allocator,
             }) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_invalid_cbor) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
             };
             defer mcp.deinit(self.allocator);
 
@@ -73,26 +73,26 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 response,
             ) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap1_err_other) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
             };
 
             if (status != .ctap1_err_success) {
                 res.deinit();
-                return Response{ .err = @enumToInt(status) };
+                return Response{ .err = @intFromEnum(status) };
             }
         },
         .authenticatorGetAssertion => {
             // Parse request
             var di = cbor.DataItem.new(command[1..]) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_invalid_cbor) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
             };
 
             const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
                 .allocator = self.allocator,
             }) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_invalid_cbor) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
             };
             defer gap.deinit(self.allocator);
 
@@ -103,29 +103,29 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 response,
             ) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap1_err_other) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
             };
 
             if (status != .ctap1_err_success) {
                 res.deinit();
-                return Response{ .err = @enumToInt(status) };
+                return Response{ .err = @intFromEnum(status) };
             }
         },
         .authenticatorGetInfo => {
             fido.ctap.commands.authenticator.authenticatorGetInfo(self.settings, response) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap2_err_not_allowed) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
             };
         },
         .authenticatorClientPin => {
             const status = fido.ctap.commands.authenticator.authenticatorClientPin(self, response, command) catch {
                 res.deinit();
-                return Response{ .err = @enumToInt(StatusCodes.ctap1_err_other) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
             };
 
             if (status != .ctap1_err_success) {
                 res.deinit();
-                return Response{ .err = @enumToInt(status) };
+                return Response{ .err = @intFromEnum(status) };
             }
         },
         .authenticatorReset => {
@@ -137,11 +137,11 @@ pub fn handle(self: *@This(), command: []const u8) Response {
             switch (up) {
                 .Denied => {
                     res.deinit();
-                    return Response{ .err = @enumToInt(StatusCodes.ctap2_err_operation_denied) };
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_operation_denied) };
                 },
                 .Timeout => {
                     res.deinit();
-                    return Response{ .err = @enumToInt(StatusCodes.ctap2_err_user_action_timeout) };
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_user_action_timeout) };
                 },
                 .Accepted => {},
             }
@@ -153,12 +153,12 @@ pub fn handle(self: *@This(), command: []const u8) Response {
 
             if (status != .ctap1_err_success) {
                 res.deinit();
-                return Response{ .err = @enumToInt(status) };
+                return Response{ .err = @intFromEnum(status) };
             }
         },
         else => {
             res.deinit();
-            return Response{ .err = @enumToInt(StatusCodes.ctap2_err_not_allowed) };
+            return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
         },
     }
 

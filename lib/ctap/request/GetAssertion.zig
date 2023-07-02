@@ -76,7 +76,7 @@ test "get assertion parse 1" {
 
     try std.testing.expectEqualStrings("webauthn.io", get_assertion_param.rpId);
     try std.testing.expectEqualSlices(u8, "\x6e\x0c\xb5\xf9\x7c\xae\xb8\xbf\x79\x7a\x62\x14\xc7\x19\x1c\x80\x8f\xe5\xa5\x50\x21\xf9\xfb\x76\x6e\x81\x83\xcd\x8a\x0d\x55\x0b", &get_assertion_param.clientDataHash);
-    try std.testing.expectEqual(@intCast(usize, 1), get_assertion_param.allowList.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(1)), get_assertion_param.allowList.?.len);
     try std.testing.expectEqualSlices(u8, "\xf9\xff\xff\xff\x95\xea\x72\x74\x2f\xa6\x03\xc3\x51\x9f\x9c\x17\xc0\xff\x81\xc4\x5d\xbb\x46\xe2\x3c\xff\x6f\xc1\xd0\xd5\xb3\x64\x6d\x49\x5c\xb1\x1b\x80\xe5\x78\x88\xbf\xba\xe3\x89\x8d\x69\x85\xfc\x19\x6c\x43\xfd\xfc\x2e\x80\x18\xac\x2d\x5b\xb3\x79\xa1\xf0", get_assertion_param.allowList.?[0].id);
     try std.testing.expectEqual(fido.common.PublicKeyCredentialType.@"public-key", get_assertion_param.allowList.?[0].type);
     try std.testing.expectEqual(false, get_assertion_param.options.?.up.?);

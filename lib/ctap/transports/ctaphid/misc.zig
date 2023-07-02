@@ -15,7 +15,7 @@ pub fn sliceToInt(comptime T: type, slice: []const u8) T {
     var res: T = 0;
     var i: usize = 0;
     while (i < @sizeOf(T)) : (i += 1) {
-        res += @intCast(T, slice[i]);
+        res += @as(T, @intCast(slice[i]));
 
         if (i < @sizeOf(T) - 1) {
             res <<= 8;
@@ -35,7 +35,7 @@ pub fn intToSlice(slice: []u8, i: anytype) void {
 
     var j: usize = 0;
     while (j < SIZE) : (j += 1) {
-        slice[SIZE - 1 - j] = @intCast(u8, x & 0xff);
+        slice[SIZE - 1 - j] = @as(u8, @intCast(x & 0xff));
         x >>= 8;
     }
 }

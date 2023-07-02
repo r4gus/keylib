@@ -315,7 +315,7 @@ pub fn authenticatorGetAssertion(
             .at = 0,
             .ed = 0,
         },
-        .signCount = @intCast(u32, cred.times.usageCount),
+        .signCount = @as(u32, @intCast(cred.times.usageCount)),
         .extensions = extensions,
     };
     std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash

@@ -135,7 +135,7 @@ test "create Entry with UserName and URL fields" {
     try std.testing.expectEqual(time, e.times.creationTime);
     try std.testing.expectEqual(time, e.times.lastAccessTime);
     try std.testing.expectEqual(e.times.usageCount, 0);
-    try std.testing.expectEqual(@intCast(usize, 1), e.fields.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(1)), e.fields.?.len);
 
     const time3 = std.time.milliTimestamp();
     try std.testing.expectEqualSlices(u8, "r4gus", e.getField("UserName", time3).?);
@@ -143,7 +143,7 @@ test "create Entry with UserName and URL fields" {
     try std.testing.expectEqual(time, e.times.creationTime);
     try std.testing.expectEqual(time3, e.times.lastAccessTime);
     try std.testing.expectEqual(e.times.usageCount, 0);
-    try std.testing.expectEqual(@intCast(usize, 1), e.fields.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(1)), e.fields.?.len);
 
     const time4 = std.time.milliTimestamp();
     try e.addField(.{ .key = "URL", .value = "https://ziglang.org" }, time4, allocator);
@@ -151,7 +151,7 @@ test "create Entry with UserName and URL fields" {
     try std.testing.expectEqual(time, e.times.creationTime);
     try std.testing.expectEqual(time3, e.times.lastAccessTime);
     try std.testing.expectEqual(e.times.usageCount, 0);
-    try std.testing.expectEqual(@intCast(usize, 2), e.fields.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(2)), e.fields.?.len);
 
     const time5 = std.time.milliTimestamp();
     try std.testing.expectEqualSlices(u8, "r4gus", e.getField("UserName", time5).?);
@@ -172,7 +172,7 @@ test "create Entry with UserName and URL fields" {
     try std.testing.expectEqual(time6, e.times.lastModificationTime);
     try std.testing.expectEqual(time, e.times.creationTime);
     try std.testing.expectEqual(time7, e.times.lastAccessTime);
-    try std.testing.expectEqual(@intCast(usize, 1), e.fields.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(1)), e.fields.?.len);
 }
 
 test "serialize entry" {
@@ -202,8 +202,8 @@ test "deserialize entry" {
     const time1 = std.time.milliTimestamp();
     try std.testing.expectEqualSlices(u8, "r4gus", e.getField("UserName", time1).?);
     try std.testing.expectEqualSlices(u8, "https://ziglang.org", e.getField("URL", time1).?);
-    try std.testing.expectEqual(@intCast(i64, 0), e.times.lastModificationTime);
-    try std.testing.expectEqual(@intCast(i64, 0), e.times.creationTime);
+    try std.testing.expectEqual(@as(i64, @intCast(0)), e.times.lastModificationTime);
+    try std.testing.expectEqual(@as(i64, @intCast(0)), e.times.creationTime);
     try std.testing.expectEqual(time1, e.times.lastAccessTime);
-    try std.testing.expectEqual(@intCast(usize, 2), e.fields.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(2)), e.fields.?.len);
 }

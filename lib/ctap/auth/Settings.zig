@@ -193,7 +193,7 @@ pub fn to_string(self: *const @This(), out: anytype) !void {
     if (self.algorithms) |algorithms| {
         try out.writeAll("\nalgorithms: ");
         for (algorithms) |algorithm| {
-            try std.fmt.format(out, "{x} ", .{@enumToInt(algorithm.alg)});
+            try std.fmt.format(out, "{x} ", .{@intFromEnum(algorithm.alg)});
         }
     }
 

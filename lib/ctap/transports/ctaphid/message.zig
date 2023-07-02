@@ -66,8 +66,8 @@ pub const CtapHidMessageIterator = struct {
                 off = IP_DATA_OFFSET;
 
                 misc.intToSlice(self.buffer[0..misc.CID_LENGTH], self.cid);
-                self.buffer[CMD_OFFSET] = @enumToInt(self.cmd) | COMMAND_ID;
-                misc.intToSlice(self.buffer[BCNT_OFFSET .. BCNT_OFFSET + misc.BCNT_LENGTH], @intCast(misc.Bcnt, self.data.len));
+                self.buffer[CMD_OFFSET] = @intFromEnum(self.cmd) | COMMAND_ID;
+                misc.intToSlice(self.buffer[BCNT_OFFSET .. BCNT_OFFSET + misc.BCNT_LENGTH], @as(misc.Bcnt, @intCast(self.data.len)));
             } else {
                 len = if (self.data.len - self.cntr <= CP_DATA_SIZE) self.data.len - self.cntr else CP_DATA_SIZE;
                 off = CP_DATA_OFFSET;

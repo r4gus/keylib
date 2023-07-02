@@ -120,7 +120,7 @@ pub fn authenticatorClientPin(
             const _code_points = std.unicode.utf8CountCodepoints(newPin) catch {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             };
-            const code_points: u8 = @intCast(u8, _code_points);
+            const code_points: u8 = @as(u8, @intCast(_code_points));
 
             if (code_points < npl) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
@@ -259,7 +259,7 @@ pub fn authenticatorClientPin(
             const _code_points = std.unicode.utf8CountCodepoints(newPin) catch {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             };
-            const code_points: u8 = @intCast(u8, _code_points);
+            const code_points: u8 = @as(u8, @intCast(_code_points));
 
             if (code_points < npl) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;

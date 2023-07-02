@@ -10,3 +10,7 @@ zbor
 *.order
 *.symvers
 *.cmd
+
+# Database files
+*.db
+*.cks

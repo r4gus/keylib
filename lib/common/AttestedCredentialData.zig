@@ -19,8 +19,8 @@ credential_public_key: []const u8,
 pub fn encode(self: *const @This(), out: anytype) !void {
     try out.writeAll(self.aaguid[0..]);
     // length is encoded in big-endian format
-    try out.writeByte(@intCast(u8, self.credential_length >> 8));
-    try out.writeByte(@intCast(u8, self.credential_length & 0xff));
+    try out.writeByte(@as(u8, @intCast(self.credential_length >> 8)));
+    try out.writeByte(@as(u8, @intCast(self.credential_length & 0xff)));
     try out.writeAll(self.credential_id[0..]);
     try out.writeAll(self.credential_public_key[0..]);
 }

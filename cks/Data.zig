@@ -116,7 +116,7 @@ test "create Data struct and add two entries" {
     try std.testing.expectEqual(time, d.times.creationTime);
     try std.testing.expectEqual(time, d.times.lastAccessTime);
     try std.testing.expectEqual(d.times.usageCount, 0);
-    try std.testing.expectEqual(@intCast(usize, 1), d.entries.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(1)), d.entries.?.len);
 
     // Add second entry
     var id2 = try allocator.alloc(u8, 64);
@@ -132,7 +132,7 @@ test "create Data struct and add two entries" {
     try std.testing.expectEqual(time, d.times.creationTime);
     try std.testing.expectEqual(time, d.times.lastAccessTime);
     try std.testing.expectEqual(d.times.usageCount, 0);
-    try std.testing.expectEqual(@intCast(usize, 2), d.entries.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(2)), d.entries.?.len);
 
     // Get the first entry
     const time5 = std.time.milliTimestamp();
@@ -144,7 +144,7 @@ test "create Data struct and add two entries" {
     try std.testing.expectEqual(time, d.times.creationTime);
     try std.testing.expectEqual(time5, d.times.lastAccessTime);
     try std.testing.expectEqual(d.times.usageCount, 0);
-    try std.testing.expectEqual(@intCast(usize, 2), d.entries.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(2)), d.entries.?.len);
 
     // Remove first entry
     // e3 pointer is invalid after the removal!
@@ -154,7 +154,7 @@ test "create Data struct and add two entries" {
     defer e4.?.deinit(allocator);
     try std.testing.expectEqualSlices(u8, "r4gus", e4.?.getField("UserName", time5).?);
     try std.testing.expectEqualSlices(u8, "https://ziglang.org", e4.?.getField("URL", time5).?);
-    try std.testing.expectEqual(@intCast(usize, 1), d.entries.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(1)), d.entries.?.len);
 
     e3 = d.getEntry(id1, time6);
     try std.testing.expect(e3 == null);
@@ -170,7 +170,7 @@ test "create Data struct and add two entries" {
     defer e5.?.deinit(allocator);
     try std.testing.expectEqualSlices(u8, "SugarYourCoffee", e5.?.getField("UserName", time5).?);
     try std.testing.expectEqualSlices(u8, "https://sugaryourcoffee.de", e5.?.getField("URL", time5).?);
-    try std.testing.expectEqual(@intCast(usize, 0), d.entries.?.len);
+    try std.testing.expectEqual(@as(usize, @intCast(0)), d.entries.?.len);
 }
 
 test "serialize data" {

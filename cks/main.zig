@@ -82,7 +82,7 @@ pub const CKS = struct {
         if (self.outer_header.cipher.type == .ChaCha20) {
 
             // 3. Write outer header data
-            const oh_len = @intCast(u32, oh.items.len);
+            const oh_len = @as(u32, @intCast(oh.items.len));
 
             try out.writeAll("\x53\x45\x43\x52\x45\x54"); // SECRET
             try out.writeIntLittle(u32, oh_len);
@@ -114,7 +114,7 @@ pub const CKS = struct {
             return error.UnknownFileFormat;
         }
 
-        const header_len = @intCast(usize, std.mem.bytesToValue(u32, raw[6..10]));
+        const header_len = @as(usize, @intCast(std.mem.bytesToValue(u32, raw[6..10])));
         const outer_header = try cbor.parse(
             header.OuterHeader,
             try cbor.DataItem.new(raw[10 .. header_len + 10]),

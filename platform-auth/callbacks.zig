@@ -20,7 +20,7 @@ pub fn password(pw: ?[]const u8) ?[]const u8 {
 
 /// Get the epoch time in ms
 pub fn millis() u64 {
-    return @intCast(u64, std.time.milliTimestamp());
+    return @as(u64, @intCast(std.time.milliTimestamp()));
 }
 
 pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult {

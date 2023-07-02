@@ -35,7 +35,7 @@ fn send_descriptor_string(fd: std.fs.File, s: []const u8) !void {
     event.type = uhid.UHID_INPUT2;
     event.u.input2.data[0] = 3;
     @memcpy(event.u.input2.data[1 .. s.len + 1], s);
-    event.u.input.size = @intCast(uhid.u_short, s.len) + 1;
+    event.u.input.size = @as(uhid.u_short, @intCast(s.len)) + 1;
 
     try uhid_write(fd, &event);
 }
@@ -155,7 +155,7 @@ pub fn main() !void {
                         var rev = std.mem.zeroes(uhid.uhid_event);
                         rev.type = uhid.UHID_INPUT;
                         @memcpy(rev.u.input.data[0..packet.len], packet);
-                        rev.u.input.size = @intCast(c_ushort, packet.len);
+                        rev.u.input.size = @as(c_ushort, @intCast(packet.len));
 
                         uhid_write(fd, &rev) catch {
                             std.debug.print("failed to send CTAPHID packet\n", .{});

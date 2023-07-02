@@ -443,7 +443,7 @@ pub fn authenticatorMakeCredential(
         .signCount = 0,
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
-            .credential_length = @intCast(u16, id[0..].len),
+            .credential_length = @as(u16, @intCast(id[0..].len)),
             .credential_id = id[0..],
             .credential_public_key = key_pair.cose_public_key,
         },
