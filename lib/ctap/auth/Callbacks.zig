@@ -26,6 +26,13 @@ pub const UpResult = enum {
     Timeout,
 };
 
+pub const UpReason = enum {
+    MakeCredential,
+    GetAssertion,
+    AuthenticatorSelection,
+    Reset,
+};
+
 /// Interface for a thread local CSPRNG
 rand: std.rand.Random,
 
@@ -33,7 +40,7 @@ rand: std.rand.Random,
 millis: *const fn () i64,
 
 /// Request user presence
-up: *const fn (user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult,
+up: *const fn (reason: UpReason, user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult,
 
 /// User verification callback
 ///

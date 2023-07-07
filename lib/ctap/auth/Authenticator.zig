@@ -132,7 +132,7 @@ pub fn handle(self: *@This(), command: []const u8) Response {
             // TODO: The authenticator instance should have a field that holds a time stamp
             // marking the point at wich the instance was created. One can then check if
             // the difference in time is less than 10 s.
-            const up = self.callbacks.up(null, null);
+            const up = self.callbacks.up(.Reset, null, null);
 
             switch (up) {
                 .Denied => {

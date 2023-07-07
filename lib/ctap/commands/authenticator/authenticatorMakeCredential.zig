@@ -222,7 +222,7 @@ pub fn authenticatorMakeCredential(
                 }
 
                 if (!userPresentFlagValue) {
-                    _ = auth.callbacks.up(null, null);
+                    _ = auth.callbacks.up(.MakeCredential, null, null);
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                 } else {
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
@@ -241,7 +241,7 @@ pub fn authenticatorMakeCredential(
                     }
 
                     if (!userPresentFlagValue) {
-                        _ = auth.callbacks.up(null, null);
+                        _ = auth.callbacks.up(.MakeCredential, null, null);
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                     } else {
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
@@ -270,13 +270,13 @@ pub fn authenticatorMakeCredential(
                 .V2 => &auth.token.two.?,
             };
             if (!token.getUserPresentFlagValue()) {
-                if (auth.callbacks.up(&mcp.user, &mcp.rp) != .Accepted) {
+                if (auth.callbacks.up(.MakeCredential, &mcp.user, &mcp.rp) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (auth.callbacks.up(&mcp.user, &mcp.rp) != .Accepted) {
+                if (auth.callbacks.up(.MakeCredential, &mcp.user, &mcp.rp) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

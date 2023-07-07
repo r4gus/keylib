@@ -5,6 +5,7 @@ const cks = @import("cks");
 const fs = @import("fs.zig");
 const LoadError = fido.ctap.authenticator.Callbacks.LoadError;
 const UpResult = fido.ctap.authenticator.Callbacks.UpResult;
+const UpReason = fido.ctap.authenticator.Callbacks.UpReason;
 
 pub fn password(pw: ?[]const u8) ?[]const u8 {
     const S = struct {
@@ -23,20 +24,28 @@ pub fn millis() u64 {
     return @as(u64, @intCast(std.time.milliTimestamp()));
 }
 
-pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult {
+pub fn up(reason: UpReason, user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) UpResult {
     const stdin = std.io.getStdIn().reader();
     const stdout = std.io.getStdOut().writer();
 
+    const r = switch (reason) {
+        .MakeCredential => "Request for creating a new credential:",
+        .GetAssertion => "Request for generating a assertion:",
+        .AuthenticatorSelection => "Please confirm if you want to select this authenticator:",
+        .Reset => "Reset request:",
+    };
+    stdout.print("{s}\n", .{r}) catch unreachable;
+
     if (user) |u| {
-        stdout.print("user:\n  id: {s}\n", .{u.id}) catch unreachable;
+        stdout.print("  user:\n      id: {s}\n", .{u.id}) catch unreachable;
     }
     if (rp) |_rp| {
-        stdout.print("rp:\n  id: {s}\n", .{_rp.id}) catch unreachable;
+        stdout.print("    rp:\n      id: {s}\n", .{_rp.id}) catch unreachable;
     }
 
     var buf: [16]u8 = undefined;
 
-    stdout.print("allow action [Y/n]: ", .{}) catch unreachable;
+    stdout.print("confirm [Y/n]: ", .{}) catch unreachable;
     if (stdin.readUntilDelimiterOrEof(buf[0..], '\n') catch unreachable) |user_input| {
         if (user_input[0] == 'y' or user_input[0] == 'Y') {
             return .Accepted;

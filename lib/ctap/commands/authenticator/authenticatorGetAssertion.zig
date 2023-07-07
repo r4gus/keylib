@@ -195,6 +195,7 @@ pub fn authenticatorGetAssertion(
             };
             if (!token.getUserPresentFlagValue()) {
                 if (auth.callbacks.up(
+                    .GetAssertion,
                     null,
                     &fido.common.RelyingParty{ .id = gap.rpId },
                 ) != .Accepted) {
@@ -204,6 +205,7 @@ pub fn authenticatorGetAssertion(
         } else {
             if (!up_response) {
                 if (auth.callbacks.up(
+                    .GetAssertion,
                     null,
                     &fido.common.RelyingParty{ .id = gap.rpId },
                 ) != .Accepted) {
