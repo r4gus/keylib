@@ -300,7 +300,8 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var id = try auth.allocator.alloc(u8, 32);
     auth.callbacks.rand.bytes(id);
-    var entry = cks.Entry.new(id, auth.callbacks.millis());
+    var entry = auth.callbacks.createEntry(id);
+    errdefer entry.deinit();
 
     // We go with the weakest policy, if one wants to use a higher policy then she can
     // always provide the `credProtect` extension.
@@ -319,13 +320,11 @@ pub fn authenticatorMakeCredential(
         try entry.addField(
             .{ .key = "CredRandomWithUV", .value = random_mem[0..] },
             auth.callbacks.millis(),
-            auth.allocator,
         );
         auth.callbacks.rand.bytes(random_mem[0..]);
         try entry.addField(
             .{ .key = "CredRandomWithoutUV", .value = random_mem[0..] },
             auth.callbacks.millis(),
-            auth.allocator,
         );
     }
 
@@ -335,7 +334,6 @@ pub fn authenticatorMakeCredential(
             try entry.addField(
                 .{ .key = "Policy", .value = pol.toString() },
                 auth.callbacks.millis(),
-                auth.allocator,
             );
 
             if (extensions) |*exts| {
@@ -384,13 +382,11 @@ pub fn authenticatorMakeCredential(
     try entry.addField(
         .{ .key = "RpId", .value = mcp.rp.id },
         auth.callbacks.millis(),
-        auth.allocator,
     );
 
     try entry.addField(
         .{ .key = "UserId", .value = mcp.user.id },
         auth.callbacks.millis(),
-        auth.allocator,
     );
 
     entry.times.usageCount = 1; // This includes the first signature possibly made below
@@ -398,13 +394,11 @@ pub fn authenticatorMakeCredential(
     try entry.addField(
         .{ .key = "PrivateKey", .value = key_pair.raw_private_key },
         auth.callbacks.millis(),
-        auth.allocator,
     );
 
     try entry.addField(
         .{ .key = "Algorithm", .value = &alg.?.alg.to_raw() },
         auth.callbacks.millis(),
-        auth.allocator,
     );
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++

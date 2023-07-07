@@ -24,12 +24,18 @@ pub fn authenticatorClientPin(
 
     var client_pin_response: ?fido.ctap.response.ClientPin = null;
 
-    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else return fido.ctap.StatusCodes.ctap1_err_other;
+    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
+        std.log.err("Unable to fetch Settings", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
 
     // Handle one of the sub-commands
     switch (client_pin_param.subCommand) {
         .getPinRetries => {
-            var retries = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries else return fido.ctap.StatusCodes.ctap1_err_other;
+            var retries = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries else {
+                std.log.err("Retries field missing in Settings", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
             client_pin_response = .{
                 .pinRetries = retries[0],
                 .powerCycleState = retry_state.powerCycleState,
@@ -135,8 +141,8 @@ pub fn authenticatorClientPin(
 
             // Store new pin
             const ph = fido.ctap.pinuv.hash(newPin);
-            try settings.addField(.{ .key = "Pin", .value = &ph }, auth.callbacks.millis(), auth.allocator);
-            try settings.addField(.{ .key = "CodePoints", .value = std.mem.toBytes(code_points)[0..] }, auth.callbacks.millis(), auth.allocator);
+            try settings.addField(.{ .key = "Pin", .value = &ph }, auth.callbacks.millis());
+            try settings.addField(.{ .key = "CodePoints", .value = std.mem.toBytes(code_points)[0..] }, auth.callbacks.millis());
             try auth.callbacks.persist();
         },
         .changePIN => {
@@ -166,7 +172,10 @@ pub fn authenticatorClientPin(
             };
 
             // If the pinRetries counter is 0, return error.
-            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else return fido.ctap.StatusCodes.ctap1_err_other;
+            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else {
+                std.log.err("changePIN: Retries field missing in Settings", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
             if (retries <= 0) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
             }
@@ -204,7 +213,6 @@ pub fn authenticatorClientPin(
                 "Retries",
                 &std.mem.toBytes(retries),
                 auth.callbacks.millis(),
-                auth.allocator,
             );
 
             // Decrypt pinHashEnc and match against stored pinHash
@@ -238,7 +246,6 @@ pub fn authenticatorClientPin(
                 "Retries",
                 &std.mem.toBytes(retries),
                 auth.callbacks.millis(),
-                auth.allocator,
             );
 
             // Decrypt new pin
@@ -286,14 +293,12 @@ pub fn authenticatorClientPin(
                 "Pin",
                 &ph,
                 auth.callbacks.millis(),
-                auth.allocator,
             );
 
             try settings.updateField(
                 "CodePoints",
                 std.mem.toBytes(code_points)[0..],
                 auth.callbacks.millis(),
-                auth.allocator,
             );
             try auth.callbacks.persist();
             auth.settings.forcePINChange = false;
@@ -345,7 +350,10 @@ pub fn authenticatorClientPin(
             }
 
             // Check if the pin is blocked
-            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else return fido.ctap.StatusCodes.ctap1_err_other;
+            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else {
+                std.log.err("getUvTokenWithPerm: Retries field missing in Settings", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
             if (retries == 0) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
             }
@@ -365,7 +373,6 @@ pub fn authenticatorClientPin(
                 "Retries",
                 &std.mem.toBytes(retries),
                 auth.callbacks.millis(),
-                auth.allocator,
             );
 
             // Decrypt pinHashEnc and match against stored pinHash
@@ -376,7 +383,10 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            var pinHash2 = if (settings.getField("Pin", auth.callbacks.millis())) |pin| pin else return fido.ctap.StatusCodes.ctap1_err_other;
+            var pinHash2 = if (settings.getField("Pin", auth.callbacks.millis())) |pin| pin else {
+                std.log.err("getUvTokenWithPerm: Pin field missing in Settings", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
@@ -399,7 +409,6 @@ pub fn authenticatorClientPin(
                 "Retries",
                 &std.mem.toBytes(retries),
                 auth.callbacks.millis(),
-                auth.allocator,
             );
             try auth.callbacks.persist();
 

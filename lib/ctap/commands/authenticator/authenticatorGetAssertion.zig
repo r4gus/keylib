@@ -288,8 +288,14 @@ pub fn authenticatorGetAssertion(
     };
 
     // select algorithm based on credential
-    const algorithm = if (cred.getField("Algorithm", auth.callbacks.millis())) |algo| cbor.cose.Algorithm.from_raw(algo[0..4].*) else return fido.ctap.StatusCodes.ctap1_err_other;
-    const private_key = if (cred.getField("PrivateKey", auth.callbacks.millis())) |algo| algo else return fido.ctap.StatusCodes.ctap1_err_other;
+    const algorithm = if (cred.getField("Algorithm", auth.callbacks.millis())) |algo| cbor.cose.Algorithm.from_raw(algo[0..4].*) else {
+        std.log.err("Algorithm field not present for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    const private_key = if (cred.getField("PrivateKey", auth.callbacks.millis())) |algo| algo else {
+        std.log.err("PrivateKey field not present for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
     var alg: ?fido.ctap.crypto.SigAlg = null;
     for (auth.algorithms) |_alg| blk: {
         if (algorithm == _alg.alg) {
@@ -299,6 +305,7 @@ pub fn authenticatorGetAssertion(
     }
 
     if (alg == null) {
+        std.log.err("Unknown algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     }
 
@@ -341,7 +348,10 @@ pub fn authenticatorGetAssertion(
         private_key,
         &.{ authData.items, &gap.clientDataHash },
         auth.allocator,
-    )) |signature| signature else return fido.ctap.StatusCodes.ctap1_err_other;
+    )) |signature| signature else {
+        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
     defer auth.allocator.free(sig);
 
     const gar = fido.ctap.response.GetAssertion{

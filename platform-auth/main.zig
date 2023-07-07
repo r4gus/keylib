@@ -100,6 +100,7 @@ pub fn main() !void {
             .rand = std.crypto.random,
             .millis = std.time.milliTimestamp,
             .up = callbacks.up,
+            .createEntry = callbacks.createEntry,
             .getEntry = callbacks.getEntry,
             .addEntry = callbacks.addEntry,
             .persist = callbacks.persist,

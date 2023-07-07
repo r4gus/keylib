@@ -48,6 +48,7 @@ up: *const fn (user: ?*const fido.common.User, rp: ?*const fido.common.RelyingPa
 /// - Pattern
 uv: ?*const fn () bool = null,
 
+createEntry: *const fn (id: []const u8) cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
 addEntry: *const fn (entry: cks.Entry) cks.Error!void,
 persist: *const fn () error{Fatal}!void,

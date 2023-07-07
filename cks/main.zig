@@ -36,11 +36,15 @@ pub const CKS = struct {
         }
         self.allocator.free(self.data.generator);
         self.allocator.free(self.data.name);
-        self.data.deinit(self.allocator);
+        self.data.deinit();
+    }
+
+    pub fn createEntry(self: *@This(), id: []const u8) Entry {
+        return Entry.new(id, self.time(), self.allocator);
     }
 
     pub fn addEntry(self: *@This(), entry: Entry) Error!void {
-        try self.data.addEntry(entry, self.time(), self.allocator);
+        try self.data.addEntry(entry, self.time());
     }
 
     pub fn getEntry(self: *@This(), id: []const u8) ?*Entry {
@@ -48,7 +52,7 @@ pub const CKS = struct {
     }
 
     pub fn removeEntry(self: *@This(), id: []const u8) Error!?Entry {
-        return self.data.removeEntry(id, self.time(), self.allocator);
+        return self.data.removeEntry(id, self.time());
     }
 
     pub fn seal(self: *@This(), out: anytype, pw: []const u8) !void {
@@ -197,7 +201,7 @@ pub const CKS = struct {
 
         return @This(){
             .outer_header = h,
-            .data = Data.new(gen, n, time()),
+            .data = Data.new(gen, n, time(), a),
             .allocator = a,
             .rand = rand,
             .time = time,
@@ -237,9 +241,9 @@ test "serialize store" {
     var id1 = try allocator.alloc(u8, 64);
     const time1 = std.time.milliTimestamp();
     std.crypto.random.bytes(id1[0..]);
-    var e1 = Entry.new(id1, time1);
-    try e1.addField(.{ .key = "UserName", .value = "SugarYourCoffee" }, time1, allocator);
-    try e1.addField(.{ .key = "URL", .value = "https://sugaryourcoffee.de" }, time1, allocator);
+    var e1 = Entry.new(id1, time1, allocator);
+    try e1.addField(.{ .key = "UserName", .value = "SugarYourCoffee" }, time1);
+    try e1.addField(.{ .key = "URL", .value = "https://sugaryourcoffee.de" }, time1);
     try store.addEntry(e1);
 
     var str = std.ArrayList(u8).init(allocator);

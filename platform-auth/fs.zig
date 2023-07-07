@@ -8,6 +8,7 @@ pub fn load(a: std.mem.Allocator, pw: []const u8) !void {
     var dir = std.fs.cwd();
 
     var file = dir.openFile("passkey.cks", .{ .mode = .read_write }) catch {
+        std.debug.print("create\n", .{});
         store = try cks.CKS.new(
             1,
             0,
@@ -23,12 +24,13 @@ pub fn load(a: std.mem.Allocator, pw: []const u8) !void {
 
         var id = try a.alloc(u8, "Settings".len);
         @memcpy(id, "Settings");
-        var settings = cks.Entry.new(id, std.time.milliTimestamp());
-        try settings.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp(), a);
+        var settings = cks.Entry.new(id, std.time.milliTimestamp(), a);
+        try settings.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp());
         try store.?.addEntry(settings);
         return;
     };
 
+    std.debug.print("load\n", .{});
     const data = try file.readToEndAlloc(a, 64000);
     defer a.free(data);
 
