@@ -298,9 +298,9 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 15. Process extensions
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var id = try auth.allocator.alloc(u8, 32);
-    auth.callbacks.rand.bytes(id);
-    var entry = auth.callbacks.createEntry(id);
+    var id: [32]u8 = undefined;
+    auth.callbacks.rand.bytes(id[0..]);
+    var entry = try auth.callbacks.createEntry(id[0..]);
     errdefer entry.deinit();
 
     // We go with the weakest policy, if one wants to use a higher policy then she can

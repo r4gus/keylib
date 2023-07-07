@@ -52,9 +52,9 @@ pub fn up(user: ?*const fido.common.User, rp: ?*const fido.common.RelyingParty) 
 
 pub fn reset() void {}
 
-pub fn createEntry(id: []const u8) cks.Entry {
+pub fn createEntry(id: []const u8) cks.Error!cks.Entry {
     var store = fs.get();
-    return store.createEntry(id);
+    return try store.createEntry(id);
 }
 
 pub fn getEntry(id: []const u8) ?*cks.Entry {

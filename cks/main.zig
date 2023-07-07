@@ -39,8 +39,10 @@ pub const CKS = struct {
         self.data.deinit();
     }
 
-    pub fn createEntry(self: *@This(), id: []const u8) Entry {
-        return Entry.new(id, self.time(), self.allocator);
+    pub fn createEntry(self: *@This(), id: []const u8) Error!Entry {
+        var a = try self.allocator.alloc(u8, id.len);
+        @memcpy(a, id);
+        return Entry.new(a, self.time(), self.allocator);
     }
 
     pub fn addEntry(self: *@This(), entry: Entry) Error!void {
@@ -153,6 +155,8 @@ pub const CKS = struct {
             break :blk mem;
         } else unreachable;
         defer allocator.free(mem);
+
+        std.debug.print("{s}\n", .{std.fmt.fmtSliceHexUpper(mem)});
 
         const data = try cbor.parse(
             Data,
