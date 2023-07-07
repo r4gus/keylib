@@ -69,7 +69,7 @@ pub fn addEntry(entry: cks.Entry) cks.Error!void {
 
 pub fn persist() error{Fatal}!void {
     const pw = if (password(null)) |pw| pw else return error.Fatal;
-    fs.writeBack(pw) catch {
+    fs.writeBack("passkey.cks", pw) catch {
         return error.Fatal;
     };
 }

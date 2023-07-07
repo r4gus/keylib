@@ -42,7 +42,7 @@ fn send_descriptor_string(fd: std.fs.File, s: []const u8) !void {
 
 fn uhid_write(fd: std.fs.File, event: *uhid.uhid_event) !void {
     fd.writeAll(std.mem.asBytes(event)) catch |e| {
-        std.debug.print("Error writing to uhid: {}\n", .{e});
+        std.log.err("Error writing to uhid: {}\n", .{e});
         return e;
     };
 }
@@ -55,20 +55,21 @@ fn destroy(fd: std.fs.File) !void {
 
 pub fn main() !void {
     //const stdin = std.io.getStdIn().reader();
-    const stdout = std.io.getStdOut().writer();
+    //const stdout = std.io.getStdOut().writer();
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var allocator = gpa.allocator();
 
     const pw = callbacks.password("password");
-    fs.load(allocator, pw.?) catch {
-        try stdout.writeAll("error: unable to open file\n");
+    fs.load("passkey.cks", allocator, pw.?) catch {
+        std.log.err("error: unable to open file\n", .{});
+        return;
     };
 
     // 1. Open file
     const path = "/dev/uhid";
 
     var fd = std.fs.openFileAbsolute(path, .{ .mode = .read_write }) catch {
-        std.debug.print("Can't open uhid-cdev {s}\n", .{path});
+        std.log.err("Can't open uhid-cdev {s}\n", .{path});
         return;
     };
     defer fd.close();
@@ -131,20 +132,20 @@ pub fn main() !void {
 
         switch (event.type) {
             uhid.UHID_START => {
-                std.debug.print("START\n", .{});
+                std.log.info("START\n", .{});
             },
             uhid.UHID_STOP => {
-                std.debug.print("STOP\n", .{});
+                std.log.info("STOP\n", .{});
             },
             uhid.UHID_OPEN => {
-                std.debug.print("OPEN\n", .{});
+                std.log.info("OPEN\n", .{});
             },
             uhid.UHID_CLOSE => {
-                std.debug.print("CLOSE\n", .{});
+                std.log.info("CLOSE\n", .{});
             },
             uhid.UHID_OUTPUT => {
-                std.debug.print("OUTPUT\n", .{});
-                std.debug.print("{x}\n", .{std.fmt.fmtSliceHexLower(event.u.output.data[0..64])});
+                std.log.info("OUTPUT\n", .{});
+                std.log.info("{x}\n", .{std.fmt.fmtSliceHexLower(event.u.output.data[0..64])});
 
                 var response = fido.ctap.transports.ctaphid.authenticator.handle(
                     event.u.output.data[1..event.u.output.size],
@@ -159,30 +160,12 @@ pub fn main() !void {
                         rev.u.input.size = @as(c_ushort, @intCast(packet.len));
 
                         uhid_write(fd, &rev) catch {
-                            std.debug.print("failed to send CTAPHID packet\n", .{});
+                            std.log.err("failed to send CTAPHID packet\n", .{});
                         };
                     }
                 }
             },
-            else => {
-                std.debug.print("fuck it\n", .{});
-            },
+            else => {},
         }
     }
-
-    //while (true) {
-    //    const msg = try usb.read();
-    //    std.debug.print("{x}\n", .{std.fmt.fmtSliceHexUpper(msg)});
-
-    //    var response = fido.ctap.transports.ctaphid.authenticator.handle(
-    //        msg,
-    //        &authenticator,
-    //    );
-
-    //    if (response) |*resp| {
-    //        while (resp.next()) |packet| {
-    //            try usb.write(packet);
-    //        }
-    //    }
-    //}
 }

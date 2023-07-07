@@ -4,11 +4,10 @@ const cks = @import("cks");
 
 var store: ?cks.CKS = null;
 
-pub fn load(a: std.mem.Allocator, pw: []const u8) !void {
+pub fn load(path: []const u8, a: std.mem.Allocator, pw: []const u8) !void {
     var dir = std.fs.cwd();
 
-    var file = dir.openFile("passkey.cks", .{ .mode = .read_write }) catch {
-        std.debug.print("create\n", .{});
+    var file = dir.openFile(path, .{ .mode = .read_write }) catch {
         store = try cks.CKS.new(
             1,
             0,
@@ -30,7 +29,6 @@ pub fn load(a: std.mem.Allocator, pw: []const u8) !void {
         return;
     };
 
-    std.debug.print("load\n", .{});
     const data = try file.readToEndAlloc(a, 64000);
     defer a.free(data);
 
@@ -48,11 +46,11 @@ pub fn get() *cks.CKS {
     return &store.?;
 }
 
-pub fn writeBack(pw: []const u8) !void {
+pub fn writeBack(path: []const u8, pw: []const u8) !void {
     var dir = std.fs.cwd();
 
-    var file = dir.openFile("passkey.cks", .{ .mode = .read_write }) catch blk: {
-        break :blk try dir.createFile("passkey.cks", .{});
+    var file = dir.openFile(path, .{ .mode = .read_write }) catch blk: {
+        break :blk try dir.createFile(path, .{});
     };
 
     try store.?.seal(file.writer(), pw);
