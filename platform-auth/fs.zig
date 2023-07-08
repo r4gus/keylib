@@ -1,6 +1,7 @@
 const std = @import("std");
 const cbor = @import("zbor");
 const cks = @import("cks");
+const fido = @import("fido");
 
 var store: ?cks.CKS = null;
 
@@ -25,7 +26,14 @@ pub fn load(path: []const u8, a: std.mem.Allocator, pw: []const u8) !void {
         @memcpy(id, "Settings");
         var settings = cks.Entry.new(id, std.time.milliTimestamp(), a);
         try settings.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp());
+        try settings.addField(.{
+            .key = "Secret",
+            .value = &fido.ctap.crypto.master_secret.createMasterSecret(std.crypto.random),
+        }, std.time.milliTimestamp());
         try store.?.addEntry(settings);
+
+        try writeBack(path, pw);
+
         return;
     };
 

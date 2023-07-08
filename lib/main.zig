@@ -96,6 +96,12 @@ pub const ctap = struct {
         /// This is the hash (computed using SHA-256) of the JSON-compatible
         /// serialization of client data, as constructed by the client
         pub const ClientDataHash = [32]u8;
+
+        /// The master secret is a value randomly generated unique value that
+        /// is used to derive subkeys.
+        pub const master_secret = @import("ctap/crypto/master_secret.zig");
+
+        pub const Id = @import("ctap/crypto/Id.zig");
     };
 
     /// PIN/UV Auth Protocol
