@@ -7,6 +7,8 @@
 
 A library that allows you to implement FIDO2 authenticators. 
 
+![Login Showcase](login.gif)
+
 <details>
 <summary><ins>Getting started</ins></summary>
 To use this library you can either add it directly as a module or use the Zig package manager to fetch it as a dependency.
