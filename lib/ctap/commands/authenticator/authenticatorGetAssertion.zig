@@ -94,7 +94,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 6. Verify user
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    if (!auth.isProtected()) {
+    if (auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
             var pinuvprot = switch (gap.pinUvAuthProtocol.?) {
                 .V1 => &auth.token.one.?,
