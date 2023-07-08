@@ -141,7 +141,20 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 7. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var credentials = std.ArrayList(*cks.Entry).init(
+
+    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
+        std.log.err("Unable to fetch Settings", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    var _ms = if (settings.getField("Secret", auth.callbacks.millis())) |ms| ms else {
+        std.log.err("Secret field missing in Settings", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    const ms: fido.ctap.crypto.master_secret.MasterSecret = _ms[0..fido.ctap.crypto.master_secret.MS_LEN].*;
+
+    var credentials = std.ArrayList(fido.ctap.crypto.Id).init(
         auth.allocator,
     );
     defer {
@@ -150,23 +163,33 @@ pub fn authenticatorGetAssertion(
 
     if (gap.allowList) |allowList| {
         for (allowList) |desc| {
-            var cred = auth.callbacks.getEntry(desc.id);
-            if (cred == null) continue;
-            try credentials.append(cred.?);
+            const credId = fido.ctap.crypto.Id.from_raw(desc.id[0..], ms, gap.rpId) catch {
+                continue;
+            };
+            try credentials.append(credId);
         }
-    } else if (auth.callbacks.load_resident_keys != null) {
-        // TODO: load resident keys using the new callbacks
+    } else {
+        if (auth.callbacks.getEntries()) |entries| {
+            for (entries) |*entry| {
+                // Each credential is bound to a rpId by a MAC, i.e., if this succeeds we know
+                // that this credential is bound to the specified rpId
+                const credId = fido.ctap.crypto.Id.from_raw(entry.id[0..], ms, gap.rpId) catch {
+                    continue;
+                };
+                try credentials.append(credId);
+            }
+        }
     }
 
     var i: usize = 0;
     while (i < credentials.items.len) : (i += 1) {
-        const policy = credentials.items[i].getField("Policy", auth.callbacks.millis());
+        const policy = credentials.items[i].getPolicy();
 
         // if credential protection for a credential is marked as
         // userVerificationRequired, and the "uv" bit is false in
         // the response, remove that credential from the applicable
         // credentials list
-        if (policy != null and std.mem.eql(u8, fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired.toString(), policy.?) and !uv_response) {
+        if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired == policy and !uv_response) {
             _ = credentials.swapRemove(i);
         }
 
@@ -175,7 +198,7 @@ pub fn authenticatorGetAssertion(
         // is no allowList passed by the client and the "uv" bit is
         // false in the response, remove that credential from the
         // applicable credentials list
-        if (policy != null and std.mem.eql(u8, fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptionalWithCredentialIDList.toString(), policy.?) and gap.allowList == null and !uv_response) {
+        if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptionalWithCredentialIDList == policy and gap.allowList == null and !uv_response) {
             _ = credentials.swapRemove(i);
         }
     }
@@ -255,7 +278,9 @@ pub fn authenticatorGetAssertion(
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var user: ?fido.common.User = null;
+    var usageCnt: u32 = @as(u32, @intCast(settings.times.usageCount));
     var cred = if (gap.allowList) |_| blk: {
+        settings.times.usageCount += 1;
         break :blk credentials.pop();
     } else blk: {
         var _cred = if (credentials.items.len == 1) blk1: {
@@ -263,22 +288,28 @@ pub fn authenticatorGetAssertion(
         } else blk1: {
             // TODO: we'll just use the most recently created credential for
             // now... but should expand this and adhere to the spec
-            var k: usize = 1;
-            var j: usize = 0;
-            var max: i64 = credentials.items[0].times.creationTime;
+            //var k: usize = 1;
+            //var j: usize = 0;
+            //var max: i64 = credentials.items[0].times.creationTime;
 
-            while (k < credentials.items.len) : (k += 1) {
-                if (credentials.items[k].times.creationTime > max) {
-                    j = k;
-                    max = credentials.items[k].times.creationTime;
-                }
-            }
+            //while (k < credentials.items.len) : (k += 1) {
+            //    if (credentials.items[k].times.creationTime > max) {
+            //        j = k;
+            //        max = credentials.items[k].times.creationTime;
+            //    }
+            //}
 
-            break :blk1 credentials.swapRemove(j);
+            //break :blk1 credentials.swapRemove(j);
+            break :blk1 credentials.pop();
         };
 
+        var entry = auth.callbacks.getEntry(_cred.raw[0..]).?;
+
+        usageCnt = @as(u32, @intCast(entry.times.usageCount));
+        entry.times.usageCount += 1;
+
         if (uv_response) {
-            const user_id = _cred.getField("UserId", auth.callbacks.millis());
+            const user_id = entry.getField("UserId", auth.callbacks.millis());
             if (user_id) |uid| {
                 // User identifiable information (name, DisplayName, icon)
                 // inside the publicKeyCredentialUserEntity MUST NOT be returned
@@ -290,14 +321,7 @@ pub fn authenticatorGetAssertion(
     };
 
     // select algorithm based on credential
-    const algorithm = if (cred.getField("Algorithm", auth.callbacks.millis())) |algo| cbor.cose.Algorithm.from_raw(algo[0..4].*) else {
-        std.log.err("Algorithm field not present for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    const private_key = if (cred.getField("PrivateKey", auth.callbacks.millis())) |algo| algo else {
-        std.log.err("PrivateKey field not present for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
+    const algorithm = cred.getAlg();
     var alg: ?fido.ctap.crypto.SigAlg = null;
     for (auth.algorithms) |_alg| blk: {
         if (algorithm == _alg.alg) {
@@ -307,8 +331,18 @@ pub fn authenticatorGetAssertion(
     }
 
     if (alg == null) {
-        std.log.err("Unknown algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        std.log.err("Unknown algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(&cred.raw)});
         return fido.ctap.StatusCodes.ctap1_err_other;
+    }
+
+    const seed = cred.deriveSeed(ms);
+    const key_pair = if (alg.?.create_det(
+        &seed,
+        auth.allocator,
+    )) |kp| kp else return fido.ctap.StatusCodes.ctap1_err_other;
+    defer {
+        auth.allocator.free(key_pair.cose_public_key);
+        auth.allocator.free(key_pair.raw_private_key);
     }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -324,7 +358,7 @@ pub fn authenticatorGetAssertion(
             .at = 0,
             .ed = 0,
         },
-        .signCount = @as(u32, @intCast(cred.times.usageCount)),
+        .signCount = usageCnt,
         .extensions = extensions,
     };
     std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
@@ -347,11 +381,11 @@ pub fn authenticatorGetAssertion(
     //                                    v
     //                           ASSERTION SIGNATURE
     const sig = if (alg.?.sign(
-        private_key,
+        key_pair.raw_private_key,
         &.{ authData.items, &gap.clientDataHash },
         auth.allocator,
     )) |signature| signature else {
-        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(&cred.raw)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
     defer auth.allocator.free(sig);
@@ -359,14 +393,13 @@ pub fn authenticatorGetAssertion(
     const gar = fido.ctap.response.GetAssertion{
         .credential = .{
             .type = .@"public-key",
-            .id = cred.id,
+            .id = &cred.raw,
         },
         .authData = authData.items,
         .signature = sig,
         .user = user,
     };
 
-    cred.times.usageCount += 1;
     try auth.callbacks.persist();
 
     try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);

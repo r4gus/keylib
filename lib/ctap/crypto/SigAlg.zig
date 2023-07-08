@@ -11,8 +11,10 @@ pub const KeyPair = struct {
 
 /// The algorithm used
 alg: cbor.cose.Algorithm,
-/// Deterministically creates a new key-pair using the given seed
+/// Create a new random key-pair
 create: *const fn (rand: std.rand.Random, allocator: Allocator) ?KeyPair,
+/// Deterministically creates a new key-pair using the given seed
+create_det: *const fn (seed: []const u8, allocator: std.mem.Allocator) ?KeyPair,
 /// Sign the given data
 sign: *const fn (
     raw_private_key: []const u8,

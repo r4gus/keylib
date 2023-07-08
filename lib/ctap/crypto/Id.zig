@@ -24,7 +24,7 @@ pub fn new(
     @memcpy(id.raw[0..4], alg.to_raw()[0..4]);
 
     // Encode credential creation policy
-    id.raw[5] = @intFromEnum(policy);
+    id.raw[4] = @intFromEnum(policy);
 
     // Create a 28 byte random context
     rand.bytes(id.raw[5..32]);
@@ -62,7 +62,7 @@ pub fn from_raw(
         return error.InvalidMac;
     }
 
-    return @This(){ .raw = raw };
+    return @This(){ .raw = raw[0..ID_LEN].* };
 }
 
 pub fn getAlg(self: *const @This()) cbor.cose.Algorithm {
@@ -70,7 +70,14 @@ pub fn getAlg(self: *const @This()) cbor.cose.Algorithm {
 }
 
 pub fn getPolicy(self: *const @This()) CredentialCreationPolicy {
-    return @as(CredentialCreationPolicy, @enumFromInt(self.raw[5]));
+    const pol: CredentialCreationPolicy = @enumFromInt(self.raw[4]);
+    return pol;
+}
+
+pub fn deriveSeed(self: *const @This(), ms: MasterSecret) [32]u8 {
+    var seed: [32]u8 = undefined;
+    Hkdf.expand(seed[0..], self.raw[0..CTX_LEN], ms);
+    return seed;
 }
 
 /// Derive a deterministic sub-key for message authentication codes.

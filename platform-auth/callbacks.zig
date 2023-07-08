@@ -71,6 +71,10 @@ pub fn getEntry(id: []const u8) ?*cks.Entry {
     return store.getEntry(id);
 }
 
+pub fn getEntries() ?[]cks.Entry {
+    return null;
+}
+
 pub fn addEntry(entry: cks.Entry) cks.Error!void {
     var store = fs.get();
     try store.addEntry(entry);

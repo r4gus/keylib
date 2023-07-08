@@ -49,7 +49,7 @@ pub fn authenticatorMakeCredential(
             uv_supported = true;
         }
 
-        if (options.rk and auth.callbacks.load_resident_key != null and auth.callbacks.store_resident_key != null) {
+        if (options.rk) {
             rk_supported = true;
         }
     }
@@ -200,16 +200,28 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 12. Check exclude list
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+
+    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
+        std.log.err("Unable to fetch Settings", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    var _ms = if (settings.getField("Secret", auth.callbacks.millis())) |ms| ms else {
+        std.log.err("Secret field missing in Settings", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    const ms: fido.ctap.crypto.master_secret.MasterSecret = _ms[0..fido.ctap.crypto.master_secret.MS_LEN].*;
+
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |ecl| {
-            // Try to load the credential with the given id. If
-            // this fails then just continue with the next possible id.
-            var entry = auth.callbacks.getEntry(ecl.id[0..]);
-            if (entry == null) continue;
+            const credId = fido.ctap.crypto.Id.from_raw(ecl.id[0..], ms, mcp.rp.id) catch {
+                continue;
+            };
 
-            const cred_policy = entry.?.getField("Policy", auth.callbacks.millis());
+            const cred_policy = credId.getPolicy();
 
-            if (cred_policy != null and !std.mem.eql(u8, fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired.toString(), cred_policy.?)) {
+            if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired != cred_policy) {
                 var userPresentFlagValue = false;
                 if (mcp.pinUvAuthParam) |_| {
                     var token = switch (mcp.pinUvAuthProtocol.?) {
@@ -298,70 +310,68 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 15. Process extensions
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var id: [32]u8 = undefined;
-    auth.callbacks.rand.bytes(id[0..]);
-    var entry = try auth.callbacks.createEntry(id[0..]);
-    errdefer entry.deinit();
+    const policy = if (mcp.extensions) |ext| blk: {
+        // Set the requested policy
+        if (ext.credProtect) |pol| {
+            break :blk pol;
+        } else {
+            break :blk fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+        }
+    } else blk: {
+        break :blk fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+    };
 
-    // We go with the weakest policy, if one wants to use a higher policy then she can
-    // always provide the `credProtect` extension.
-    //var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
-    //var cred_random: ?struct {
-    //    CredRandomWithUV: [32]u8,
-    //    CredRandomWithoutUV: [32]u8,
-    //} = null;
-    var extensions: ?fido.ctap.extensions.Extensions = null;
+    var extensions: fido.ctap.extensions.Extensions = .{
+        .credProtect = policy,
+    };
 
-    if (auth.extensionSupported(.@"hmac-secret")) {
+    const id = fido.ctap.crypto.Id.new(alg.?.alg, policy, ms, mcp.rp.id, auth.callbacks.rand);
+
+    // Create Entry if rk required
+    var entry: ?cks.Entry = if (rk) try auth.callbacks.createEntry(id.raw[0..]) else null;
+    errdefer {
+        if (rk) {
+            entry.?.deinit();
+        }
+    }
+
+    if (rk) {
+        try entry.?.addField(
+            .{ .key = "Policy", .value = policy.toString() },
+            auth.callbacks.millis(),
+        );
+    }
+
+    if (rk and auth.extensionSupported(.@"hmac-secret")) {
         // The authenticator generates two random 32-byte values (called CredRandomWithUV
         // and CredRandomWithoutUV) and associates them with the credential.
         var random_mem: [32]u8 = undefined;
         auth.callbacks.rand.bytes(random_mem[0..]);
-        try entry.addField(
+        try entry.?.addField(
             .{ .key = "CredRandomWithUV", .value = random_mem[0..] },
             auth.callbacks.millis(),
         );
         auth.callbacks.rand.bytes(random_mem[0..]);
-        try entry.addField(
+        try entry.?.addField(
             .{ .key = "CredRandomWithoutUV", .value = random_mem[0..] },
             auth.callbacks.millis(),
         );
     }
 
     if (mcp.extensions) |ext| {
-        // Set the requested policy
-        if (ext.credProtect) |pol| {
-            try entry.addField(
-                .{ .key = "Policy", .value = pol.toString() },
-                auth.callbacks.millis(),
-            );
-
-            if (extensions) |*exts| {
-                exts.credProtect = pol;
-            } else {
-                extensions = fido.ctap.extensions.Extensions{
-                    .credProtect = pol,
-                };
-            }
-        }
-
-        // Prepare hmac-secret
-        if (ext.@"hmac-secret") |hsec| {
-            switch (hsec) {
-                .create => |flag| {
-                    // The creation of the two random values will always succeed,
-                    // so we'll always return true.
-                    if (flag) {
-                        if (extensions) |*exts| {
-                            exts.@"hmac-secret" = .{ .create = true };
-                        } else {
-                            extensions = fido.ctap.extensions.Extensions{
-                                .@"hmac-secret" = .{ .create = true },
-                            };
+        if (rk) {
+            // Prepare hmac-secret
+            if (ext.@"hmac-secret") |hsec| {
+                switch (hsec) {
+                    .create => |flag| {
+                        // The creation of the two random values will always succeed,
+                        // so we'll always return true.
+                        if (flag) {
+                            extensions.@"hmac-secret" = .{ .create = true };
                         }
-                    }
-                },
-                else => {},
+                    },
+                    else => {},
+                }
             }
         }
     }
@@ -369,9 +379,10 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    const seed = id.deriveSeed(ms);
 
-    const key_pair = if (alg.?.create(
-        auth.callbacks.rand,
+    const key_pair = if (alg.?.create_det(
+        &seed,
         auth.allocator,
     )) |kp| kp else return fido.ctap.StatusCodes.ctap1_err_other;
     defer {
@@ -379,43 +390,43 @@ pub fn authenticatorMakeCredential(
         auth.allocator.free(key_pair.raw_private_key);
     }
 
-    try entry.addField(
-        .{ .key = "RpId", .value = mcp.rp.id },
-        auth.callbacks.millis(),
-    );
+    const usageCnt = if (rk) blk: {
+        try entry.?.addField(
+            .{ .key = "RpId", .value = mcp.rp.id },
+            auth.callbacks.millis(),
+        );
 
-    try entry.addField(
-        .{ .key = "UserId", .value = mcp.user.id },
-        auth.callbacks.millis(),
-    );
+        try entry.?.addField(
+            .{ .key = "UserId", .value = mcp.user.id },
+            auth.callbacks.millis(),
+        );
 
-    entry.times.usageCount = 1; // This includes the first signature possibly made below
+        const cnt = entry.?.times.usageCount;
+        entry.?.times.usageCount = 1; // This includes the first signature possibly made below
 
-    try entry.addField(
-        .{ .key = "PrivateKey", .value = key_pair.raw_private_key },
-        auth.callbacks.millis(),
-    );
+        try entry.?.addField(
+            .{ .key = "PrivateKey", .value = key_pair.raw_private_key },
+            auth.callbacks.millis(),
+        );
 
-    try entry.addField(
-        .{ .key = "Algorithm", .value = &alg.?.alg.to_raw() },
-        auth.callbacks.millis(),
-    );
+        try entry.?.addField(
+            .{ .key = "Algorithm", .value = &alg.?.alg.to_raw() },
+            auth.callbacks.millis(),
+        );
+        break :blk cnt;
+    } else blk: {
+        const cnt = settings.times.usageCount;
+        // This is the global usage counter
+        settings.times.usageCount += 1;
+        break :blk cnt;
+    };
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 17. + 18. Store credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
     if (rk) {
-        auth.callbacks.addEntry(entry) catch {
-            return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-        };
-    } else {
-        // TODO: At the moment there is no difference between discoverable
-        // and non discoverable credentials, i.e. we assume "unlimited" memory.
-        // This is pretty bad for hardware authenticator implementations
-        // but it makes things a little bit simpler for now and the current
-        // focus is more on platform authenticators.
-        auth.callbacks.addEntry(entry) catch {
+        auth.callbacks.addEntry(entry.?) catch {
             return fido.ctap.StatusCodes.ctap2_err_key_store_full;
         };
     }
@@ -434,11 +445,11 @@ pub fn authenticatorMakeCredential(
             .at = 1,
             .ed = 0,
         },
-        .signCount = 0,
+        .signCount = @as(u32, @intCast(usageCnt)),
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
-            .credential_length = @as(u16, @intCast(id[0..].len)),
-            .credential_id = id[0..],
+            .credential_length = @as(u16, @intCast(id.raw[0..].len)),
+            .credential_id = id.raw[0..],
             .credential_public_key = key_pair.cose_public_key,
         },
         .extensions = extensions,

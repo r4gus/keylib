@@ -7,6 +7,7 @@ const EcdsaP256Sha256 = std.crypto.sign.ecdsa.EcdsaP256Sha256;
 pub const Es256 = SigAlg{
     .alg = .Es256,
     .create = create,
+    .create_det = create_det,
     .sign = sign,
 };
 
@@ -14,7 +15,11 @@ pub fn create(rand: std.rand.Random, allocator: std.mem.Allocator) ?SigAlg.KeyPa
     // Create key pair
     var seed: [32]u8 = undefined;
     rand.bytes(&seed);
-    const kp = EcdsaP256Sha256.KeyPair.create(seed) catch return null;
+    return create_det(&seed, allocator);
+}
+
+pub fn create_det(seed: []const u8, allocator: std.mem.Allocator) ?SigAlg.KeyPair {
+    const kp = EcdsaP256Sha256.KeyPair.create(seed[0..32].*) catch return null;
     const sec1 = kp.public_key.toUncompressedSec1();
     const pk = kp.secret_key.toBytes();
     const pubk = cbor.cose.Key{ .P256 = .{

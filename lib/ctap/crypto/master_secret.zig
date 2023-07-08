@@ -1,8 +1,9 @@
 const std = @import("std");
 const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 
+pub const MS_LEN = Hkdf.prk_length;
 /// Stored by the authenticator and used to derive all other secrets
-pub const MasterSecret = [Hkdf.prk_length]u8;
+pub const MasterSecret = [MS_LEN]u8;
 
 /// Create a new, random master secret using a hash based key derivation function
 pub fn createMasterSecret(rand: std.rand.Random) MasterSecret {

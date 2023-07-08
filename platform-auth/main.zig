@@ -103,6 +103,7 @@ pub fn main() !void {
             .up = callbacks.up,
             .createEntry = callbacks.createEntry,
             .getEntry = callbacks.getEntry,
+            .getEntries = callbacks.getEntries,
             .addEntry = callbacks.addEntry,
             .persist = callbacks.persist,
             .reset = callbacks.reset,

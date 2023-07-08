@@ -57,6 +57,7 @@ uv: ?*const fn () bool = null,
 
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
+getEntries: *const fn () ?[]cks.Entry,
 addEntry: *const fn (entry: cks.Entry) cks.Error!void,
 persist: *const fn () error{Fatal}!void,
 
@@ -80,21 +81,3 @@ reset: *const fn () void,
 /// Those constraints are checked when settings and changing a PIN. Returns true
 /// if all constraints are met, false otherwise.
 validate_pin_constraints: ?*const fn (pin: []const u8) bool = null,
-
-/// Load a CBOR encoded credential using the given rpId
-///
-/// This callback is optional for discoverable credentials.
-///
-/// This operation should fail with `DoesNotExist` if there is no credential
-/// with the given id.
-load_resident_key: ?*const fn (rpid: []const u8, userId: []const u8, a: std.mem.Allocator) LoadError![]const u8 = null,
-
-/// Store a CBOR encoded credential using the given rpId
-///
-/// This callback is optional for discoverable credentials.
-///
-/// Any existing credential bound to the same rpId should be overwritten.
-store_resident_key: ?*const fn (rpid: []const u8, userId: []const u8, d: []const u8) StoreError!void = null,
-
-/// Load all resident keys for the given rpId
-load_resident_keys: ?*const fn (rpid: []const u8, a: std.mem.Allocator) LoadError![]const []const u8 = null,
