@@ -112,10 +112,15 @@ pub fn handle(self: *@This(), command: []const u8) Response {
             }
         },
         .authenticatorGetInfo => {
-            fido.ctap.commands.authenticator.authenticatorGetInfo(self.settings, response) catch {
+            const status = fido.ctap.commands.authenticator.authenticatorGetInfo(self, response) catch {
                 res.deinit();
-                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
+                return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
             };
+
+            if (status != .ctap1_err_success) {
+                res.deinit();
+                return Response{ .err = @intFromEnum(status) };
+            }
         },
         .authenticatorClientPin => {
             const status = fido.ctap.commands.authenticator.authenticatorClientPin(self, response, command) catch {

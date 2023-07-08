@@ -93,8 +93,9 @@ var authenticator = fido.ctap.authenticator.Authenticator{
             .uv = false,
             // This is a platform authenticator even if we use usb for ipc
             .plat = true,
-            // THe device is capable of accepting a PIN from the client
-            .clientPin = true,
+            // Set clientPin to false if you wanna support a pin and to none
+            // if you don't want to use a pin at all. Never set this to true!
+            .clientPin = false,
             .pinUvAuthToken = true,
             .alwaysUv = true,
         },

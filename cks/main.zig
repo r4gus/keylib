@@ -156,7 +156,7 @@ pub const CKS = struct {
         } else unreachable;
         defer allocator.free(mem);
 
-        std.debug.print("{s}\n", .{std.fmt.fmtSliceHexUpper(mem)});
+        //std.debug.print("{s}\n", .{std.fmt.fmtSliceHexUpper(mem)});
 
         const data = try cbor.parse(
             Data,
