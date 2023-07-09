@@ -58,6 +58,8 @@ pub const ctap = struct {
         pub const GetAssertion = @import("ctap/request/GetAssertion.zig");
         /// authenticatorClientPin request data structure
         pub const ClientPin = @import("ctap/request/ClientPin.zig");
+        /// authenticatorCredentialManagement request data structure
+        pub const CredentialManagement = @import("ctap/request/CredentialManagement.zig");
     };
 
     /// Response data structures
@@ -68,6 +70,8 @@ pub const ctap = struct {
         pub const GetAssertion = @import("ctap/response/GetAssertion.zig");
         /// authenticatorClientPin response data structure
         pub const ClientPin = @import("ctap/response/ClientPin.zig");
+        /// authenticatorCredentialManagement response data structure
+        pub const CredentialManagement = @import("ctap/response/CredentialManagement.zig");
     };
 
     /// Algorithms and data types for crypto
@@ -172,6 +176,7 @@ pub const ctap = struct {
             pub const authenticatorGetAssertion = @import("ctap/commands/authenticator/authenticatorGetAssertion.zig").authenticatorGetAssertion;
             pub const authenticatorClientPin = @import("ctap/commands/authenticator/authenticatorClientPin.zig").authenticatorClientPin;
             pub const authenticatorSelection = @import("ctap/commands/authenticator/authenticatorSelection.zig").authenticatorSelection;
+            pub const authenticatorCredentialManagement = @import("ctap/commands/authenticator/authenticatorCredentialManagement.zig").authenticatorCredentialManagement;
         };
     };
 

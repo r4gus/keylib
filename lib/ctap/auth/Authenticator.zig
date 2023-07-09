@@ -161,6 +161,17 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 return Response{ .err = @intFromEnum(status) };
             }
         },
+        .authenticatorCredentialManagement => {
+            const status = fido.ctap.commands.authenticator.authenticatorCredentialManagement(self, response, command) catch {
+                res.deinit();
+                return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
+            };
+
+            if (status != .ctap1_err_success) {
+                res.deinit();
+                return Response{ .err = @intFromEnum(status) };
+            }
+        },
         else => {
             res.deinit();
             return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
