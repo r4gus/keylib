@@ -7,8 +7,17 @@
 
 A library that allows you to implement FIDO2 authenticators. 
 
+## Examples
+
+### Login with FIDO2
+
 ![Login Showcase](login.gif)
+
+### Login using Passkey (FIDO2 with discoverable credential)
+
 ![Passkey Showcase](login2.gif)
+
+## Docs
 
 <details>
 <summary><ins>Getting started</ins></summary>
