@@ -8,6 +8,7 @@
 A library that allows you to implement FIDO2 authenticators. 
 
 ![Login Showcase](login.gif)
+![Passkey Showcase](login2.gif)
 
 <details>
 <summary><ins>Getting started</ins></summary>
