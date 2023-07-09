@@ -131,10 +131,6 @@ pub fn authenticatorGetAssertion(
         } else if (uv) {
             // TODO: performBuiltInUv(internalRetry)
             return fido.ctap.StatusCodes.ctap2_err_uv_invalid;
-        } else {
-            // This should be unreachable but we'll return an error
-            // just in case.
-            return fido.ctap.StatusCodes.ctap1_err_other;
         }
     }
 

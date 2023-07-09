@@ -128,6 +128,8 @@ pub fn main() !void {
         two.initialize();
     }
 
+    //try authenticator.init();
+
     while (true) {
         var event = std.mem.zeroes(uhid.uhid_event);
         const l = try fd.read(std.mem.asBytes(&event));
