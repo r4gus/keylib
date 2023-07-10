@@ -30,6 +30,28 @@ token: struct {
 
 allocator: std.mem.Allocator,
 
+pub fn init(self: *@This()) !void {
+    var settings = if (self.callbacks.getEntry("Settings")) |settings| settings else blk: {
+        std.log.warn("No Settings entry found", .{});
+
+        var s = try self.callbacks.createEntry("Settings");
+        try s.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp());
+        try s.addField(.{
+            .key = "Secret",
+            .value = &fido.ctap.crypto.master_secret.createMasterSecret(self.callbacks.rand),
+        }, self.callbacks.millis());
+        try self.callbacks.addEntry(s);
+
+        break :blk self.callbacks.getEntry("Settings").?;
+    };
+
+    _ = settings;
+    // TODO: go through the given settings and options and check if the Settings
+    // struct has to be altered, e.g., the max number of resident keys has changed.
+
+    try self.callbacks.persist();
+}
+
 pub fn handle(self: *@This(), command: []const u8) Response {
     // Buffer for the response message
     var res = std.ArrayList(u8).init(self.allocator);
@@ -161,7 +183,7 @@ pub fn handle(self: *@This(), command: []const u8) Response {
                 return Response{ .err = @intFromEnum(status) };
             }
         },
-        .authenticatorCredentialManagement => {
+        .authenticatorCredentialManagement, .authenticatorCredentialManagementYubico => {
             const status = fido.ctap.commands.authenticator.authenticatorCredentialManagement(self, response, command) catch {
                 res.deinit();
                 return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
@@ -184,24 +206,25 @@ pub fn handle(self: *@This(), command: []const u8) Response {
 /// Returns true if the authenticator supports the given pinUvAuth protocol version
 pub fn pinUvAuthProtocolSupported(
     self: *const @This(),
-    protocol: fido.ctap.pinuv.common.PinProtocol,
+    protocol: ?fido.ctap.pinuv.common.PinProtocol,
 ) bool {
+    if (protocol == null) return false;
     if (self.settings.pinUvAuthProtocols == null) return false;
 
     var supported = false;
 
     // We must expose this capability via getInfo...
     for (self.settings.pinUvAuthProtocols.?) |prot| {
-        if (prot == protocol) {
+        if (prot == protocol.?) {
             supported = true;
             break;
         }
     }
 
     // ...and also provide the logic
-    if (protocol == .V1 and self.token.one == null) {
+    if (protocol.? == .V1 and self.token.one == null) {
         supported = false;
-    } else if (protocol == .V2 and self.token.two == null) {
+    } else if (protocol.? == .V2 and self.token.two == null) {
         supported = false;
     }
 

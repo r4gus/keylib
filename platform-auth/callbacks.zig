@@ -71,9 +71,9 @@ pub fn getEntry(id: []const u8) ?*cks.Entry {
     return store.getEntry(id);
 }
 
-pub fn getEntries() ?[]cks.Entry {
+pub fn getEntries() ?[]cks.Entry { // TODO: maybe rename to getResidentKeys
     var store = fs.get();
-    return store.data.entries;
+    return if (store.data.entries) |entries| entries[1..] else null; // first entry is "Settings"
 }
 
 pub fn addEntry(entry: cks.Entry) cks.Error!void {

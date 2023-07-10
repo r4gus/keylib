@@ -7,16 +7,18 @@ subCommand: SubCommand,
 /// Map of sub command parameters
 subCommandParams: ?SubCommandParams = null,
 /// PIN/UV protocol version chosen by the platform
-pinUvAuthProtocol: fido.ctap.pinuv.common.PinProtocol,
+pinUvAuthProtocol: ?fido.ctap.pinuv.common.PinProtocol = null,
 /// First 16 bytes of HMAC-SHA-256 of contents using pinUvAuthToken
-pinUvAuthParam: []const u8,
+pinUvAuthParam: ?[]const u8 = null,
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     if (self.subCommandParams) |subCommandParams| {
         subCommandParams.deinit(allocator);
     }
 
-    allocator.free(self.pinUvAuthParam);
+    if (self.pinUvAuthParam) |puap| {
+        allocator.free(puap);
+    }
 }
 
 pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
@@ -50,6 +52,7 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
 
 /// List of sub commands for credential management
 pub const SubCommand = enum(u8) {
+    /// get credentials metadata information
     getCredsMetadata = 0x01,
     enumerateRPsBegin = 0x02,
     enumerateRPsGetNextRP = 0x03,
