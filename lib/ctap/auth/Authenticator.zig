@@ -36,6 +36,9 @@ pub fn init(self: *@This()) !void {
 
         var s = try self.callbacks.createEntry("Settings");
         try s.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp());
+        try s.addField(.{ .key = "ForcePinChange", .value = "False" }, std.time.milliTimestamp());
+        try s.addField(.{ .key = "MinPinLength", .value = "\x04" }, std.time.milliTimestamp());
+        try s.addField(.{ .key = "AlwaysUv", .value = "True" }, std.time.milliTimestamp());
         try s.addField(.{
             .key = "Secret",
             .value = &fido.ctap.crypto.master_secret.createMasterSecret(self.callbacks.rand),
@@ -44,10 +47,7 @@ pub fn init(self: *@This()) !void {
 
         break :blk self.callbacks.getEntry("Settings").?;
     };
-
     _ = settings;
-    // TODO: go through the given settings and options and check if the Settings
-    // struct has to be altered, e.g., the max number of resident keys has changed.
 
     try self.callbacks.persist();
 }

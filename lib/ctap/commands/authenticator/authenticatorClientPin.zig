@@ -124,17 +124,20 @@ pub fn authenticatorClientPin(
             // Count the number of code points. We must then check the required
             // length of the password against the code point length.
             const _code_points = std.unicode.utf8CountCodepoints(newPin) catch {
+                std.log.err("authenticatorClientPin (setPin): invalid utf8 string", .{});
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             };
             const code_points: u8 = @as(u8, @intCast(_code_points));
 
             if (code_points < npl) {
+                std.log.err("authenticatorClientPin (setPin): length insufficient, expected {d} got {d}", .{ npl, code_points });
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
             if (auth.callbacks.validate_pin_constraints) |vpc| {
                 // Check additional PIN constraints
                 if (!vpc(newPin)) {
+                    std.log.err("authenticatorClientPin (setPin): pin constraint violated", .{});
                     return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
                 }
             }
@@ -264,11 +267,13 @@ pub fn authenticatorClientPin(
             // Count the number of code points. We must then check the required
             // length of the password against the code point length.
             const _code_points = std.unicode.utf8CountCodepoints(newPin) catch {
+                std.log.err("authenticatorClientPin (setPin): invalid utf8 string", .{});
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             };
             const code_points: u8 = @as(u8, @intCast(_code_points));
 
             if (code_points < npl) {
+                std.log.err("authenticatorClientPin (setPin): length insufficient, expected {d} got {d}", .{ npl, code_points });
                 return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
@@ -278,6 +283,7 @@ pub fn authenticatorClientPin(
             if (auth.settings.forcePINChange) |fpc| {
                 // Hash of new pin must not be the same as the old hash
                 if (fpc and std.mem.eql(u8, pinHash2[0..], &ph)) {
+                    std.log.err("authenticatorClientPin (changePin): new and old pin must differ", .{});
                     return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
                 }
             }
@@ -285,6 +291,7 @@ pub fn authenticatorClientPin(
             if (auth.callbacks.validate_pin_constraints) |vpc| {
                 // Check additional PIN constraints
                 if (!vpc(newPin)) {
+                    std.log.err("authenticatorClientPin (changePin): pin constraint violated", .{});
                     return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
                 }
             }
@@ -415,6 +422,7 @@ pub fn authenticatorClientPin(
             // Check if user is forced to change the pin
             if (auth.settings.forcePINChange) |change| {
                 if (change) {
+                    std.log.err("authenticatorClientPin (getPinUvAuthTokenUsingPinWithPermissions): pin change required", .{});
                     return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
                 }
             }

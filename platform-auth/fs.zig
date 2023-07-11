@@ -22,16 +22,6 @@ pub fn load(path: []const u8, a: std.mem.Allocator, pw: []const u8) !void {
             std.time.milliTimestamp,
         );
 
-        var id = try a.alloc(u8, "Settings".len);
-        @memcpy(id, "Settings");
-        var settings = cks.Entry.new(id, std.time.milliTimestamp(), a);
-        try settings.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp());
-        try settings.addField(.{
-            .key = "Secret",
-            .value = &fido.ctap.crypto.master_secret.createMasterSecret(std.crypto.random),
-        }, std.time.milliTimestamp());
-        try store.?.addEntry(settings);
-
         try writeBack(path, pw);
 
         return;
