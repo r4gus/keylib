@@ -112,13 +112,7 @@ pub fn pinUvAuthTokenUsageTimerObserver(self: *@This(), time_ms: i64) void {
     // If the initial usage time limit is reached without the platform using the pinUvAuthToken
     // in an authenticator operation then call stopUsingPinUvAuthToken(), and terminate these steps.
     if ((delta > self.initial_usage_time_limit and !self.used) or delta > self.max_usage_time_period) {
-        self.in_use = false;
-        self.initial_usage_time_limit = 19000;
-        self.user_present_time_limit = 19000;
-        self.user_verified = false;
-        self.user_present = false;
-        self.usage_timer = null;
-        self.used = false;
+        self.stopUsingPinUvAuthToken();
         return;
     }
 }
@@ -140,7 +134,7 @@ pub fn clearUserVerifiedFlag(self: *@This()) void {
 pub fn stopUsingPinUvAuthToken(self: *@This()) void {
     self.rp_id = null;
     self.permissions = 0;
-    self.is_use = false;
+    self.in_use = false;
     self.initial_usage_time_limit = 19000;
     self.user_present_time_limit = 19000;
     self.max_usage_time_period = 600000;
