@@ -1,3 +1,4 @@
+const std = @import("std");
 /// Protection level for credentials
 ///
 /// Authenticators supporting some form of user verification MUST process this extension
@@ -23,5 +24,17 @@ pub const CredentialCreationPolicy = enum(u8) {
             .userVerificationOptionalWithCredentialIDList => "userVerificationOptionalWithCredentialIDList",
             .userVerificationRequired => "userVerificationRequired",
         };
+    }
+
+    pub fn fromString(s: []const u8) ?@This() {
+        if (std.mem.eql(u8, s, "userVerificationOptional")) {
+            return @This().userVerificationOptional;
+        } else if (std.mem.eql(u8, s, "userVerificationOptionalWithCredentialIDList")) {
+            return @This().userVerificationOptionalWithCredentialIDList;
+        } else if (std.mem.eql(u8, s, "userVerificationRequired")) {
+            return @This().userVerificationRequired;
+        } else {
+            return null;
+        }
     }
 };

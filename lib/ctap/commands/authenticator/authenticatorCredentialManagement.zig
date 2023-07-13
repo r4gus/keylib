@@ -64,6 +64,83 @@ fn validate(
     return null;
 }
 
+pub fn getKeyInfo(
+    id: []const u8,
+    cmResp: *fido.ctap.response.CredentialManagement,
+    auth: *fido.ctap.authenticator.Authenticator,
+) ?fido.ctap.StatusCodes {
+    var entry = auth.callbacks.getEntry(id).?;
+
+    // Get the user id
+    if (entry.getField("UserId", auth.callbacks.millis())) |user| {
+        var a = auth.allocator.alloc(u8, user.len) catch {
+            std.log.err("Out of memory", .{});
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        };
+        @memcpy(a, user);
+        cmResp.user = .{ .id = a };
+    } else {
+        std.log.err("authenticatorCredentialManagement (enumerateRPsBegin): unable to fetch UserId", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
+
+    // Get the credential id
+    cmResp.credentialID = .{
+        .id = id,
+        .type = .@"public-key",
+    };
+
+    // Get the public key
+    if (entry.getField("PrivateKey", auth.callbacks.millis())) |pk| {
+        if (entry.getField("Algorithm", auth.callbacks.millis())) |algo| {
+            const algorithm = std.mem.bytesToValue(cbor.cose.Algorithm, algo[0..4]);
+
+            var alg: ?fido.ctap.crypto.SigAlg = null;
+            for (auth.algorithms) |_alg| blk: {
+                if (algorithm == _alg.alg) {
+                    alg = _alg;
+                    break :blk;
+                }
+            }
+
+            if (alg == null) {
+                std.log.err("Unsupported algorithm", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            }
+
+            if (alg.?.from_priv(pk)) |public_key| {
+                cmResp.publicKey = public_key;
+            } else {
+                std.log.err("Unable to derive public key", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            }
+        } else {
+            std.log.err("Unable to fetch Algorithm", .{});
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        }
+    } else {
+        std.log.err("Unable to fetch PrivateKey", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
+
+    // Get policy
+    if (entry.getField("Policy", auth.callbacks.millis())) |pol| {
+        if (fido.ctap.extensions.CredentialCreationPolicy.fromString(pol)) |p| {
+            cmResp.credProtect = p;
+        } else {
+            std.log.err("Unable to translate Policy", .{});
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        }
+    } else {
+        std.log.err("Unable to fetch Policy", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
+
+    // TODO: Return large blob key (not yet supported)
+
+    return null;
+}
+
 pub fn authenticatorCredentialManagement(
     auth: *fido.ctap.authenticator.Authenticator,
     out: anytype,
@@ -231,68 +308,13 @@ pub fn authenticatorCredentialManagement(
                 return fido.ctap.StatusCodes.ctap2_err_no_credentials;
             }
 
+            // Get total credentials
             cmResp.totalCredentials = @intCast(S.rpId.?.ids.items.len);
             const id = S.rpId.?.ids.pop();
-            var entry = auth.callbacks.getEntry(id).?;
 
-            // Get the user id
-            if (entry.getField("UserId", auth.callbacks.millis())) |user| {
-                var a = try auth.allocator.alloc(u8, user.len);
-                @memcpy(a, user);
-                cmResp.user = .{ .id = a };
-            } else {
-                std.log.err("authenticatorCredentialManagement (enumerateRPsBegin): unable to fetch UserId", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
+            if (getKeyInfo(id, &cmResp, auth)) |err| {
+                return err;
             }
-
-            // Get the credential id
-            cmResp.credentialID = .{
-                .id = id,
-                .type = .@"public-key",
-            };
-
-            // Get the public key
-            var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
-                std.log.err("Unable to fetch Settings", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            var _ms = if (settings.getField("Secret", auth.callbacks.millis())) |ms| ms else {
-                std.log.err("Secret field missing in Settings", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            const ms: fido.ctap.crypto.master_secret.MasterSecret = _ms[0..fido.ctap.crypto.master_secret.MS_LEN].*;
-            const cred = try fido.ctap.crypto.Id.from_raw(id, ms, RP_ID.?);
-
-            const algorithm = cred.getAlg();
-            var alg: ?fido.ctap.crypto.SigAlg = null;
-            for (auth.algorithms) |_alg| blk: {
-                if (algorithm == _alg.alg) {
-                    alg = _alg;
-                    break :blk;
-                }
-            }
-
-            if (alg == null) {
-                std.log.err("Unknown algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(&cred.raw)});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            }
-
-            const seed = cred.deriveSeed(ms);
-            const key_pair = if (alg.?.create_det(
-                &seed,
-                auth.allocator,
-            )) |kp| kp else return fido.ctap.StatusCodes.ctap1_err_other;
-            defer {
-                auth.allocator.free(key_pair.raw_private_key);
-            }
-            const kp = try cbor.parse(cbor.cose.Key, try cbor.DataItem.new(key_pair.cose_public_key), .{});
-
-            cmResp.publicKey = kp;
-
-            // Get policy
-            cmResp.credProtect = cred.getPolicy();
-
-            // TODO: Return large blob key (not yet supported)
         },
         .enumerateCredentialsGetNextCredential => {},
         .deleteCredential => {},
