@@ -17,6 +17,28 @@ A library that allows you to implement FIDO2 authenticators.
 
 ![Passkey Showcase](login2.gif)
 
+### Linux platform authenticator
+
+There is a Linux platform authenticator available in `./platform-auth`.
+To set it up you can run the following commands from the command line:
+
+1. install udev rules
+```
+echo "KERNEL=="uhid", MODE="0660", GROUP="fido", TAG+="uaccess" > /etc/udev/rules.d/99-uhid.rules
+```
+
+3. Run the authenticator
+```
+zig build
+./zig-out/bin/platauth
+```
+All the stuff here is still very experimental so expect bugs and breaking changes! If you wanna
+contribute, just open a issue or pull request :smile:.
+
+#### Known issues
+
+1. All browsers based on chromium should have CTAP2 support but I encountered issues with recent builds of Chromium. At least Brave doesn't let me down.
+
 ## Docs
 
 <details>
@@ -221,20 +243,6 @@ Each `SigAlg` instance has a `cbor.cose.Algorithm` field, a `create` and a `sign
 
 See `lib/ctap/crypto/sigalgs/Es256.zig` for reference.
 
-### Linux platform authenticator
-
-There is a (very incomplete but working) platform authenticator available in `./platform-auth`.
-To set it up you can run the following commands from the command line:
-
-1. install udev rules
-TODO: Provide udev rules
-
-3. Run the authenticator
-```
-zig build
-./zig-out/bin/platauth
-```
-All the stuff here is still very experimental!
 
 ### Are we yet?
 
