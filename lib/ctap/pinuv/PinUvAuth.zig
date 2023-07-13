@@ -142,6 +142,7 @@ pub fn stopUsingPinUvAuthToken(self: *@This()) void {
     self.user_present = false;
     self.usage_timer = null;
     self.used = false;
+    @memset(self.pin_token[0..], 0);
 }
 
 pub fn initialize(self: *@This()) void {

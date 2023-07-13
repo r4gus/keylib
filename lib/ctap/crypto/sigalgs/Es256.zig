@@ -9,6 +9,7 @@ pub const Es256 = SigAlg{
     .create = create,
     .create_det = create_det,
     .sign = sign,
+    .from_priv = from_priv,
 };
 
 pub fn create(rand: std.rand.Random, allocator: std.mem.Allocator) ?SigAlg.KeyPair {
@@ -75,4 +76,21 @@ pub fn sign(
     var mem = allocator.alloc(u8, der.len) catch return null;
     @memcpy(mem, der);
     return mem;
+}
+
+pub fn from_priv(priv: []const u8) ?cbor.cose.Key {
+    if (priv.len != 32) return null;
+
+    var kp = EcdsaP256Sha256.KeyPair.fromSecretKey(
+        try EcdsaP256Sha256.SecretKey.fromBytes(priv[0..32].*),
+    ) catch return null;
+
+    const sec1 = kp.public_key.toUncompressedSec1();
+    const pubk = cbor.cose.Key{ .P256 = .{
+        .alg = .Es256,
+        .x = sec1[1..33].*,
+        .y = sec1[33..65].*,
+    } };
+
+    return pubk;
 }

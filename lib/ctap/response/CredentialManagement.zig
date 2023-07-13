@@ -17,7 +17,7 @@ user: ?fido.common.User = null,
 /// PublicKeyCredentialDescriptor
 credentialID: ?fido.common.PublicKeyCredentialDescriptor = null,
 /// Public key of the credential
-publicKey: ?[]const u8 = null,
+publicKey: ?cbor.cose.Key = null,
 /// Total number of credentials present on the authenticator for the RP in question
 totalCredentials: ?u32 = null,
 /// Credential protection policy
@@ -77,10 +77,6 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
 
     if (self.credentialID) |credId| {
         credId.deinit(allocator);
-    }
-
-    if (self.publicKey) |pk| {
-        allocator.free(pk);
     }
 
     if (self.largeBlobKey) |lbk| {

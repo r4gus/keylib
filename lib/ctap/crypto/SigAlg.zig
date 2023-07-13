@@ -21,3 +21,4 @@ sign: *const fn (
     data_seq: []const []const u8,
     allocator: Allocator,
 ) ?[]const u8,
+from_priv: *const fn (priv: []const u8) ?cbor.cose.Key,
