@@ -109,6 +109,7 @@ pub fn main() !void {
             .getEntry = callbacks.getEntry,
             .getEntries = callbacks.getEntries,
             .addEntry = callbacks.addEntry,
+            .removeEntry = callbacks.removeEntry,
             .persist = callbacks.persist,
             .reset = callbacks.reset,
         },

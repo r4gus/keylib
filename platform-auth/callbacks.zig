@@ -81,6 +81,11 @@ pub fn addEntry(entry: cks.Entry) cks.Error!void {
     try store.addEntry(entry);
 }
 
+pub fn removeEntry(id: []const u8) cks.Error!void {
+    var store = fs.get();
+    try store.removeEntry(id);
+}
+
 pub fn persist() error{Fatal}!void {
     const pw = if (password(null)) |pw| pw else return error.Fatal;
     fs.writeBack("passkey.cks", pw) catch {

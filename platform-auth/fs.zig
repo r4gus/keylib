@@ -51,5 +51,6 @@ pub fn writeBack(path: []const u8, pw: []const u8) !void {
         break :blk try dir.createFile(path, .{});
     };
 
+    try file.setEndPos(0);
     try store.?.seal(file.writer(), pw);
 }

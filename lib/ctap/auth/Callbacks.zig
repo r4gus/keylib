@@ -59,6 +59,7 @@ createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
 getEntries: *const fn () ?[]cks.Entry,
 addEntry: *const fn (entry: cks.Entry) cks.Error!void,
+removeEntry: *const fn (id: []const u8) cks.Error!void,
 persist: *const fn () error{Fatal}!void,
 
 //// Called on a reset

@@ -21,26 +21,19 @@ fn validate(
         .V2 => &auth.token.two.?,
     };
 
+    // SUB_COMMAND || CBOR(SUB_COMMAND_PARAMS is validated)
     var arr = std.ArrayList(u8).init(auth.allocator);
     defer arr.deinit();
-    if (!prot.verify_token(switch (cmReq.subCommand) {
-        .getCredsMetadata => "\x01",
-        .enumerateRPsBegin => "\x02",
-        .enumerateRPsGetNextRP => "\x03",
-        .enumerateCredentialsBegin => blk: {
-            // Verify expects the following: 0x04 || CBOR(subCommandParams)
-            arr.writer().writeByte(4) catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            cbor.stringify(cmReq.subCommandParams.?, .{}, arr.writer()) catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            break :blk arr.items[0..];
-        },
-        .enumerateCredentialsGetNextCredential => "\x05",
-        .deleteCredential => "\x06",
-        .updateUserInformation => "\x07",
-    }, cmReq.pinUvAuthParam.?, auth.allocator)) {
+    arr.writer().writeByte(@intFromEnum(cmReq.subCommand)) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    if (cmReq.subCommandParams) |params| {
+        cbor.stringify(params, .{}, arr.writer()) catch {
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        };
+    }
+
+    if (!prot.verify_token(arr.items, cmReq.pinUvAuthParam.?, auth.allocator)) {
         std.log.err("authenticatorCredentialManagement: token verification failed", .{});
         return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
     }
@@ -264,6 +257,10 @@ pub fn authenticatorCredentialManagement(
             }
         },
         .enumerateCredentialsBegin => {
+            if (cmReq.subCommandParams == null or cmReq.subCommandParams.?.rpIDHash == null) {
+                return fido.ctap.StatusCodes.ctap2_err_missing_parameter;
+            }
+
             if (validate(&cmReq, auth)) |r| {
                 return r;
             }
@@ -316,9 +313,104 @@ pub fn authenticatorCredentialManagement(
                 return err;
             }
         },
-        .enumerateCredentialsGetNextCredential => {},
-        .deleteCredential => {},
-        .updateUserInformation => {},
+        .enumerateCredentialsGetNextCredential => {
+            if (S.rpId) |*rpIds| {
+                const id = rpIds.ids.pop();
+
+                if (getKeyInfo(id, &cmResp, auth)) |err| {
+                    return err;
+                }
+            } else {
+                // This is actualy not required in the standard but its possible
+                // so it should be handled
+                return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            }
+        },
+        .deleteCredential => {
+            if (cmReq.subCommandParams == null or cmReq.subCommandParams.?.credentialID == null) {
+                return fido.ctap.StatusCodes.ctap2_err_missing_parameter;
+            }
+
+            if (validate(&cmReq, auth)) |r| {
+                return r;
+            }
+
+            auth.callbacks.removeEntry(cmReq.subCommandParams.?.credentialID.?.id) catch |err| {
+                if (err == error.DoesNotExist) {
+                    return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+                } else {
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                }
+            };
+
+            try auth.callbacks.persist();
+        },
+        .updateUserInformation => {
+            if (cmReq.subCommandParams == null or
+                cmReq.subCommandParams.?.credentialID == null or
+                cmReq.subCommandParams.?.user == null)
+            {
+                return fido.ctap.StatusCodes.ctap2_err_missing_parameter;
+            }
+
+            if (validate(&cmReq, auth)) |r| {
+                return r;
+            }
+
+            var entry = if (auth.callbacks.getEntry(cmReq.subCommandParams.?.credentialID.?.id)) |e| e else {
+                return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            };
+
+            if (!std.mem.eql(
+                u8,
+                cmReq.subCommandParams.?.credentialID.?.id,
+                cmReq.subCommandParams.?.user.?.id,
+            )) {
+                return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
+            }
+
+            // Replace, add or remove the user name
+            if (cmReq.subCommandParams.?.user.?.name) |name| {
+                if (entry.getField("UserName", auth.callbacks.millis())) |_| {
+                    entry.updateField("UserName", name, auth.callbacks.millis()) catch {
+                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+                    };
+                } else {
+                    entry.addField(.{ .key = "UserName", .value = name }, auth.callbacks.millis()) catch {
+                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+                    };
+                }
+            } else blk: {
+                const uname = entry.removeField("UserName", auth.callbacks.millis()) catch {
+                    break :blk; // this is a problem but not such a big one
+                };
+                if (uname) |name| {
+                    entry.allocator.free(name.key);
+                    entry.allocator.free(name.value);
+                }
+            }
+
+            // Replace, add or remove the display name
+            if (cmReq.subCommandParams.?.user.?.displayName) |displayName| {
+                if (entry.getField("UserDisplayName", auth.callbacks.millis())) |_| {
+                    entry.updateField("UserDisplayName", displayName, auth.callbacks.millis()) catch {
+                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+                    };
+                } else {
+                    entry.addField(.{ .key = "UserDisplayName", .value = displayName }, auth.callbacks.millis()) catch {
+                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+                    };
+                }
+            } else blk: {
+                const dname = entry.removeField("UserDisplayName", auth.callbacks.millis()) catch {
+                    break :blk; // this is a problem but not such a big one
+                };
+                if (dname) |name| {
+                    entry.allocator.free(name.key);
+                    entry.allocator.free(name.value);
+                }
+            }
+        },
     }
 
     try cbor.stringify(cmResp, .{}, out);
