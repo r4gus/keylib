@@ -401,6 +401,20 @@ pub fn authenticatorMakeCredential(
             auth.callbacks.millis(),
         );
 
+        if (mcp.user.name) |name| {
+            try entry.?.addField(
+                .{ .key = "UserName", .value = name },
+                auth.callbacks.millis(),
+            );
+        }
+
+        if (mcp.user.displayName) |name| {
+            try entry.?.addField(
+                .{ .key = "UserDisplayName", .value = name },
+                auth.callbacks.millis(),
+            );
+        }
+
         const cnt = entry.?.times.usageCount;
         entry.?.times.usageCount = 1; // This includes the first signature possibly made below
 
