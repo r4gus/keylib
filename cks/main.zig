@@ -53,8 +53,9 @@ pub const CKS = struct {
         return self.data.getEntry(id, self.time());
     }
 
-    pub fn removeEntry(self: *@This(), id: []const u8) Error!?Entry {
-        return self.data.removeEntry(id, self.time());
+    pub fn removeEntry(self: *@This(), id: []const u8) Error!void {
+        var e = try self.data.removeEntry(id, self.time());
+        e.deinit();
     }
 
     pub fn seal(self: *@This(), out: anytype, pw: []const u8) !void {
@@ -77,12 +78,16 @@ pub const CKS = struct {
         try cbor.stringify(self.outer_header, .{}, oh.writer());
         defer oh.deinit();
 
+        //std.debug.print("seal:\n{s}\n\n", .{std.fmt.fmtSliceHexUpper(oh.items)});
+
         var d = std.ArrayList(u8).init(self.allocator);
         try cbor.stringify(self.data, .{}, d.writer());
         defer {
             zero(d.items);
             d.deinit();
         }
+
+        //std.debug.print("{s}\n\n", .{std.fmt.fmtSliceHexUpper(d.items)});
 
         // The data layout might differ depending on the encryption scheme used
         if (self.outer_header.cipher.type == .ChaCha20) {
@@ -117,15 +122,22 @@ pub const CKS = struct {
         time: *const fn () i64,
     ) !@This() {
         if (!std.mem.eql(u8, "SECRET", raw[0..6])) {
+            std.log.err("Unexpected magic number", .{});
             return error.UnknownFileFormat;
         }
 
         const header_len = @as(usize, @intCast(std.mem.bytesToValue(u32, raw[6..10])));
-        const outer_header = try cbor.parse(
+        const outer_header = cbor.parse(
             header.OuterHeader,
-            try cbor.DataItem.new(raw[10 .. header_len + 10]),
+            cbor.DataItem.new(raw[10 .. header_len + 10]) catch |err| {
+                std.log.err("OuterHeader: Invalid data item", .{});
+                return err;
+            },
             .{ .allocator = allocator },
-        );
+        ) catch |err| {
+            std.log.err("OuterHeader: Parsing failed", .{});
+            return err;
+        };
 
         // derive key from secret using kdf
         var key: [32]u8 = undefined;
@@ -143,14 +155,17 @@ pub const CKS = struct {
             var tag: [16]u8 = undefined;
             std.mem.copy(u8, tag[0..], raw[data_index .. data_index + 16]);
 
-            try ChaCha20.decrypt(
+            ChaCha20.decrypt(
                 mem, // out
                 raw[data_index + 16 ..], // cipher text
                 tag, // tag
                 raw[10 .. header_len + 10], // ad
                 outer_header.cipher.iv.?[0..12].*, // nonce
                 key,
-            );
+            ) catch |err| {
+                std.log.err("Unable to decrypt data", .{});
+                return err;
+            };
 
             break :blk mem;
         } else unreachable;
@@ -158,11 +173,17 @@ pub const CKS = struct {
 
         //std.debug.print("{s}\n", .{std.fmt.fmtSliceHexUpper(mem)});
 
-        const data = try cbor.parse(
+        const data = cbor.parse(
             Data,
-            try cbor.DataItem.new(mem),
+            cbor.DataItem.new(mem) catch |err| {
+                std.log.err("Data: Invalid data item", .{});
+                return err;
+            },
             .{ .allocator = allocator },
-        );
+        ) catch |err| {
+            std.log.err("Data: Parsing failed", .{});
+            return err;
+        };
 
         return @This(){
             .outer_header = outer_header,

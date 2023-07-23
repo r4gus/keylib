@@ -80,25 +80,24 @@ pub fn getEntry(self: *@This(), id: []const u8, time: i64) ?*Entry {
     return null;
 }
 
-pub fn removeEntry(self: *@This(), id: []const u8, time: i64) !?Entry {
+pub fn removeEntry(self: *@This(), id: []const u8, time: i64) !Entry {
     if (self.entries) |entries| {
         var i: usize = 0;
         for (entries) |entry| {
             if (std.mem.eql(u8, entry.id, id)) {
                 var e = entry;
-                const end = self.entries.?.len - 1;
-                var e_end = self.entries.?[end];
-                self.entries = try self.allocator.realloc(self.entries.?, self.entries.?.len - 1);
-                if (i < end) {
-                    self.entries.?[i] = e_end;
-                }
+                var new_mem = try self.allocator.alloc(Entry, entries.len - 1);
+                @memcpy(new_mem[0..i], entries[0..i]);
+                @memcpy(new_mem[i..], entries[i + 1 ..]);
+                self.allocator.free(self.entries.?);
+                self.entries = new_mem;
                 self.times.lastModificationTime = time;
                 return e;
             }
             i += 1;
         }
     }
-    return null;
+    return error.DoesNotExist;
 }
 
 test "data tests" {
@@ -164,10 +163,9 @@ test "create Data struct and add two entries" {
     // e3 pointer is invalid after the removal!
     const time6 = std.time.milliTimestamp();
     var e4 = try d.removeEntry(id1, time6);
-    try std.testing.expect(e4 != null);
-    defer e4.?.deinit();
-    try std.testing.expectEqualSlices(u8, "r4gus", e4.?.getField("UserName", time5).?);
-    try std.testing.expectEqualSlices(u8, "https://ziglang.org", e4.?.getField("URL", time5).?);
+    defer e4.deinit();
+    try std.testing.expectEqualSlices(u8, "r4gus", e4.getField("UserName", time5).?);
+    try std.testing.expectEqualSlices(u8, "https://ziglang.org", e4.getField("URL", time5).?);
     try std.testing.expectEqual(@as(usize, @intCast(1)), d.entries.?.len);
 
     e3 = d.getEntry(id1, time6);
@@ -180,10 +178,9 @@ test "create Data struct and add two entries" {
     // Remove second entry
     const time7 = std.time.milliTimestamp();
     var e5 = try d.removeEntry(id2, time7);
-    try std.testing.expect(e5 != null);
-    defer e5.?.deinit();
-    try std.testing.expectEqualSlices(u8, "SugarYourCoffee", e5.?.getField("UserName", time5).?);
-    try std.testing.expectEqualSlices(u8, "https://sugaryourcoffee.de", e5.?.getField("URL", time5).?);
+    defer e5.deinit();
+    try std.testing.expectEqualSlices(u8, "SugarYourCoffee", e5.getField("UserName", time5).?);
+    try std.testing.expectEqualSlices(u8, "https://sugaryourcoffee.de", e5.getField("URL", time5).?);
     try std.testing.expectEqual(@as(usize, @intCast(0)), d.entries.?.len);
 }
 
