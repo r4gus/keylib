@@ -300,11 +300,32 @@ This is all theoretical! At the end it depends on the actual configuration.
 |:-----------------:|:----------:|
 | MUST support the hmac-secret extension  | |
 | clientPin or uv + resident key  |  ✅  |
-| credMgmt  | |
+| credMgmt  |  ✅  |
 | MUST support credProtect extension |  ✅  |
 | pinUvAuthToken  |  ✅  |
 | PIN/UV auth protocol two support |  ✅  |
     
+</details>
+
+<details>
+<summary><ins>Browser Support</ins></summary>
+
+### USB
+
+| Browser | Credential Creation | Login | PassKey Creation | PassKey Login |
+|:-------:|:-------------------:|:-----:|:----------------:|:-------------:|
+| Brave   |      ✅             |  ✅   |      ✅          |     ✅        |
+| Chromium |      ✅             |  ✅   |      ✅          |     ✅        |
+| Firefox |                     |       |                  |       ✅      |
+
+### NFC
+
+n.a.
+
+### Bluetooth
+
+n.a.
+
 </details>
 
 ## Resources

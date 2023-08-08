@@ -271,7 +271,20 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
         // execute the command
         switch (S.cmd.?) {
             .msg => {
-                return S.@"error"(ErrorCodes.invalid_cmd);
+                std.debug.print("message {s}\n", .{std.fmt.fmtSliceHexUpper(S.data[0..S.bcnt])});
+                var response = resp.CtapHidMessageIterator.new(S.busy.?, S.cmd.?);
+
+                if (S.data[1] == 3) {
+                    var d = auth.allocator.alloc(u8, 10) catch unreachable;
+                    @memcpy(d, "FIDO_2_0\x69\x86");
+                    response.data = d;
+                } else {
+                    var d = auth.allocator.alloc(u8, 2) catch unreachable;
+                    @memcpy(d, "\x69\x86");
+                    response.data = d;
+                }
+
+                return response;
             },
             .cbor => {
                 var response = resp.CtapHidMessageIterator.new(S.busy.?, S.cmd.?);

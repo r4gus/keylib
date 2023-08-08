@@ -61,14 +61,14 @@ pub fn build(b: *std.build.Builder) !void {
     // ++++++++++++++++++++++++++++++++++++++++++++
 
     const authenticator = b.addExecutable(.{
-        .name = "platauth",
+        .name = "passkee",
         .root_source_file = .{ .path = "platform-auth/main.zig" },
         .target = target,
         .optimize = optimize,
     });
     authenticator.addModule("fido", fido_module);
-    authenticator.addModule("zbor", zbor_module);
     authenticator.addModule("cks", cks_module);
+    authenticator.linkSystemLibraryPkgConfigOnly("libnotify");
     authenticator.linkLibC();
     b.installArtifact(authenticator);
 
