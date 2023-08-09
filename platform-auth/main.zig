@@ -303,7 +303,7 @@ pub fn createFile(dir: std.fs.Dir, name: []const u8, pw: []const u8, a: std.mem.
 
 pub fn writeFile(dir: std.fs.Dir, path: []const u8, s: *cks.CKS, pw: []const u8) !void {
     var file = dir.openFile(path, .{ .mode = .read_write }) catch blk: {
-        break :blk try dir.createFile(path, .{});
+        break :blk try dir.createFile(path, .{ .mode = 0o600 });
     };
 
     try file.setEndPos(0);
