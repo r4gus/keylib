@@ -121,7 +121,7 @@ pub const CKS = struct {
         rand: std.rand.Random,
         time: *const fn () i64,
     ) !@This() {
-        if (!std.mem.eql(u8, "SECRET", raw[0..6])) {
+        if (raw.len < 10 or !std.mem.eql(u8, "SECRET", raw[0..6])) {
             std.log.err("Unexpected magic number", .{});
             return error.UnknownFileFormat;
         }

@@ -23,8 +23,13 @@ var uv: ?bool = null;
 
 var notification: [*c]notify.NotifyNotification = undefined;
 
+//const la = std.heap.LoggingAllocator(.debug, .debug);
+//var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+//var lagpa = la.init(gpa.allocator());
+//var allocator = lagpa.allocator();
+
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator = gpa.allocator();
+const allocator = gpa.allocator();
 
 fn accept_callback(
     n: [*c]notify.NotifyNotification,
@@ -85,6 +90,9 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
             );
 
             if (response) |*resp| {
+                // Free the response data at the end
+                defer resp.deinit();
+
                 while (resp.next()) |packet| {
                     var rev = std.mem.zeroes(uhid.uhid_event);
                     rev.type = uhid.UHID_INPUT;

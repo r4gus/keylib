@@ -275,13 +275,9 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
                 var response = resp.CtapHidMessageIterator.new(S.busy.?, S.cmd.?);
 
                 if (S.data[1] == 3) {
-                    var d = auth.allocator.alloc(u8, 10) catch unreachable;
-                    @memcpy(d, "FIDO_2_0\x69\x86");
-                    response.data = d;
+                    return resp.iterator(S.busy.?, S.cmd.?, "CTAP2/U2F_V2\x90\x00");
                 } else {
-                    var d = auth.allocator.alloc(u8, 2) catch unreachable;
-                    @memcpy(d, "\x69\x86");
-                    response.data = d;
+                    return resp.iterator(S.busy.?, S.cmd.?, "\x69\x86");
                 }
 
                 return response;
@@ -293,11 +289,14 @@ pub fn handle(packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
                 switch (data) {
                     .ok => |d| {
                         response.data = d;
+                        response.allocator = auth.allocator;
                     },
                     .err => |e| {
+                        // `data` is freed within handle()
                         var d = auth.allocator.alloc(u8, 1) catch unreachable;
                         d[0] = e;
                         response.data = d;
+                        response.allocator = auth.allocator;
                     },
                 }
 

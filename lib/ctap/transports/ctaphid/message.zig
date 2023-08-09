@@ -38,6 +38,7 @@ pub const CtapHidMessageIterator = struct {
     seq: misc.Seq = 0,
     buffer: [PACKET_SIZE]u8 = undefined,
     data: []const u8 = &.{},
+    allocator: ?std.mem.Allocator = null,
     cid: misc.Cid,
     cmd: command.Cmd,
 
@@ -49,6 +50,12 @@ pub const CtapHidMessageIterator = struct {
             .cid = cid,
             .cmd = cmd,
         };
+    }
+
+    pub fn deinit(self: *const @This()) void {
+        if (self.allocator) |a| {
+            a.free(self.data);
+        }
     }
 
     /// Get the next data packet.
