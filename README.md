@@ -57,11 +57,11 @@ FIDO2 has a lot of advantages compared to passwords:
 
 ### Login with FIDO2
 
-![Login Showcase](login.gif)
+![Login Showcase](media/login.gif)
 
 ### Login using Passkey (FIDO2 with discoverable credential)
 
-![Passkey Showcase](login2.gif)
+![Passkey Showcase](media/passkey.gif)
 
 ### Linux platform authenticator
 
