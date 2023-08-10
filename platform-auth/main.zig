@@ -149,6 +149,7 @@ pub fn main() !void {
     authenticator = fido.ctap.authenticator.Authenticator{
         .settings = .{
             .versions = &.{ .FIDO_2_0, .FIDO_2_1 },
+            .extensions = &.{.credProtect},
             .aaguid = "\x6f\x15\x82\x74\xaa\xb6\x44\x3d\x9b\xcf\x8a\x3f\x69\x29\x7c\x88".*,
             .options = .{
                 .credMgmt = true,

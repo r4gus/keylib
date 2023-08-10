@@ -275,32 +275,13 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var user: ?fido.common.User = null;
     var usageCnt: u32 = @as(u32, @intCast(settings.times.usageCount));
-    var cred = if (gap.allowList) |_| blk: {
-        settings.times.usageCount += 1;
-        break :blk credentials.pop();
-    } else blk: {
-        var _cred = if (credentials.items.len == 1) blk1: {
-            break :blk1 credentials.pop();
-        } else blk1: {
-            // TODO: we'll just use the most recently created credential for
-            // now... but should expand this and adhere to the spec
-            //var k: usize = 1;
-            //var j: usize = 0;
-            //var max: i64 = credentials.items[0].times.creationTime;
 
-            //while (k < credentials.items.len) : (k += 1) {
-            //    if (credentials.items[k].times.creationTime > max) {
-            //        j = k;
-            //        max = credentials.items[k].times.creationTime;
-            //    }
-            //}
-
-            //break :blk1 credentials.swapRemove(j);
-            break :blk1 credentials.pop();
-        };
-
-        var entry = auth.callbacks.getEntry(_cred.raw[0..]).?;
-
+    // TODO: we'll just use the most recently created credential for
+    // now... but should expand this and adhere to the spec
+    const cred = credentials.pop();
+    if (auth.callbacks.getEntry(cred.raw[0..])) |entry| {
+        // Seems like this is a discoverable credential, because we
+        // just discovered it :)
         usageCnt = @as(u32, @intCast(entry.times.usageCount));
         entry.times.usageCount += 1;
 
@@ -311,10 +292,13 @@ pub fn authenticatorGetAssertion(
                 // inside the publicKeyCredentialUserEntity MUST NOT be returned
                 // if user verification is not done by the authenticator
                 user = .{ .id = uid, .name = null, .displayName = null };
+            } else {
+                std.log.warn("UserId field missing for id {s}. Returning the user id is mandatory for resident keys so expect errors.", .{std.fmt.fmtSliceHexUpper(cred.raw[0..])});
             }
         }
-        break :blk _cred;
-    };
+    } else {
+        settings.times.usageCount += 1;
+    }
 
     // select algorithm based on credential
     const algorithm = cred.getAlg();
