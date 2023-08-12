@@ -200,6 +200,7 @@ pub fn main() !void {
     }
 
     try authenticator.init();
+    defer authenticator.deinit();
     // --------------------------------------------------------
 
     notify.g_main_loop_run(loop);

@@ -9,6 +9,13 @@ pub fn authenticatorGetAssertion(
     gap: *const fido.ctap.request.GetAssertion,
     out: anytype,
 ) !fido.ctap.StatusCodes {
+    // Remove the credential list form the previous getAssertion
+    // call if one exists.
+    if (auth.credential_list != null) {
+        auth.credential_list.?.deinit(auth.allocator);
+        auth.credential_list = null;
+    }
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -296,6 +303,14 @@ pub fn authenticatorGetAssertion(
                 std.log.warn("UserId field missing for id {s}. Returning the user id is mandatory for resident keys so expect errors.", .{std.fmt.fmtSliceHexUpper(cred.raw[0..])});
             }
         }
+
+        if (credentials.items.len >= 1) {
+            // Copy the remaining credential Ids for later use by authenticatorGetNextAssertion
+            auth.credential_list = .{
+                .list = try auth.allocator.dupe(fido.ctap.crypto.Id, credentials.items),
+                .time_stamp = auth.callbacks.millis(),
+            };
+        }
     } else {
         settings.times.usageCount += 1;
     }
@@ -383,6 +398,12 @@ pub fn authenticatorGetAssertion(
     try auth.callbacks.persist();
 
     try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);
+
+    if (auth.credential_list) |*cl| {
+        // We remember authData and clientDataHash for authenticatorGetNextAssertion
+        cl.authData = auth_data;
+        cl.clientDataHash = gap.clientDataHash;
+    }
 
     return status;
 }

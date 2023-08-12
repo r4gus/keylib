@@ -28,6 +28,18 @@ token: struct {
     two: ?fido.ctap.pinuv.PinUvAuth = null,
 },
 
+credential_list: ?struct {
+    list: []const fido.ctap.crypto.Id,
+    credentialCounter: usize = 0,
+    time_stamp: i64,
+    authData: fido.common.AuthenticatorData = undefined,
+    clientDataHash: fido.ctap.crypto.ClientDataHash = undefined,
+
+    pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        allocator.free(self.list);
+    }
+} = null,
+
 allocator: std.mem.Allocator,
 
 pub fn init(self: *@This()) !void {
@@ -50,6 +62,13 @@ pub fn init(self: *@This()) !void {
     _ = settings;
 
     try self.callbacks.persist();
+}
+
+pub fn deinit(self: *@This()) void {
+    if (self.credential_list != null) {
+        self.credential_list.?.deinit(self.allocator);
+        self.credential_list = null;
+    }
 }
 
 pub fn handle(self: *@This(), command: []const u8) Response {
@@ -174,6 +193,21 @@ pub fn handle(self: *@This(), command: []const u8) Response {
             }
 
             self.callbacks.reset();
+        },
+        .authenticatorGetNextAssertion => {
+            // Execute command
+            const status = fido.ctap.commands.authenticator.authenticatorGetNextAssertion(
+                self,
+                response,
+            ) catch {
+                res.deinit();
+                return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
+            };
+
+            if (status != .ctap1_err_success) {
+                res.deinit();
+                return Response{ .err = @intFromEnum(status) };
+            }
         },
         .authenticatorSelection => {
             const status = fido.ctap.commands.authenticator.authenticatorSelection(self);
