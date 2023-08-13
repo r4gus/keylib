@@ -58,6 +58,14 @@ pub const CKS = struct {
         e.deinit();
     }
 
+    pub fn getEntries(
+        self: *@This(),
+        filters: []const Data.Filter,
+        allocator: std.mem.Allocator,
+    ) ?[]const *Entry {
+        return self.data.getEntries(filters, allocator, self.time());
+    }
+
     pub fn seal(self: *@This(), out: anytype, pw: []const u8) !void {
         // 1. derive key from secret using kdf
         self.outer_header.kdf.params.seed(self.rand);

@@ -440,9 +440,34 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
     if (rk) {
-        auth.callbacks.addEntry(entry.?) catch {
-            return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-        };
+        // If a credential for the same rp.id and account ID already exists
+        // on the authenticator, overwrite that credential.
+        if (auth.callbacks.getEntries(
+            &.{
+                .{ .key = "RpId", .value = mcp.rp.id },
+                .{ .key = "UserId", .value = mcp.user.id },
+            },
+            auth.allocator,
+        )) |entries| {
+            defer auth.allocator.free(entries);
+
+            if (entries.len > 1) {
+                std.log.warn("Found two discoverable credentials with the same rpId and uId. This shouldn't be!", .{});
+            }
+
+            std.log.info(
+                "Overwriting credential with id: {s}",
+                .{std.fmt.fmtSliceHexUpper(entries[0].id)},
+            );
+            // Update the old entry
+            try entries[0].update(&entry.?, auth.callbacks.millis());
+            // We don't need the new entry anymore
+            entry.?.deinit();
+        } else {
+            auth.callbacks.addEntry(entry.?) catch {
+                return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+            };
+        }
     }
     try auth.callbacks.persist();
 

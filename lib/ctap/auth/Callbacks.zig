@@ -57,7 +57,7 @@ uv: ?*const fn () bool = null,
 
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
-getEntries: *const fn () ?[]cks.Entry,
+getEntries: *const fn (filters: []const cks.Data.Filter, a: std.mem.Allocator) ?[]const *cks.Entry,
 addEntry: *const fn (entry: cks.Entry) cks.Error!void,
 removeEntry: *const fn (id: []const u8) cks.Error!void,
 persist: *const fn () error{Fatal}!void,

@@ -191,7 +191,12 @@ pub fn authenticatorCredentialManagement(
                 return r;
             }
 
-            const el: u32 = if (auth.callbacks.getEntries()) |entries| @intCast(entries.len) else 0;
+            const el: u32 = if (auth.callbacks.getEntries(&.{}, auth.allocator)) |entries| blk: {
+                auth.allocator.free(entries);
+                break :blk @intCast(entries.len);
+            } else blk: {
+                break :blk 0;
+            };
             cmResp.existingResidentCredentialsCount = el;
             cmResp.maxPossibleRemainingResidentCredentialsCount = if (auth.settings.remainingDiscoverableCredentials) |rdc| @as(u32, @intCast(rdc)) - el else 1;
         },
@@ -201,7 +206,8 @@ pub fn authenticatorCredentialManagement(
             }
 
             // check if discoverable credentials exist on this authenticator
-            const entries = if (auth.callbacks.getEntries()) |entries| entries else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            const entries = if (auth.callbacks.getEntries(&.{}, auth.allocator)) |entries| entries else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            defer auth.allocator.free(entries);
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
             if (S.rpId == null) {
@@ -218,7 +224,7 @@ pub fn authenticatorCredentialManagement(
                 };
             }
 
-            for (entries) |*entry| {
+            for (entries) |entry| {
                 if (entry.getField("RpId", auth.callbacks.millis())) |rpId| {
                     var a = try auth.allocator.alloc(u8, rpId.len);
                     @memcpy(a, rpId);
@@ -267,7 +273,8 @@ pub fn authenticatorCredentialManagement(
 
             const rpIdHash = cmReq.subCommandParams.?.rpIDHash.?;
 
-            const entries = if (auth.callbacks.getEntries()) |entries| entries else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            const entries = if (auth.callbacks.getEntries(&.{}, auth.allocator)) |entries| entries else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            defer auth.allocator.free(entries);
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
             if (S.rpId == null) {
@@ -285,7 +292,7 @@ pub fn authenticatorCredentialManagement(
             }
 
             var RP_ID: ?[]const u8 = null;
-            for (entries) |*entry| {
+            for (entries) |entry| {
                 if (entry.getField("RpId", auth.callbacks.millis())) |rpId| {
                     var idh: [32]u8 = undefined;
                     std.crypto.hash.sha2.Sha256.hash(rpId, &idh, .{});

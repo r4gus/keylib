@@ -172,8 +172,13 @@ pub fn authenticatorGetAssertion(
             try credentials.append(credId);
         }
     } else {
-        if (auth.callbacks.getEntries()) |entries| {
-            for (entries) |*entry| {
+        if (auth.callbacks.getEntries(
+            &.{.{ .key = "RpId", .value = gap.rpId }},
+            auth.allocator,
+        )) |entries| {
+            defer auth.allocator.free(entries);
+
+            for (entries) |entry| {
                 // Each credential is bound to a rpId by a MAC, i.e., if this succeeds we know
                 // that this credential is bound to the specified rpId
                 const credId = fido.ctap.crypto.Id.from_raw(entry.id[0..], ms, gap.rpId) catch {

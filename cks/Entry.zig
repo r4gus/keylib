@@ -90,6 +90,22 @@ pub fn getField(self: *@This(), key: []const u8, time: i64) ?[]const u8 {
     return null;
 }
 
+pub fn update(self: *@This(), other: *@This(), time: i64) !void {
+    self.id = other.id;
+
+    if (other.fields) |fields| {
+        for (fields) |field| {
+            self.updateField(field.key, field.value, time) catch |err| {
+                if (err == error.DoesNotExist) {
+                    try self.addField(field, time);
+                } else {
+                    return err;
+                }
+            };
+        }
+    }
+}
+
 pub fn updateField(self: *@This(), key: []const u8, value: []const u8, time: i64) !void {
     if (self.fields) |fields| {
         for (fields) |*field| {

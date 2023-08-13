@@ -408,8 +408,11 @@ pub fn getEntry(id: []const u8) ?*cks.Entry {
     return store.?.getEntry(id);
 }
 
-pub fn getEntries() ?[]cks.Entry { // TODO: maybe rename to getResidentKeys
-    return if (store.?.data.entries) |entries| entries[1..] else null; // first entry is "Settings"
+pub fn getEntries(
+    filters: []const cks.Data.Filter,
+    a: std.mem.Allocator,
+) ?[]const *cks.Entry { // TODO: maybe rename to getResidentKeys
+    return store.?.getEntries(filters, a);
 }
 
 pub fn addEntry(entry: cks.Entry) cks.Error!void {

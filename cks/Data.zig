@@ -80,6 +80,48 @@ pub fn getEntry(self: *@This(), id: []const u8, time: i64) ?*Entry {
     return null;
 }
 
+pub const Filter = struct {
+    key: []const u8,
+    value: []const u8,
+};
+
+pub fn getEntries(
+    self: *@This(),
+    filters: []const Filter,
+    allocator: std.mem.Allocator,
+    time: i64,
+) ?[]const *Entry {
+    var arr = std.ArrayList(*Entry).init(allocator);
+
+    if (self.entries) |entries| {
+        self.times.lastAccessTime = time;
+        outer_blk: for (entries) |*entry| {
+            for (filters) |*filter| {
+                if (entry.getField(filter.key, time)) |v| {
+                    if (!std.mem.eql(u8, filter.value, v)) {
+                        continue :outer_blk;
+                    }
+                } else {
+                    continue :outer_blk;
+                }
+            }
+
+            arr.append(entry) catch {
+                arr.deinit();
+                return null;
+            };
+        }
+
+        if (arr.items.len > 0) {
+            return arr.toOwnedSlice() catch unreachable;
+        } else {
+            arr.deinit();
+            return null;
+        }
+    }
+    return null;
+}
+
 pub fn removeEntry(self: *@This(), id: []const u8, time: i64) !Entry {
     if (self.entries) |entries| {
         var i: usize = 0;
