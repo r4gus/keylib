@@ -327,10 +327,14 @@ pub fn authenticatorGetAssertion(
     //}
 
     var cred = if (gap.allowList == null) blk: {
-        if (credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null) {
-            std.log.info("in", .{});
+        if (credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null and
+            (up or uv))
+        {
             var users = std.ArrayList(fido.common.User).init(auth.allocator);
             defer users.deinit();
+
+            // TODO: allow selection of credential
+
             break :blk credentials.pop();
         } else {
             var _cred = credentials.pop();
