@@ -290,35 +290,112 @@ pub fn authenticatorGetAssertion(
 
     // TODO: we'll just use the most recently created credential for
     // now... but should expand this and adhere to the spec
-    const cred = credentials.pop();
-    if (auth.callbacks.getEntry(cred.raw[0..])) |entry| {
-        // Seems like this is a discoverable credential, because we
-        // just discovered it :)
-        usageCnt = @as(u32, @intCast(entry.times.usageCount));
-        entry.times.usageCount += 1;
+    //var cred = credentials.pop();
+    //if (auth.callbacks.getEntry(cred.raw[0..])) |entry| {
+    //    if (credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null) {
+    //        std.log.info("in", .{});
+    //        var users = std.ArrayList(fido.common.User).init(auth.allocator);
+    //        defer users.deinit();
+    //    } else {
+    //        // Seems like this is a discoverable credential, because we
+    //        // just discovered it :)
+    //        usageCnt = @as(u32, @intCast(entry.times.usageCount));
+    //        entry.times.usageCount += 1;
 
-        if (uv_response) {
-            const user_id = entry.getField("UserId", auth.callbacks.millis());
-            if (user_id) |uid| {
-                // User identifiable information (name, DisplayName, icon)
-                // inside the publicKeyCredentialUserEntity MUST NOT be returned
-                // if user verification is not done by the authenticator
-                user = .{ .id = uid, .name = null, .displayName = null };
-            } else {
-                std.log.warn("UserId field missing for id {s}. Returning the user id is mandatory for resident keys so expect errors.", .{std.fmt.fmtSliceHexUpper(cred.raw[0..])});
+    //        if (uv_response) {
+    //            const user_id = entry.getField("UserId", auth.callbacks.millis());
+    //            if (user_id) |uid| {
+    //                // User identifiable information (name, DisplayName, icon)
+    //                // inside the publicKeyCredentialUserEntity MUST NOT be returned
+    //                // if user verification is not done by the authenticator
+    //                user = .{ .id = uid, .name = null, .displayName = null };
+    //            } else {
+    //                std.log.warn("UserId field missing for id {s}. Returning the user id is mandatory for resident keys so expect errors.", .{std.fmt.fmtSliceHexUpper(cred.raw[0..])});
+    //            }
+    //        }
+
+    //        if (credentials.items.len >= 1) {
+    //            // Copy the remaining credential Ids for later use by authenticatorGetNextAssertion
+    //            auth.credential_list = .{
+    //                .list = try auth.allocator.dupe(fido.ctap.crypto.Id, credentials.items),
+    //                .time_stamp = auth.callbacks.millis(),
+    //            };
+    //        }
+    //    }
+    //} else {
+    //    settings.times.usageCount += 1;
+    //}
+
+    var cred = if (gap.allowList == null) blk: {
+        if (credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null) {
+            std.log.info("in", .{});
+            var users = std.ArrayList(fido.common.User).init(auth.allocator);
+            defer users.deinit();
+            break :blk credentials.pop();
+        } else {
+            var _cred = credentials.pop();
+            // There should always be a credential, but we can't be sure
+            var entry = if (auth.callbacks.getEntry(_cred.raw[0..])) |entry| entry else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            // Seems like this is a discoverable credential, because we
+            // just discovered it :)
+            usageCnt = @as(u32, @intCast(entry.times.usageCount));
+            entry.times.usageCount += 1;
+
+            if (uv_response) {
+                const user_id = entry.getField("UserId", auth.callbacks.millis());
+                if (user_id) |uid| {
+                    // User identifiable information (name, DisplayName, icon)
+                    // inside the publicKeyCredentialUserEntity MUST NOT be returned
+                    // if user verification is not done by the authenticator
+                    user = .{ .id = uid, .name = null, .displayName = null };
+                } else {
+                    std.log.warn(
+                        "UserId field missing for id {s}",
+                        .{std.fmt.fmtSliceHexUpper(_cred.raw[0..])},
+                    );
+                }
             }
+
+            if (credentials.items.len >= 1) {
+                // Copy the remaining credential Ids for later use by authenticatorGetNextAssertion
+                auth.credential_list = .{
+                    .list = try auth.allocator.dupe(fido.ctap.crypto.Id, credentials.items),
+                    .time_stamp = auth.callbacks.millis(),
+                };
+            }
+
+            break :blk _cred;
+        }
+    } else blk: {
+        var _cred = credentials.pop();
+
+        if (auth.callbacks.getEntry(_cred.raw[0..])) |entry| {
+            // This is a discoverable credential a.k.a. PassKey but it was used as
+            // second factor, i.e. the RP used a allowList. We have to return the
+            // user as this is mandatory of discoverable credentials.
+            usageCnt = @as(u32, @intCast(entry.times.usageCount));
+            entry.times.usageCount += 1;
+
+            if (uv_response) {
+                const user_id = entry.getField("UserId", auth.callbacks.millis());
+                if (user_id) |uid| {
+                    // User identifiable information (name, DisplayName, icon)
+                    // inside the publicKeyCredentialUserEntity MUST NOT be returned
+                    // if user verification is not done by the authenticator
+                    user = .{ .id = uid, .name = null, .displayName = null };
+                } else {
+                    std.log.warn(
+                        "UserId field missing for id {s}",
+                        .{std.fmt.fmtSliceHexUpper(_cred.raw[0..])},
+                    );
+                }
+            }
+        } else {
+            settings.times.usageCount += 1;
         }
 
-        if (credentials.items.len >= 1) {
-            // Copy the remaining credential Ids for later use by authenticatorGetNextAssertion
-            auth.credential_list = .{
-                .list = try auth.allocator.dupe(fido.ctap.crypto.Id, credentials.items),
-                .time_stamp = auth.callbacks.millis(),
-            };
-        }
-    } else {
-        settings.times.usageCount += 1;
-    }
+        break :blk _cred;
+    };
 
     // select algorithm based on credential
     const algorithm = cred.getAlg();

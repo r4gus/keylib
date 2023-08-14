@@ -33,6 +33,13 @@ pub const UpReason = enum {
     Reset,
 };
 
+pub const CredentialSelectionResultTag = enum { index, timeout };
+
+pub const CredentialSelectionResult = union(CredentialSelectionResultTag) {
+    index: usize,
+    timeout: void,
+};
+
 /// Interface for a thread local CSPRNG
 rand: std.rand.Random,
 
@@ -54,6 +61,12 @@ up: *const fn (reason: UpReason, user: ?*const fido.common.User, rp: ?*const fid
 /// - Finger print sensor
 /// - Pattern
 uv: ?*const fn () bool = null,
+
+/// Let the user select one of the given `users` credentials
+select_discoverable_credential: ?*const fn (
+    rpId: []const u8,
+    users: []const fido.common.User,
+) CredentialSelectionResult = null,
 
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
