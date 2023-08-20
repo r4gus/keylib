@@ -28,6 +28,8 @@ token: struct {
     two: ?fido.ctap.pinuv.PinUvAuth = null,
 },
 
+secret: []u8 = undefined,
+
 credential_list: ?struct {
     list: []const fido.ctap.crypto.Id,
     credentialCounter: usize = 0,
@@ -42,26 +44,48 @@ credential_list: ?struct {
 
 allocator: std.mem.Allocator,
 
+password: []const u8,
+
 pub fn init(self: *@This()) !void {
-    var settings = if (self.callbacks.getEntry("Settings")) |settings| settings else blk: {
-        std.log.warn("No Settings entry found", .{});
+    var setting = self.callbacks.readSettings(self.allocator) catch |err| blk: {
+        if (err == .DoesNotExist) {
+            std.log.warn("No Settings entry found", .{});
+            var meta = fido.ctap.authenticator.Meta{};
 
-        var s = try self.callbacks.createEntry("Settings");
-        try s.addField(.{ .key = "Retries", .value = "\x08" }, std.time.milliTimestamp());
-        try s.addField(.{ .key = "ForcePinChange", .value = "False" }, std.time.milliTimestamp());
-        try s.addField(.{ .key = "MinPinLength", .value = "\x04" }, std.time.milliTimestamp());
-        try s.addField(.{ .key = "AlwaysUv", .value = "True" }, std.time.milliTimestamp());
-        try s.addField(.{
-            .key = "Secret",
-            .value = &fido.ctap.crypto.master_secret.createMasterSecret(self.callbacks.rand),
-        }, self.callbacks.millis());
-        try self.callbacks.addEntry(s);
+            // First we derive a key from the given password.
+            // This will also generate a random salt that is stored with
+            // the rest of the meta data and used for the key derivation.
+            //
+            // From now on we can call meta.deriveKey(password) to derive the key.
+            const k = try meta.newKey(self.password, self.callbacks.rand, self.allocator);
 
-        break :blk self.callbacks.getEntry("Settings").?;
+            // Lets create a new master secret. This is used to encrypt all generated credentials.
+            // We use this indirection so we don't need to re-encrypt all credentials if the user
+            // changes the password.
+            const ms = fido.ctap.crypto.master_secret.createMasterSecret(self.callbacks.rand);
+            meta.setSecret(ms, k, self.callbacks.rand);
+
+            // Finally, we calculate a mac over the data. The master secret uses authenticated encryption
+            // but I don't want to reencrypt the master secret every time one of the other fields changes.
+            meta.updateMac(&k);
+
+            self.callbacks.updateSettings(&meta) catch |e| {
+                std.log.err("unable to persist new settings ({any})", .{e});
+                return error.Fatal;
+            };
+
+            break :blk meta;
+        } else {
+            std.log.err("fatal error while loading settings", .{});
+            return error.Fatal;
+        }
     };
-    _ = settings;
 
-    try self.callbacks.persist();
+    const k = try setting.deriveKey(self.password, self.allocator);
+    if (!setting.verifyMac(&k)) {
+        std.log.err("MAC verification for the given settings failed", .{});
+        return error.Fatal;
+    }
 }
 
 pub fn deinit(self: *@This()) void {

@@ -10,10 +10,12 @@ const cks = @import("cks");
 pub const LoadError = error{
     DoesNotExist,
     NotEnoughMemory,
+    Other,
 };
 
 pub const StoreError = error{
     KeyStoreFull,
+    Other,
 };
 
 /// Result value of the `up` callback
@@ -67,6 +69,9 @@ select_discoverable_credential: ?*const fn (
     rpId: []const u8,
     users: []const fido.common.User,
 ) CredentialSelectionResult = null,
+
+readSettings: *const fn (a: std.mem.Allocator) LoadError!fido.ctap.authenticator.Meta,
+updateSettings: *const fn (settings: *fido.ctap.authenticator.Meta) StoreError!void,
 
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
