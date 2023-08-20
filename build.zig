@@ -43,6 +43,18 @@ pub fn build(b: *std.build.Builder) !void {
 
     try b.modules.put(b.dupe("cks"), cks_module);
 
+    // Allocator Module
+    // ------------------------------------------------
+
+    const allocator_module = b.addModule("cks", .{
+        .source_file = .{ .path = "profiling_allocator/main.zig" },
+        .dependencies = &.{
+            .{ .name = "profiling_allocator", .module = zbor_module },
+        },
+    });
+
+    try b.modules.put(b.dupe("profiling_allocator"), allocator_module);
+
     // Authenticator Module
     // ------------------------------------------------
 
@@ -68,6 +80,7 @@ pub fn build(b: *std.build.Builder) !void {
     });
     authenticator.addModule("fido", fido_module);
     authenticator.addModule("cks", cks_module);
+    authenticator.addModule("profiling_allocator", allocator_module);
     authenticator.linkSystemLibraryPkgConfigOnly("libnotify");
     authenticator.linkLibC();
     b.installArtifact(authenticator);

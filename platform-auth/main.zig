@@ -2,6 +2,7 @@ const std = @import("std");
 const cks = @import("cks");
 const fido = @import("fido");
 const hid = @import("hid.zig");
+const profiling_allocator = @import("profiling_allocator");
 
 const notify = @cImport({
     @cInclude("libnotify/notify.h");
@@ -29,7 +30,9 @@ var notification: [*c]notify.NotifyNotification = undefined;
 //var allocator = lagpa.allocator();
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
+const allocator1 = gpa.allocator();
+var pa = profiling_allocator.ProfilingAllocator.init(allocator1, std.heap.c_allocator);
+const allocator = pa.allocator();
 
 fn accept_callback(
     n: [*c]notify.NotifyNotification,
@@ -105,6 +108,7 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
                         std.log.err("failed to send CTAPHID packet\n", .{});
                     };
                 }
+                pa.printStats();
             }
         },
         else => {},

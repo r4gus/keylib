@@ -163,6 +163,10 @@ pub const ctap = struct {
         pub const Authenticator = @import("ctap/auth/Authenticator.zig");
         /// Authenticator callbacks the user must provide
         pub const Callbacks = @import("ctap/auth/Callbacks.zig");
+        /// Representation of a discoverable credential
+        pub const Credential = @import("ctap/auth/Credential.zig");
+        /// Authenticator related data
+        pub const Meta = @import("ctap/auth/Meta.zig");
     };
 
     /// CTAP commands
@@ -228,6 +232,8 @@ pub const ctap = struct {
         _ = authenticator.Options;
         _ = authenticator.Callbacks;
         _ = authenticator.Authenticator;
+        _ = authenticator.Credential;
+        _ = authenticator.Meta;
         _ = transports.ctaphid.Cmd;
         _ = transports.ctaphid.message;
         _ = transports.ctaphid.authenticator;
