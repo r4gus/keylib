@@ -5,6 +5,8 @@ const Mac = std.crypto.auth.hmac.sha2.HmacSha256;
 const Aes256Ocb = std.crypto.aead.aes_ocb.Aes256Ocb;
 const master_secret = fido.ctap.crypto.master_secret;
 
+_id: [8]u8 = "Settings".*,
+_rev: ?[]const u8 = null,
 /// Number of retries left
 retries: u8 = 8,
 /// Pin has to be changed
@@ -20,6 +22,7 @@ mac: [Mac.mac_length]u8 = undefined,
 
 pub fn updateMac(self: *@This(), key: []const u8) void {
     var m = Mac.init(key);
+    m.update(&self._id);
     m.update(std.mem.asBytes(&self.retries));
     m.update(std.mem.asBytes(&self.force_pin_change));
     m.update(std.mem.asBytes(&self.min_pin_length));
@@ -31,6 +34,7 @@ pub fn updateMac(self: *@This(), key: []const u8) void {
 pub fn verifyMac(self: *@This(), key: []const u8) bool {
     var x: [Mac.mac_length]u8 = undefined;
     var m = Mac.init(key);
+    m.update(&self._id);
     m.update(std.mem.asBytes(&self.retries));
     m.update(std.mem.asBytes(&self.force_pin_change));
     m.update(std.mem.asBytes(&self.min_pin_length));
