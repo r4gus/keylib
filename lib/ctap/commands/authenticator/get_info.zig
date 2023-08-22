@@ -10,13 +10,17 @@ pub fn authenticatorGetInfo(
 ) !fido.ctap.StatusCodes {
     // Fetch dynamic settings, these will override the static settings set
     // during instantiation.
-    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
-        std.log.err("Unable to fetch Settings", .{});
+    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+        std.log.err("authenticatorGetAssertion: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
+    if (!settings.verifyMac(&auth.secret.mac)) {
+        std.log.err("authenticatorGetAssertion: Settings MAC validation unsuccessful", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
 
     // Check if we have set a pin
-    if (settings.getField("Pin", auth.callbacks.millis())) |_| {
+    if (settings.pin != null) {
         // null means no client pin support => we wont change that!
         if (auth.settings.options.?.clientPin != null) {
             auth.settings.options.?.clientPin = true;
@@ -28,29 +32,18 @@ pub fn authenticatorGetInfo(
         }
     }
 
-    if (settings.getField("ForcePinChange", auth.callbacks.millis())) |fpc| {
-        if (std.mem.eql(u8, fpc, "True")) {
-            auth.settings.forcePINChange = true;
-        } else {
-            auth.settings.forcePINChange = false;
-        }
+    if (settings.force_pin_change) {
+        auth.settings.forcePINChange = true;
     } else {
-        auth.settings.forcePINChange = null;
+        auth.settings.forcePINChange = false;
     }
 
-    if (settings.getField("MinPinLength", auth.callbacks.millis())) |mpl| {
-        std.debug.print("minPinLength: {d}\n", .{mpl[0]});
-        auth.settings.minPINLength = mpl[0];
-    }
+    auth.settings.minPINLength = settings.min_pin_length;
 
-    if (settings.getField("AlwaysUv", auth.callbacks.millis())) |auv| {
-        if (std.mem.eql(u8, auv, "True")) {
-            auth.settings.options.?.alwaysUv = true;
-        } else {
-            auth.settings.options.?.alwaysUv = false;
-        }
+    if (settings.always_uv) {
+        auth.settings.options.?.alwaysUv = true;
     } else {
-        auth.settings.options.?.alwaysUv = null;
+        auth.settings.options.?.alwaysUv = false;
     }
 
     try cbor.stringify(auth.settings, .{}, out);

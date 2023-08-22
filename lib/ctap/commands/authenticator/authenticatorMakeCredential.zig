@@ -201,17 +201,16 @@ pub fn authenticatorMakeCredential(
     // 12. Check exclude list
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
-    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
-        std.log.err("Unable to fetch Settings", .{});
+    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+        std.log.err("authenticatorMakeCredential: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-
-    var _ms = if (settings.getField("Secret", auth.callbacks.millis())) |ms| ms else {
-        std.log.err("Secret field missing in Settings", .{});
+    if (!settings.verifyMac(&auth.secret.mac)) {
+        std.log.err("authenticatorMakeCredential: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
-    };
+    }
 
-    const ms: fido.ctap.crypto.master_secret.MasterSecret = _ms[0..fido.ctap.crypto.master_secret.MS_LEN].*;
+    const ms = try settings.getSecret(auth.secret.enc);
 
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |ecl| {
@@ -429,9 +428,14 @@ pub fn authenticatorMakeCredential(
         );
         break :blk cnt;
     } else blk: {
-        const cnt = settings.times.usageCount;
+        const cnt = settings.usage_count;
         // This is the global usage counter
-        settings.times.usageCount += 1;
+        settings.usage_count += 1;
+        settings.updateMac(&auth.secret.mac);
+        auth.callbacks.updateSettings(&settings) catch |err| {
+            std.log.err("authenticatorMakeCredential: unable to update settings ({any})", .{err});
+            return err;
+        };
         break :blk cnt;
     };
 

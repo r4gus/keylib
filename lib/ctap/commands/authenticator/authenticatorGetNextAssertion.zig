@@ -20,18 +20,16 @@ pub fn authenticatorGetNextAssertion(
         return fido.ctap.StatusCodes.ctap2_err_not_allowed;
     }
 
-    // Fetch authenticator settings to get master secret
-    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
-        std.log.err("Unable to fetch Settings", .{});
+    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+        std.log.err("authenticatorGetNextAssertion: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-
-    var _ms = if (settings.getField("Secret", auth.callbacks.millis())) |ms| ms else {
-        std.log.err("Secret field missing in Settings", .{});
+    if (!settings.verifyMac(&auth.secret.mac)) {
+        std.log.err("authenticatorGetNextAssertion: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
-    };
+    }
 
-    const ms: fido.ctap.crypto.master_secret.MasterSecret = _ms[0..fido.ctap.crypto.master_secret.MS_LEN].*;
+    const ms = try settings.getSecret(auth.secret.enc);
 
     // Fetch next credential id
     const id = auth.credential_list.?.list[auth.credential_list.?.credentialCounter];

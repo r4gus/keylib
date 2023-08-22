@@ -27,6 +27,8 @@ always_uv: bool = true,
 secret: [Aes256Ocb.nonce_length + Aes256Ocb.tag_length + master_secret.MS_LEN]u8 = undefined,
 /// Pin with a max length of 63 bytes
 pin: ?[Aes256Ocb.nonce_length + Aes256Ocb.tag_length + 33]u8 = null,
+/// Gloabl credential usage counter
+usage_count: u64 = 0,
 /// Message Authentication Code over the remaining data
 mac: [Mac.mac_length]u8 = undefined,
 kdf: struct {
@@ -78,6 +80,7 @@ pub fn updateMac(self: *@This(), key: []const u8) void {
     if (self.pin) |pin| {
         m.update(&pin);
     }
+    m.update(std.mem.asBytes(&self.usage_count));
     m.final(&self.mac);
 }
 
@@ -93,6 +96,7 @@ pub fn verifyMac(self: *@This(), key: []const u8) bool {
     if (self.pin) |pin| {
         m.update(&pin);
     }
+    m.update(std.mem.asBytes(&self.usage_count));
     m.final(&x);
 
     return std.mem.eql(u8, x[0..], self.mac[0..]);

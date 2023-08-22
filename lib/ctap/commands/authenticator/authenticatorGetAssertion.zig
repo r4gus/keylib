@@ -145,17 +145,16 @@ pub fn authenticatorGetAssertion(
     // 7. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
-    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
-        std.log.err("Unable to fetch Settings", .{});
+    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+        std.log.err("authenticatorGetAssertion: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-
-    var _ms = if (settings.getField("Secret", auth.callbacks.millis())) |ms| ms else {
-        std.log.err("Secret field missing in Settings", .{});
+    if (!settings.verifyMac(&auth.secret.mac)) {
+        std.log.err("authenticatorGetAssertion: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
-    };
+    }
 
-    const ms: fido.ctap.crypto.master_secret.MasterSecret = _ms[0..fido.ctap.crypto.master_secret.MS_LEN].*;
+    const ms = try settings.getSecret(auth.secret.enc);
 
     var credentials = std.ArrayList(fido.ctap.crypto.Id).init(
         auth.allocator,
@@ -286,45 +285,7 @@ pub fn authenticatorGetAssertion(
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var user: ?fido.common.User = null;
-    var usageCnt: u32 = @as(u32, @intCast(settings.times.usageCount));
-
-    // TODO: we'll just use the most recently created credential for
-    // now... but should expand this and adhere to the spec
-    //var cred = credentials.pop();
-    //if (auth.callbacks.getEntry(cred.raw[0..])) |entry| {
-    //    if (credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null) {
-    //        std.log.info("in", .{});
-    //        var users = std.ArrayList(fido.common.User).init(auth.allocator);
-    //        defer users.deinit();
-    //    } else {
-    //        // Seems like this is a discoverable credential, because we
-    //        // just discovered it :)
-    //        usageCnt = @as(u32, @intCast(entry.times.usageCount));
-    //        entry.times.usageCount += 1;
-
-    //        if (uv_response) {
-    //            const user_id = entry.getField("UserId", auth.callbacks.millis());
-    //            if (user_id) |uid| {
-    //                // User identifiable information (name, DisplayName, icon)
-    //                // inside the publicKeyCredentialUserEntity MUST NOT be returned
-    //                // if user verification is not done by the authenticator
-    //                user = .{ .id = uid, .name = null, .displayName = null };
-    //            } else {
-    //                std.log.warn("UserId field missing for id {s}. Returning the user id is mandatory for resident keys so expect errors.", .{std.fmt.fmtSliceHexUpper(cred.raw[0..])});
-    //            }
-    //        }
-
-    //        if (credentials.items.len >= 1) {
-    //            // Copy the remaining credential Ids for later use by authenticatorGetNextAssertion
-    //            auth.credential_list = .{
-    //                .list = try auth.allocator.dupe(fido.ctap.crypto.Id, credentials.items),
-    //                .time_stamp = auth.callbacks.millis(),
-    //            };
-    //        }
-    //    }
-    //} else {
-    //    settings.times.usageCount += 1;
-    //}
+    var usageCnt: u32 = @as(u32, @intCast(settings.usage_count));
 
     var cred = if (gap.allowList == null) blk: {
         if (credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null and
@@ -395,7 +356,12 @@ pub fn authenticatorGetAssertion(
                 }
             }
         } else {
-            settings.times.usageCount += 1;
+            settings.usage_count += 1;
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("authenticatorGetAssertion: unable to update settings ({any})", .{err});
+                return err;
+            };
         }
 
         break :blk _cred;
