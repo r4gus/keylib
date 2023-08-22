@@ -5,7 +5,7 @@
     .dependencies = .{
         .zbor = .{
             .url = "https://github.com/r4gus/zbor/archive/master.tar.gz",
-            .hash = "1220a1b2ab5f3092f4f29d85b0627cc6adc54c973ae588ddc75e630b624293ea4722",
+            .hash = "12204bf1073e9bc1eb12d09a2c298c687ed9c782c687f98ccda3bc95daad8c216845",
         },
     },
 }

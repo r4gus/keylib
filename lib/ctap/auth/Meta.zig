@@ -6,6 +6,8 @@ const Aes256Ocb = std.crypto.aead.aes_ocb.Aes256Ocb;
 const argon2 = std.crypto.pwhash.argon2;
 const master_secret = fido.ctap.crypto.master_secret;
 
+pub const KEY_LEN = Aes256Ocb.key_length;
+
 _id: [8]u8 = "Settings".*,
 _rev: ?[]const u8 = null,
 /// Number of retries left
@@ -35,7 +37,7 @@ pub fn newKey(
     password: []const u8,
     random: std.rand.Random,
     a: std.mem.Allocator,
-) ![Aes256Ocb.key_length]u8 {
+) ![KEY_LEN]u8 {
     random.bytes(self.kdf.salt[0..]);
     return try self.deriveKey(password, a);
 }
@@ -44,8 +46,8 @@ pub fn deriveKey(
     self: *@This(),
     password: []const u8,
     a: std.mem.Allocator,
-) ![Aes256Ocb.key_length]u8 {
-    var k: [Aes256Ocb.key_length]u8 = undefined;
+) ![KEY_LEN]u8 {
+    var k: [KEY_LEN]u8 = undefined;
     try argon2.kdf(
         a,
         k[0..],

@@ -44,9 +44,22 @@ credential_list: ?struct {
 
 allocator: std.mem.Allocator,
 
-password: []const u8,
+/// TODO: We use AES256-OCB and HMAC. It should be fine to use the same key
+/// for HMAC and AES256-OCB encryption but maybe its still better to use
+/// two different keys.
+secret: [fido.ctap.authenticator.Meta.KEY_LEN]u8 = undefined,
 
-pub fn init(self: *@This()) !void {
+/// Initialize the authenticator
+///
+/// This will try to load dynamic authenticator settings, i.e. those
+/// that will change over time.
+///
+/// The settings will be created, if they don't exist. This includes a new
+/// master secret, used to encrypt all credentials. The master secret itself
+/// is encrypted using the provided password (a key derived from the password
+/// to be more precise).
+pub fn init(self: *@This(), password: []const u8) !void {
+    var new: bool = false;
     var setting = self.callbacks.readSettings(self.allocator) catch |err| blk: {
         if (err == .DoesNotExist) {
             std.log.warn("No Settings entry found", .{});
@@ -57,23 +70,24 @@ pub fn init(self: *@This()) !void {
             // the rest of the meta data and used for the key derivation.
             //
             // From now on we can call meta.deriveKey(password) to derive the key.
-            const k = try meta.newKey(self.password, self.callbacks.rand, self.allocator);
+            self.secret = try meta.newKey(password, self.callbacks.rand, self.allocator);
 
             // Lets create a new master secret. This is used to encrypt all generated credentials.
             // We use this indirection so we don't need to re-encrypt all credentials if the user
             // changes the password.
             const ms = fido.ctap.crypto.master_secret.createMasterSecret(self.callbacks.rand);
-            meta.setSecret(ms, k, self.callbacks.rand);
+            meta.setSecret(ms, self.secret, self.callbacks.rand);
 
             // Finally, we calculate a mac over the data. The master secret uses authenticated encryption
             // but I don't want to reencrypt the master secret every time one of the other fields changes.
-            meta.updateMac(&k);
+            meta.updateMac(&self.secret);
 
             self.callbacks.updateSettings(&meta) catch |e| {
                 std.log.err("unable to persist new settings ({any})", .{e});
                 return error.Fatal;
             };
 
+            new = true;
             break :blk meta;
         } else {
             std.log.err("fatal error while loading settings", .{});
@@ -81,8 +95,11 @@ pub fn init(self: *@This()) !void {
         }
     };
 
-    const k = try setting.deriveKey(self.password, self.allocator);
-    if (!setting.verifyMac(&k)) {
+    if (!new) {
+        self.secret = try setting.deriveKey(password, self.allocator);
+    }
+
+    if (!setting.verifyMac(&self.secret)) {
         std.log.err("MAC verification for the given settings failed", .{});
         return error.Fatal;
     }
