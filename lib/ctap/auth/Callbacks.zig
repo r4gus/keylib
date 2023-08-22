@@ -71,7 +71,7 @@ select_discoverable_credential: ?*const fn (
 ) CredentialSelectionResult = null,
 
 readSettings: *const fn (a: std.mem.Allocator) LoadError!fido.ctap.authenticator.Meta,
-updateSettings: *const fn (settings: *fido.ctap.authenticator.Meta) StoreError!void,
+updateSettings: *const fn (settings: *fido.ctap.authenticator.Meta, a: std.mem.Allocator) StoreError!void,
 
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,

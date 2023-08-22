@@ -149,6 +149,7 @@ pub fn authenticatorGetAssertion(
         std.log.err("authenticatorGetAssertion: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
+    defer settings.deinit(auth.allocator);
     if (!settings.verifyMac(&auth.secret.mac)) {
         std.log.err("authenticatorGetAssertion: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
@@ -358,7 +359,7 @@ pub fn authenticatorGetAssertion(
         } else {
             settings.usage_count += 1;
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("authenticatorGetAssertion: unable to update settings ({any})", .{err});
                 return err;
             };

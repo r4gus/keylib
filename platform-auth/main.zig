@@ -3,6 +3,7 @@ const cks = @import("cks");
 const fido = @import("fido");
 const hid = @import("hid.zig");
 const profiling_allocator = @import("profiling_allocator");
+const snorlax = @import("snorlax");
 
 const notify = @cImport({
     @cInclude("libnotify/notify.h");
@@ -178,6 +179,8 @@ pub fn main() !void {
             .rand = std.crypto.random,
             .millis = std.time.milliTimestamp,
             .up = up,
+            .readSettings = readSettings,
+            .updateSettings = updateSettings,
             .createEntry = createEntry,
             .getEntry = getEntry,
             .getEntries = getEntries,
@@ -203,7 +206,7 @@ pub fn main() !void {
         two.initialize();
     }
 
-    try authenticator.init();
+    try authenticator.init("password");
     defer authenticator.deinit();
     // --------------------------------------------------------
 
@@ -403,6 +406,45 @@ pub fn up(reason: UpReason, user: ?*const fido.common.User, rp: ?*const fido.com
 }
 
 pub fn reset() void {}
+
+pub fn readSettings(
+    a: std.mem.Allocator,
+) fido.ctap.authenticator.Callbacks.LoadError!fido.ctap.authenticator.Meta {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", allocator) catch {
+        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    };
+    defer client.deinit();
+
+    var meta = client.read(fido.ctap.authenticator.Meta, "passkee", "Settings", a) catch |err| {
+        if (err == error.NotFound) {
+            return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
+        } else {
+            return fido.ctap.authenticator.Callbacks.LoadError.Other;
+        }
+    };
+    return meta;
+}
+
+pub fn updateSettings(
+    settings: *fido.ctap.authenticator.Meta,
+    a: std.mem.Allocator,
+) fido.ctap.authenticator.Callbacks.StoreError!void {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", allocator) catch {
+        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    };
+    defer client.deinit();
+
+    const x = client.update("passkee", settings, a) catch {
+        return fido.ctap.authenticator.Callbacks.StoreError.Other;
+    };
+
+    a.free(x.?.id); // we don't need this
+    if (settings._rev) |rev| {
+        // free old revision id
+        a.free(rev);
+    }
+    settings._rev = x.?.rev;
+}
 
 pub fn createEntry(id: []const u8) cks.Error!cks.Entry {
     return try store.?.createEntry(id);

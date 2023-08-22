@@ -14,18 +14,11 @@ pub fn build(b: *std.build.Builder) !void {
     });
     const zbor_module = zbor_dep.module("zbor");
 
-    //const hidapi_dep = b.dependency("hidapi", .{
-    //    .target = target,
-    //    .optimize = optimize,
-    //});
-    //_ = hidapi_dep;
-
-    //const clap_dep = b.dependency("clap", .{
-    //    .target = target,
-    //    .optimize = optimize,
-    //});
-    //const clap_module = clap_dep.module("clap");
-    //_ = clap_module;
+    const snorlax_dep = b.dependency("snorlax", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const snorlax_module = snorlax_dep.module("snorlax");
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
@@ -81,6 +74,7 @@ pub fn build(b: *std.build.Builder) !void {
     authenticator.addModule("fido", fido_module);
     authenticator.addModule("cks", cks_module);
     authenticator.addModule("profiling_allocator", allocator_module);
+    authenticator.addModule("snorlax", snorlax_module);
     authenticator.linkSystemLibraryPkgConfigOnly("libnotify");
     authenticator.linkLibC();
     b.installArtifact(authenticator);

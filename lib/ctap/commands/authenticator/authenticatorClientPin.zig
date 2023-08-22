@@ -28,6 +28,7 @@ pub fn authenticatorClientPin(
         std.log.err("authenticatorClientPin: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
+    defer settings.deinit(auth.allocator);
     if (!settings.verifyMac(&auth.secret.mac)) {
         std.log.err("authenticatorClientPin: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
@@ -145,7 +146,7 @@ pub fn authenticatorClientPin(
             const ph = fido.ctap.pinuv.hash(newPin);
             try settings.setPin(ph, code_points, auth.secret.enc, auth.callbacks.rand);
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("authenticatorClientPin (setPin): unable to update settings ({any})", .{err});
                 return err;
             };
@@ -211,7 +212,7 @@ pub fn authenticatorClientPin(
             // decrement pin retries
             settings.retries -= 1;
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("authenticatorClientPin (updatePin): unable to update settings ({any})", .{err});
                 return err;
             };
@@ -249,7 +250,7 @@ pub fn authenticatorClientPin(
             // Set the pinRetries to maximum
             settings.retries = 8;
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("changePIN: unable to update settings ({any})", .{err});
                 return err;
             };
@@ -302,7 +303,7 @@ pub fn authenticatorClientPin(
             try settings.setPin(ph, code_points, auth.secret.enc, auth.callbacks.rand);
             settings.force_pin_change = false;
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("authenticatorClientPin (changePin): unable to update settings ({any})", .{err});
                 return err;
             };
@@ -370,7 +371,7 @@ pub fn authenticatorClientPin(
             // decrement pin retries
             settings.retries -= 1;
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("getPinUvAuthTokenUsingPinWithPermissions: unable to update settings ({any})", .{err});
                 return err;
             };
@@ -404,7 +405,7 @@ pub fn authenticatorClientPin(
             // Set retry counter to maximum
             settings.retries = 8;
             settings.updateMac(&auth.secret.mac);
-            auth.callbacks.updateSettings(&settings) catch |err| {
+            auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
                 std.log.err("getPinUvAuthTokenUsingPinWithPermissions: unable to update settings ({any})", .{err});
                 return err;
             };

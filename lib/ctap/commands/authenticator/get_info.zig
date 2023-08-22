@@ -14,6 +14,7 @@ pub fn authenticatorGetInfo(
         std.log.err("authenticatorGetAssertion: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
+    defer settings.deinit(auth.allocator);
     if (!settings.verifyMac(&auth.secret.mac)) {
         std.log.err("authenticatorGetAssertion: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;

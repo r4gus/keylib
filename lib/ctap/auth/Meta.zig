@@ -13,7 +13,7 @@ pub const Keys = struct {
     enc: [KEY_LEN]u8,
 };
 
-_id: [8]u8 = "Settings".*,
+_id: []const u8 = "Settings",
 _rev: ?[]const u8 = null,
 /// Number of retries left
 retries: u8 = 8,
@@ -38,6 +38,13 @@ kdf: struct {
     M: u32 = 7168,
     I: u32 = 5,
 } = .{},
+
+pub fn deinit(self: *const @This(), a: std.mem.Allocator) void {
+    a.free(self._id);
+    if (self._rev) |rev| {
+        a.free(rev);
+    }
+}
 
 pub fn newKey(
     self: *@This(),
@@ -64,14 +71,14 @@ pub fn deriveKey(
         .argon2id,
     );
     return Keys{
-        .max = k[0..KEY_LEN].*,
+        .mac = k[0..KEY_LEN].*,
         .enc = k[KEY_LEN..].*,
     };
 }
 
 pub fn updateMac(self: *@This(), key: []const u8) void {
     var m = Mac.init(key);
-    m.update(&self._id);
+    m.update(self._id);
     m.update(std.mem.asBytes(&self.retries));
     m.update(std.mem.asBytes(&self.force_pin_change));
     m.update(std.mem.asBytes(&self.min_pin_length));
@@ -87,7 +94,7 @@ pub fn updateMac(self: *@This(), key: []const u8) void {
 pub fn verifyMac(self: *@This(), key: []const u8) bool {
     var x: [Mac.mac_length]u8 = undefined;
     var m = Mac.init(key);
-    m.update(&self._id);
+    m.update(self._id);
     m.update(std.mem.asBytes(&self.retries));
     m.update(std.mem.asBytes(&self.force_pin_change));
     m.update(std.mem.asBytes(&self.min_pin_length));

@@ -59,9 +59,11 @@ secret: fido.ctap.authenticator.Meta.Keys = undefined,
 pub fn init(self: *@This(), password: []const u8) !void {
     var new: bool = false;
     var setting = self.callbacks.readSettings(self.allocator) catch |err| blk: {
-        if (err == .DoesNotExist) {
+        if (err == error.DoesNotExist) {
             std.log.warn("No Settings entry found", .{});
-            var meta = fido.ctap.authenticator.Meta{};
+            var meta = fido.ctap.authenticator.Meta{
+                ._id = try self.allocator.dupe(u8, "Settings"),
+            };
 
             // First we derive a key from the given password.
             // This will also generate a random salt that is stored with
@@ -80,7 +82,7 @@ pub fn init(self: *@This(), password: []const u8) !void {
             // but I don't want to reencrypt the master secret every time one of the other fields changes.
             meta.updateMac(&self.secret.mac);
 
-            self.callbacks.updateSettings(&meta) catch |e| {
+            self.callbacks.updateSettings(&meta, self.allocator) catch |e| {
                 std.log.err("unable to persist new settings ({any})", .{e});
                 return error.Fatal;
             };
@@ -92,6 +94,7 @@ pub fn init(self: *@This(), password: []const u8) !void {
             return error.Fatal;
         }
     };
+    defer setting.deinit(self.allocator);
 
     if (!new) {
         self.secret = try setting.deriveKey(password, self.allocator);
