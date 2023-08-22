@@ -28,8 +28,6 @@ token: struct {
     two: ?fido.ctap.pinuv.PinUvAuth = null,
 },
 
-secret: []u8 = undefined,
-
 credential_list: ?struct {
     list: []const fido.ctap.crypto.Id,
     credentialCounter: usize = 0,
@@ -47,7 +45,7 @@ allocator: std.mem.Allocator,
 /// TODO: We use AES256-OCB and HMAC. It should be fine to use the same key
 /// for HMAC and AES256-OCB encryption but maybe its still better to use
 /// two different keys.
-secret: [fido.ctap.authenticator.Meta.KEY_LEN]u8 = undefined,
+secret: fido.ctap.authenticator.Meta.Keys = undefined,
 
 /// Initialize the authenticator
 ///
@@ -76,11 +74,11 @@ pub fn init(self: *@This(), password: []const u8) !void {
             // We use this indirection so we don't need to re-encrypt all credentials if the user
             // changes the password.
             const ms = fido.ctap.crypto.master_secret.createMasterSecret(self.callbacks.rand);
-            meta.setSecret(ms, self.secret, self.callbacks.rand);
+            meta.setSecret(ms, self.secret.enc, self.callbacks.rand);
 
             // Finally, we calculate a mac over the data. The master secret uses authenticated encryption
             // but I don't want to reencrypt the master secret every time one of the other fields changes.
-            meta.updateMac(&self.secret);
+            meta.updateMac(&self.secret.mac);
 
             self.callbacks.updateSettings(&meta) catch |e| {
                 std.log.err("unable to persist new settings ({any})", .{e});
@@ -99,7 +97,7 @@ pub fn init(self: *@This(), password: []const u8) !void {
         self.secret = try setting.deriveKey(password, self.allocator);
     }
 
-    if (!setting.verifyMac(&self.secret)) {
+    if (!setting.verifyMac(&self.secret.mac)) {
         std.log.err("MAC verification for the given settings failed", .{});
         return error.Fatal;
     }

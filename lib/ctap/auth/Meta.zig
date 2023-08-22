@@ -8,6 +8,11 @@ const master_secret = fido.ctap.crypto.master_secret;
 
 pub const KEY_LEN = Aes256Ocb.key_length;
 
+pub const Keys = struct {
+    mac: [KEY_LEN]u8,
+    enc: [KEY_LEN]u8,
+};
+
 _id: [8]u8 = "Settings".*,
 _rev: ?[]const u8 = null,
 /// Number of retries left
@@ -21,7 +26,7 @@ always_uv: bool = true,
 /// Master secret encrypted using AES-OCB
 secret: [Aes256Ocb.nonce_length + Aes256Ocb.tag_length + master_secret.MS_LEN]u8 = undefined,
 /// Pin with a max length of 63 bytes
-pin: ?[Aes256Ocb.nonce_length + Aes256Ocb.tag_length + 64]u8 = null,
+pin: ?[Aes256Ocb.nonce_length + Aes256Ocb.tag_length + 33]u8 = null,
 /// Message Authentication Code over the remaining data
 mac: [Mac.mac_length]u8 = undefined,
 kdf: struct {
@@ -37,7 +42,7 @@ pub fn newKey(
     password: []const u8,
     random: std.rand.Random,
     a: std.mem.Allocator,
-) ![KEY_LEN]u8 {
+) !Keys {
     random.bytes(self.kdf.salt[0..]);
     return try self.deriveKey(password, a);
 }
@@ -46,8 +51,8 @@ pub fn deriveKey(
     self: *@This(),
     password: []const u8,
     a: std.mem.Allocator,
-) ![KEY_LEN]u8 {
-    var k: [KEY_LEN]u8 = undefined;
+) !Keys {
+    var k: [KEY_LEN + KEY_LEN]u8 = undefined;
     try argon2.kdf(
         a,
         k[0..],
@@ -56,7 +61,10 @@ pub fn deriveKey(
         .{ .t = self.kdf.I, .m = self.kdf.M, .p = self.kdf.P },
         .argon2id,
     );
-    return k;
+    return Keys{
+        .max = k[0..KEY_LEN].*,
+        .enc = k[KEY_LEN..].*,
+    };
 }
 
 pub fn updateMac(self: *@This(), key: []const u8) void {
@@ -127,17 +135,16 @@ pub fn getSecret(
 
 pub fn setPin(
     self: *@This(),
-    pin: []const u8,
+    pin: [32]u8,
     code_points: u8,
     key: [Aes256Ocb.key_length]u8,
     rand: std.rand.Random,
 ) !void {
-    if (pin.len > 63) return error.InvalidPinLength;
-    var p: [64]u8 = .{0} ** 64;
-    @memcpy(p[0..pin.len], pin);
-    p[63] = code_points;
+    var p: [33]u8 = .{0} ** 33;
+    @memcpy(p[0..32], pin[0..32]);
+    p[32] = code_points;
 
-    self.pin = .{0} ** (Aes256Ocb.nonce_length + Aes256Ocb.tag_length + 64);
+    self.pin = .{0} ** (Aes256Ocb.nonce_length + Aes256Ocb.tag_length + 33);
     rand.bytes(self.pin.?[0..Aes256Ocb.nonce_length]);
     Aes256Ocb.encrypt(
         self.pin.?[Aes256Ocb.nonce_length + Aes256Ocb.tag_length ..],
@@ -152,12 +159,11 @@ pub fn setPin(
 pub fn getPin(
     self: *const @This(),
     key: [Aes256Ocb.key_length]u8,
-    pin: *[63]u8,
     code_points: *u8,
-) !usize {
+) ![32]u8 {
     if (self.pin == null) return error.NoPinSet;
 
-    var m: [64]u8 = undefined;
+    var m: [33]u8 = undefined;
 
     try Aes256Ocb.decrypt(
         &m,
@@ -168,12 +174,8 @@ pub fn getPin(
         key,
     );
 
-    @memcpy(pin[0..], m[0..63]);
-    code_points.* = m[63];
-
-    var i: usize = 0;
-    while (i < 63 and m[i] != 0) : (i += 1) {}
-    return i;
+    code_points.* = m[32];
+    return m[0..32].*;
 }
 
 test "Meta mac #1" {

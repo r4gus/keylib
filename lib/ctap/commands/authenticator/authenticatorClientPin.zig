@@ -24,20 +24,20 @@ pub fn authenticatorClientPin(
 
     var client_pin_response: ?fido.ctap.response.ClientPin = null;
 
-    var settings = if (auth.callbacks.getEntry("Settings")) |settings| settings else {
-        std.log.err("Unable to fetch Settings", .{});
+    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+        std.log.err("authenticatorClientPin: Unable to fetch Settings ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
+    if (!settings.verifyMac(&auth.secret.mac)) {
+        std.log.err("authenticatorClientPin: Settings MAC validation unsuccessful", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
 
     // Handle one of the sub-commands
     switch (client_pin_param.subCommand) {
         .getPinRetries => {
-            var retries = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries else {
-                std.log.err("Retries field missing in Settings", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
             client_pin_response = .{
-                .pinRetries = retries[0],
+                .pinRetries = settings.retries,
                 .powerCycleState = retry_state.powerCycleState,
             };
         },
@@ -82,8 +82,7 @@ pub fn authenticatorClientPin(
                 .V2 => &auth.token.two.?,
             };
 
-            var already_set = if (settings.getField("Pin", auth.callbacks.millis())) |_| true else false;
-
+            var already_set = settings.pin != null;
             if (already_set) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
@@ -144,9 +143,12 @@ pub fn authenticatorClientPin(
 
             // Store new pin
             const ph = fido.ctap.pinuv.hash(newPin);
-            try settings.addField(.{ .key = "Pin", .value = &ph }, auth.callbacks.millis());
-            try settings.addField(.{ .key = "CodePoints", .value = std.mem.toBytes(code_points)[0..] }, auth.callbacks.millis());
-            try auth.callbacks.persist();
+            try settings.setPin(ph, code_points, auth.secret.enc, auth.callbacks.rand);
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("authenticatorClientPin (setPin): unable to update settings ({any})", .{err});
+                return err;
+            };
         },
         .changePIN => {
             if (retry_state.ctr == 0) {
@@ -175,11 +177,7 @@ pub fn authenticatorClientPin(
             };
 
             // If the pinRetries counter is 0, return error.
-            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else {
-                std.log.err("changePIN: Retries field missing in Settings", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            if (retries <= 0) {
+            if (settings.retries <= 0) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
             }
 
@@ -211,12 +209,12 @@ pub fn authenticatorClientPin(
             }
 
             // decrement pin retries
-            retries = retries - 1;
-            try settings.updateField(
-                "Retries",
-                &std.mem.toBytes(retries),
-                auth.callbacks.millis(),
-            );
+            settings.retries -= 1;
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("authenticatorClientPin (updatePin): unable to update settings ({any})", .{err});
+                return err;
+            };
 
             // Decrypt pinHashEnc and match against stored pinHash
             var pinHash1: [16]u8 = undefined;
@@ -226,7 +224,12 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            const pinHash2 = if (settings.getField("Pin", auth.callbacks.millis())) |pin| pin else return fido.ctap.StatusCodes.ctap2_err_pin_not_set;
+            if (settings.pin == null) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_not_set;
+            }
+
+            var cp: u8 = 0;
+            const pinHash2 = try settings.getPin(auth.secret.enc, &cp);
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
@@ -234,7 +237,7 @@ pub fn authenticatorClientPin(
 
                 prot.regenerate();
 
-                if (retries == 0) {
+                if (settings.retries == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
                 } else if (retry_state.ctr == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
@@ -244,12 +247,12 @@ pub fn authenticatorClientPin(
             }
 
             // Set the pinRetries to maximum
-            retries = 8;
-            try settings.updateField(
-                "Retries",
-                &std.mem.toBytes(retries),
-                auth.callbacks.millis(),
-            );
+            settings.retries = 8;
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("changePIN: unable to update settings ({any})", .{err});
+                return err;
+            };
 
             // Decrypt new pin
             var paddedNewPin: [64]u8 = undefined;
@@ -280,9 +283,9 @@ pub fn authenticatorClientPin(
             const ph = fido.ctap.pinuv.hash(newPin);
 
             // Validate forePINChange
-            if (auth.settings.forcePINChange) |fpc| {
+            if (settings.force_pin_change) {
                 // Hash of new pin must not be the same as the old hash
-                if (fpc and std.mem.eql(u8, pinHash2[0..], &ph)) {
+                if (std.mem.eql(u8, pinHash2[0..], &ph)) {
                     std.log.err("authenticatorClientPin (changePin): new and old pin must differ", .{});
                     return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
                 }
@@ -296,19 +299,13 @@ pub fn authenticatorClientPin(
                 }
             }
 
-            try settings.updateField(
-                "Pin",
-                &ph,
-                auth.callbacks.millis(),
-            );
-
-            try settings.updateField(
-                "CodePoints",
-                std.mem.toBytes(code_points)[0..],
-                auth.callbacks.millis(),
-            );
-            try auth.callbacks.persist();
-            auth.settings.forcePINChange = false;
+            try settings.setPin(ph, code_points, auth.secret.enc, auth.callbacks.rand);
+            settings.force_pin_change = false;
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("authenticatorClientPin (changePin): unable to update settings ({any})", .{err});
+                return err;
+            };
 
             // Invalidate all pinUvAuthTokens
             if (auth.token.one) |*one| {
@@ -357,11 +354,7 @@ pub fn authenticatorClientPin(
             }
 
             // Check if the pin is blocked
-            var retries: u8 = if (settings.getField("Retries", auth.callbacks.millis())) |retries| retries[0] else {
-                std.log.err("getUvTokenWithPerm: Retries field missing in Settings", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            if (retries == 0) {
+            if (settings.retries == 0) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
             }
 
@@ -375,12 +368,12 @@ pub fn authenticatorClientPin(
             defer auth.allocator.free(shared_secret);
 
             // decrement pin retries
-            retries = retries - 1;
-            try settings.updateField(
-                "Retries",
-                &std.mem.toBytes(retries),
-                auth.callbacks.millis(),
-            );
+            settings.retries -= 1;
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("getPinUvAuthTokenUsingPinWithPermissions: unable to update settings ({any})", .{err});
+                return err;
+            };
 
             // Decrypt pinHashEnc and match against stored pinHash
             var pinHash1: [16]u8 = undefined;
@@ -390,10 +383,8 @@ pub fn authenticatorClientPin(
                 client_pin_param.pinHashEnc.?[0..],
             );
 
-            var pinHash2 = if (settings.getField("Pin", auth.callbacks.millis())) |pin| pin else {
-                std.log.err("getUvTokenWithPerm: Pin field missing in Settings", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            var cp: u8 = 0;
+            const pinHash2 = try settings.getPin(auth.secret.enc, &cp);
 
             if (!std.mem.eql(u8, pinHash1[0..], pinHash2[0..16])) {
                 // The pin hashes don't match
@@ -401,7 +392,7 @@ pub fn authenticatorClientPin(
 
                 prot.regenerate();
 
-                if (retries == 0) {
+                if (settings.retries == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_blocked;
                 } else if (retry_state.ctr == 0) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_auth_blocked;
@@ -411,20 +402,17 @@ pub fn authenticatorClientPin(
             }
 
             // Set retry counter to maximum
-            retries = 8;
-            try settings.updateField(
-                "Retries",
-                &std.mem.toBytes(retries),
-                auth.callbacks.millis(),
-            );
-            try auth.callbacks.persist();
+            settings.retries = 8;
+            settings.updateMac(&auth.secret.mac);
+            auth.callbacks.updateSettings(&settings) catch |err| {
+                std.log.err("getPinUvAuthTokenUsingPinWithPermissions: unable to update settings ({any})", .{err});
+                return err;
+            };
 
             // Check if user is forced to change the pin
-            if (auth.settings.forcePINChange) |change| {
-                if (change) {
-                    std.log.err("authenticatorClientPin (getPinUvAuthTokenUsingPinWithPermissions): pin change required", .{});
-                    return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
-                }
+            if (settings.force_pin_change) {
+                std.log.err("authenticatorClientPin (getPinUvAuthTokenUsingPinWithPermissions): pin change required", .{});
+                return fido.ctap.StatusCodes.ctap2_err_pin_policy_violation;
             }
 
             // Create a new pinUvAuthToken
