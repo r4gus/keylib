@@ -73,6 +73,9 @@ select_discoverable_credential: ?*const fn (
 readSettings: *const fn (a: std.mem.Allocator) LoadError!fido.ctap.authenticator.Meta,
 updateSettings: *const fn (settings: *fido.ctap.authenticator.Meta, a: std.mem.Allocator) StoreError!void,
 
+readCred: *const fn (id: ?[]const u8, a: std.mem.Allocator) LoadError!fido.ctap.authenticator.Credential,
+updateCred: *const fn (cred: *fido.ctap.authenticator.Credential, a: std.mem.Allocator) StoreError!void,
+
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
 getEntries: *const fn (filters: []const cks.Data.Filter, a: std.mem.Allocator) ?[]const *cks.Entry,

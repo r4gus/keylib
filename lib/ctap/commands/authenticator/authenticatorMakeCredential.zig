@@ -213,6 +213,9 @@ pub fn authenticatorMakeCredential(
 
     const ms = try settings.getSecret(auth.secret.enc);
 
+    // The authenticator returns an error if the authenticator already contains one of the credentials
+    // enumerated in this array. This allows RPs to limit the creation of multiple credentials for the
+    // same account on a single authenticator.
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |ecl| {
             const credId = fido.ctap.crypto.Id.from_raw(ecl.id[0..], ms, mcp.rp.id) catch {
@@ -328,34 +331,21 @@ pub fn authenticatorMakeCredential(
     const id = fido.ctap.crypto.Id.new(alg.?.alg, policy, ms, mcp.rp.id, auth.callbacks.rand);
 
     // Create Entry if rk required
-    var entry: ?cks.Entry = if (rk) try auth.callbacks.createEntry(id.raw[0..]) else null;
-    errdefer {
-        if (rk) {
-            entry.?.deinit();
-        }
-    }
-
-    if (rk) {
-        try entry.?.addField(
-            .{ .key = "Policy", .value = policy.toString() },
-            auth.callbacks.millis(),
-        );
-    }
-
-    if (rk and auth.extensionSupported(.@"hmac-secret")) {
+    var entry: ?fido.ctap.authenticator.Credential = if (rk) try fido.ctap.authenticator.Credential.allocInit(
+        id.raw[0..],
+        &mcp.user,
+        mcp.rp.id,
+        alg.?.alg,
+        policy,
+        auth.allocator,
         // The authenticator generates two random 32-byte values (called CredRandomWithUV
         // and CredRandomWithoutUV) and associates them with the credential.
-        var random_mem: [32]u8 = undefined;
-        auth.callbacks.rand.bytes(random_mem[0..]);
-        try entry.?.addField(
-            .{ .key = "CredRandomWithUV", .value = random_mem[0..] },
-            auth.callbacks.millis(),
-        );
-        auth.callbacks.rand.bytes(random_mem[0..]);
-        try entry.?.addField(
-            .{ .key = "CredRandomWithoutUV", .value = random_mem[0..] },
-            auth.callbacks.millis(),
-        );
+        auth.callbacks.rand,
+    ) else null;
+    defer {
+        if (rk) {
+            entry.?.deinit(auth.allocator);
+        }
     }
 
     if (mcp.extensions) |ext| {
@@ -391,42 +381,16 @@ pub fn authenticatorMakeCredential(
     }
 
     const usageCnt = if (rk) blk: {
-        try entry.?.addField(
-            .{ .key = "RpId", .value = mcp.rp.id },
-            auth.callbacks.millis(),
+        try entry.?.setPrivateKey(
+            key_pair.raw_private_key,
+            ms,
+            auth.callbacks.rand,
+            auth.allocator,
         );
 
-        try entry.?.addField(
-            .{ .key = "UserId", .value = mcp.user.id },
-            auth.callbacks.millis(),
-        );
+        const cnt = entry.?.sign_count;
+        entry.?.sign_count = 1; // This includes the first signature possibly made below
 
-        if (mcp.user.name) |name| {
-            try entry.?.addField(
-                .{ .key = "UserName", .value = name },
-                auth.callbacks.millis(),
-            );
-        }
-
-        if (mcp.user.displayName) |name| {
-            try entry.?.addField(
-                .{ .key = "UserDisplayName", .value = name },
-                auth.callbacks.millis(),
-            );
-        }
-
-        const cnt = entry.?.times.usageCount;
-        entry.?.times.usageCount = 1; // This includes the first signature possibly made below
-
-        try entry.?.addField(
-            .{ .key = "PrivateKey", .value = key_pair.raw_private_key },
-            auth.callbacks.millis(),
-        );
-
-        try entry.?.addField(
-            .{ .key = "Algorithm", .value = &alg.?.alg.to_raw() },
-            auth.callbacks.millis(),
-        );
         break :blk cnt;
     } else blk: {
         const cnt = settings.usage_count;
@@ -447,34 +411,40 @@ pub fn authenticatorMakeCredential(
     if (rk) {
         // If a credential for the same rp.id and account ID already exists
         // on the authenticator, overwrite that credential.
-        if (auth.callbacks.getEntries(
-            &.{
-                .{ .key = "RpId", .value = mcp.rp.id },
-                .{ .key = "UserId", .value = mcp.user.id },
-            },
-            auth.allocator,
-        )) |entries| {
-            defer auth.allocator.free(entries);
+        // TODO
+        //if (auth.callbacks.getEntries(
+        //    &.{
+        //        .{ .key = "RpId", .value = mcp.rp.id },
+        //        .{ .key = "UserId", .value = mcp.user.id },
+        //    },
+        //    auth.allocator,
+        //)) |entries| {
+        //    defer auth.allocator.free(entries);
 
-            if (entries.len > 1) {
-                std.log.warn("Found two discoverable credentials with the same rpId and uId. This shouldn't be!", .{});
-            }
+        //    if (entries.len > 1) {
+        //        std.log.warn("Found two discoverable credentials with the same rpId and uId. This shouldn't be!", .{});
+        //    }
 
-            std.log.info(
-                "Overwriting credential with id: {s}",
-                .{std.fmt.fmtSliceHexUpper(entries[0].id)},
-            );
-            // Update the old entry
-            try entries[0].update(&entry.?, auth.callbacks.millis());
-            // We don't need the new entry anymore
-            entry.?.deinit();
-        } else {
-            auth.callbacks.addEntry(entry.?) catch {
-                return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-            };
-        }
+        //    std.log.info(
+        //        "Overwriting credential with id: {s}",
+        //        .{std.fmt.fmtSliceHexUpper(entries[0].id)},
+        //    );
+        //    // Update the old entry
+        //    try entries[0].update(&entry.?, auth.callbacks.millis());
+        //    // We don't need the new entry anymore
+        //    entry.?.deinit();
+        //} else {
+        //    auth.callbacks.addEntry(entry.?) catch {
+        //        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
+        //    };
+        //}
+        std.debug.print("{any}\n", .{entry.?});
+        entry.?.updateMac(&ms);
+        auth.callbacks.updateCred(&entry.?, auth.allocator) catch |err| {
+            std.log.err("authenticatorMakeCredential: unable to create credential ({any})", .{err});
+            return err;
+        };
     }
-    try auth.callbacks.persist();
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 19. Create attestation statement

@@ -181,6 +181,8 @@ pub fn main() !void {
             .up = up,
             .readSettings = readSettings,
             .updateSettings = updateSettings,
+            .readCred = readCred,
+            .updateCred = updateCred,
             .createEntry = createEntry,
             .getEntry = getEntry,
             .getEntries = getEntries,
@@ -410,7 +412,11 @@ pub fn reset() void {}
 pub fn readSettings(
     a: std.mem.Allocator,
 ) fido.ctap.authenticator.Callbacks.LoadError!fido.ctap.authenticator.Meta {
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", allocator) catch {
+    var buffer: [50000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const all = fba.allocator();
+
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
@@ -429,7 +435,11 @@ pub fn updateSettings(
     settings: *fido.ctap.authenticator.Meta,
     a: std.mem.Allocator,
 ) fido.ctap.authenticator.Callbacks.StoreError!void {
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", allocator) catch {
+    var buffer: [50000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const all = fba.allocator();
+
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
@@ -444,6 +454,59 @@ pub fn updateSettings(
         a.free(rev);
     }
     settings._rev = x.?.rev;
+}
+
+pub fn readCred(
+    id: ?[]const u8,
+    a: std.mem.Allocator,
+) fido.ctap.authenticator.Callbacks.LoadError!fido.ctap.authenticator.Credential {
+    var buffer: [50000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const all = fba.allocator();
+
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    };
+    defer client.deinit();
+
+    if (id) |_id| {
+        var meta = client.read(fido.ctap.authenticator.Credential, "passkee", _id, a) catch |err| {
+            if (err == error.NotFound) {
+                return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
+            } else {
+                return fido.ctap.authenticator.Callbacks.LoadError.Other;
+            }
+        };
+        return meta;
+    } else {
+        // TODO: return all credentials
+        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    }
+}
+
+pub fn updateCred(
+    cred: *fido.ctap.authenticator.Credential,
+    a: std.mem.Allocator,
+) fido.ctap.authenticator.Callbacks.StoreError!void {
+    var buffer: [50000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const all = fba.allocator();
+
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    };
+    defer client.deinit();
+
+    const x = client.update("passkee", cred, a) catch {
+        return fido.ctap.authenticator.Callbacks.StoreError.Other;
+    };
+
+    a.free(x.?.id); // we don't need this
+    if (cred._rev) |rev| {
+        // free old revision id
+        a.free(rev);
+    }
+    cred._rev = x.?.rev;
 }
 
 pub fn createEntry(id: []const u8) cks.Error!cks.Entry {

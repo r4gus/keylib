@@ -1,5 +1,5 @@
 const std = @import("std");
-const fido = @import("../../../main.zig");
+const fido = @import("../../main.zig");
 const cbor = @import("zbor");
 
 const Mac = std.crypto.auth.hmac.sha2.HmacSha256;
@@ -29,13 +29,52 @@ alg: cbor.cose.Algorithm,
 /// The AES-OCB encrypted private key
 private_key: []const u8 = undefined,
 
+policy: fido.ctap.extensions.CredentialCreationPolicy = .userVerificationOptional,
+
+/// Belongs to hmac secret
+cred_random_with_uv: [32]u8 = undefined,
+
+/// Belongs to hmac secret
+cred_random_without_uv: [32]u8 = undefined,
+
 /// Message Authentication Code over the remaining data
 mac: [Mac.mac_length]u8 = undefined,
 
-pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
-    if (self._id) |id| {
-        allocator.free(id);
+pub fn allocInit(
+    raw_id: []const u8,
+    user: *const fido.common.User,
+    rp_id: []const u8,
+    alg: cbor.cose.Algorithm,
+    policy: fido.ctap.extensions.CredentialCreationPolicy,
+    allocator: std.mem.Allocator,
+    rand: std.rand.Random,
+) !@This() {
+    var self = @This(){
+        ._id = try std.fmt.allocPrint(allocator, "{s}", .{std.fmt.fmtSliceHexUpper(raw_id)}),
+        .user_id = try allocator.dupe(u8, user.id),
+        .rp_id = try allocator.dupe(u8, rp_id),
+        .sign_count = 0,
+        .alg = alg,
+        .policy = policy,
+    };
+
+    if (user.name) |name| {
+        self.user_name = try allocator.dupe(u8, name);
     }
+    if (user.displayName) |name| {
+        self.user_display_name = try allocator.dupe(u8, name);
+    }
+
+    rand.bytes(self.cred_random_with_uv[0..]);
+    rand.bytes(self.cred_random_without_uv[0..]);
+
+    self.sign_count = 0;
+
+    return self;
+}
+
+pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+    allocator.free(self._id);
     if (self._rev) |rev| {
         allocator.free(rev);
     }
@@ -96,6 +135,9 @@ pub fn updateMac(self: *@This(), key: []const u8) void {
     m.update(std.mem.asBytes(&self.sign_count));
     m.update(std.mem.asBytes(&self.alg));
     m.update(self.private_key);
+    m.update(std.mem.asBytes(&self.policy));
+    m.update(&self.cred_random_with_uv);
+    m.update(&self.cred_random_without_uv);
     m.final(&self.mac);
 }
 
@@ -108,6 +150,9 @@ pub fn verifyMac(self: *@This(), key: []const u8) bool {
     m.update(std.mem.asBytes(&self.sign_count));
     m.update(std.mem.asBytes(&self.alg));
     m.update(self.private_key);
+    m.update(std.mem.asBytes(&self.policy));
+    m.update(&self.cred_random_with_uv);
+    m.update(&self.cred_random_without_uv);
     m.final(&x);
 
     return std.mem.eql(u8, x[0..], self.mac[0..]);
