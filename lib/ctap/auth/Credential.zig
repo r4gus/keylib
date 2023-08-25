@@ -1,6 +1,7 @@
 const std = @import("std");
 const fido = @import("../../main.zig");
 const cbor = @import("zbor");
+const uuid = @import("uuid");
 
 const Mac = std.crypto.auth.hmac.sha2.HmacSha256;
 const Aes256Ocb = std.crypto.aead.aes_ocb.Aes256Ocb;
@@ -37,11 +38,19 @@ cred_random_with_uv: [32]u8 = undefined,
 /// Belongs to hmac secret
 cred_random_without_uv: [32]u8 = undefined,
 
+/// Is this credential discoverable or not
+///
+/// This is kind of stupid but authenticatorMakeCredential
+/// docs state, that you're not allowed to create a discoverable
+/// credential if not explicitely requested. The docs also state
+/// that you're allowed to keep (some) state, e.g., store the key.
+discoverable: bool = false,
+
 /// Message Authentication Code over the remaining data
 mac: [Mac.mac_length]u8 = undefined,
 
 pub fn allocInit(
-    raw_id: []const u8,
+    id: uuid.Uuid,
     user: *const fido.common.User,
     rp_id: []const u8,
     alg: cbor.cose.Algorithm,
@@ -49,8 +58,9 @@ pub fn allocInit(
     allocator: std.mem.Allocator,
     rand: std.rand.Random,
 ) !@This() {
+    const urn = uuid.urn.serialize(id);
     var self = @This(){
-        ._id = try std.fmt.allocPrint(allocator, "{s}", .{std.fmt.fmtSliceHexUpper(raw_id)}),
+        ._id = try allocator.dupe(u8, urn[0..]),
         .user_id = try allocator.dupe(u8, user.id),
         .rp_id = try allocator.dupe(u8, rp_id),
         .sign_count = 0,
@@ -138,6 +148,7 @@ pub fn updateMac(self: *@This(), key: []const u8) void {
     m.update(std.mem.asBytes(&self.policy));
     m.update(&self.cred_random_with_uv);
     m.update(&self.cred_random_without_uv);
+    m.update(std.mem.asBytes(&self.discoverable));
     m.final(&self.mac);
 }
 
@@ -153,6 +164,7 @@ pub fn verifyMac(self: *@This(), key: []const u8) bool {
     m.update(std.mem.asBytes(&self.policy));
     m.update(&self.cred_random_with_uv);
     m.update(&self.cred_random_without_uv);
+    m.update(std.mem.asBytes(&self.discoverable));
     m.final(&x);
 
     return std.mem.eql(u8, x[0..], self.mac[0..]);

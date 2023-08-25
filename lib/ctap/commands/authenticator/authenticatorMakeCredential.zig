@@ -1,8 +1,11 @@
 const std = @import("std");
 const cbor = @import("zbor");
 const cks = @import("cks");
+const uuid = @import("uuid");
 const fido = @import("../../../main.zig");
 const helper = @import("helper.zig");
+const deriveMacKey = fido.ctap.crypto.master_secret.deriveMacKey;
+const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
 
 pub fn authenticatorMakeCredential(
     auth: *fido.ctap.authenticator.Authenticator,
@@ -218,11 +221,20 @@ pub fn authenticatorMakeCredential(
     // same account on a single authenticator.
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |ecl| {
-            const credId = fido.ctap.crypto.Id.from_raw(ecl.id[0..], ms, mcp.rp.id) catch {
+            var cred = auth.callbacks.readCred(ecl.id[0..], auth.allocator) catch {
+                // TODO: return error for all errors except DoesNotExist
+
+                // If we cant find the credential, it doesn't exist
                 continue;
             };
+            defer cred.deinit(auth.allocator);
+            const mac_key = deriveMacKey(ms);
+            if (!cred.verifyMac(&mac_key)) {
+                // MAC validation failed
+                continue;
+            }
 
-            const cred_policy = credId.getPolicy();
+            const cred_policy = cred.policy;
 
             if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired != cred_policy) {
                 var userPresentFlagValue = false;
@@ -328,11 +340,12 @@ pub fn authenticatorMakeCredential(
         .credProtect = policy,
     };
 
-    const id = fido.ctap.crypto.Id.new(alg.?.alg, policy, ms, mcp.rp.id, auth.callbacks.rand);
+    // Create a new universally unique identifier as ID
+    const id = uuid.v4.new2(auth.callbacks.rand);
 
     // Create Entry if rk required
-    var entry: ?fido.ctap.authenticator.Credential = if (rk) try fido.ctap.authenticator.Credential.allocInit(
-        id.raw[0..],
+    var entry = try fido.ctap.authenticator.Credential.allocInit(
+        id,
         &mcp.user,
         mcp.rp.id,
         alg.?.alg,
@@ -341,27 +354,25 @@ pub fn authenticatorMakeCredential(
         // The authenticator generates two random 32-byte values (called CredRandomWithUV
         // and CredRandomWithoutUV) and associates them with the credential.
         auth.callbacks.rand,
-    ) else null;
+    );
     defer {
         if (rk) {
-            entry.?.deinit(auth.allocator);
+            entry.deinit(auth.allocator);
         }
     }
 
     if (mcp.extensions) |ext| {
-        if (rk) {
-            // Prepare hmac-secret
-            if (ext.@"hmac-secret") |hsec| {
-                switch (hsec) {
-                    .create => |flag| {
-                        // The creation of the two random values will always succeed,
-                        // so we'll always return true.
-                        if (flag) {
-                            extensions.@"hmac-secret" = .{ .create = true };
-                        }
-                    },
-                    else => {},
-                }
+        // Prepare hmac-secret
+        if (ext.@"hmac-secret") |hsec| {
+            switch (hsec) {
+                .create => |flag| {
+                    // The creation of the two random values will always succeed,
+                    // so we'll always return true.
+                    if (flag) {
+                        extensions.@"hmac-secret" = .{ .create = true };
+                    }
+                },
+                else => {},
             }
         }
     }
@@ -369,10 +380,8 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    const seed = id.deriveSeed(ms);
-
-    const key_pair = if (alg.?.create_det(
-        &seed,
+    const key_pair = if (alg.?.create(
+        auth.callbacks.rand,
         auth.allocator,
     )) |kp| kp else return fido.ctap.StatusCodes.ctap1_err_other;
     defer {
@@ -380,35 +389,23 @@ pub fn authenticatorMakeCredential(
         auth.allocator.free(key_pair.raw_private_key);
     }
 
-    const usageCnt = if (rk) blk: {
-        try entry.?.setPrivateKey(
-            key_pair.raw_private_key,
-            ms,
-            auth.callbacks.rand,
-            auth.allocator,
-        );
+    const enc_key = deriveEncKey(ms);
+    try entry.setPrivateKey(
+        key_pair.raw_private_key,
+        enc_key,
+        auth.callbacks.rand,
+        auth.allocator,
+    );
 
-        const cnt = entry.?.sign_count;
-        entry.?.sign_count = 1; // This includes the first signature possibly made below
-
-        break :blk cnt;
-    } else blk: {
-        const cnt = settings.usage_count;
-        // This is the global usage counter
-        settings.usage_count += 1;
-        settings.updateMac(&auth.secret.mac);
-        auth.callbacks.updateSettings(&settings, auth.allocator) catch |err| {
-            std.log.err("authenticatorMakeCredential: unable to update settings ({any})", .{err});
-            return err;
-        };
-        break :blk cnt;
-    };
+    const usageCnt = entry.sign_count;
+    entry.sign_count += 1;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 17. + 18. Store credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
     if (rk) {
+        entry.discoverable = true;
         // If a credential for the same rp.id and account ID already exists
         // on the authenticator, overwrite that credential.
         // TODO
@@ -438,13 +435,14 @@ pub fn authenticatorMakeCredential(
         //        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
         //    };
         //}
-        std.debug.print("{any}\n", .{entry.?});
-        entry.?.updateMac(&ms);
-        auth.callbacks.updateCred(&entry.?, auth.allocator) catch |err| {
-            std.log.err("authenticatorMakeCredential: unable to create credential ({any})", .{err});
-            return err;
-        };
     }
+    std.debug.print("{any}\n", .{entry});
+    const mac_key = deriveMacKey(ms);
+    entry.updateMac(&mac_key);
+    auth.callbacks.updateCred(&entry, auth.allocator) catch |err| {
+        std.log.err("authenticatorMakeCredential: unable to create credential ({any})", .{err});
+        return err;
+    };
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 19. Create attestation statement
@@ -462,8 +460,8 @@ pub fn authenticatorMakeCredential(
         .signCount = @as(u32, @intCast(usageCnt)),
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
-            .credential_length = @as(u16, @intCast(id.raw[0..].len)),
-            .credential_id = id.raw[0..],
+            .credential_length = @as(u16, @intCast(entry._id[0..].len)),
+            .credential_id = entry._id[0..],
             .credential_public_key = key_pair.cose_public_key,
         },
         .extensions = extensions,
