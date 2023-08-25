@@ -49,6 +49,25 @@ discoverable: bool = false,
 /// Message Authentication Code over the remaining data
 mac: [Mac.mac_length]u8 = undefined,
 
+pub fn copy(self: *const @This(), a: std.mem.Allocator) !@This() {
+    return .{
+        ._id = try a.dupe(u8, self._id),
+        ._rev = if (self._rev) |rev| try a.dupe(u8, rev) else null,
+        .user_id = try a.dupe(u8, self.user_id),
+        .user_name = if (self.user_name) |name| try a.dupe(u8, name) else null,
+        .user_display_name = if (self.user_display_name) |name| try a.dupe(u8, name) else null,
+        .rp_id = try a.dupe(u8, self.rp_id),
+        .sign_count = self.sign_count,
+        .alg = self.alg,
+        .private_key = try a.dupe(u8, self.private_key),
+        .policy = self.policy,
+        .cred_random_with_uv = self.cred_random_with_uv,
+        .cred_random_without_uv = self.cred_random_without_uv,
+        .discoverable = self.discoverable,
+        .mac = self.mac,
+    };
+}
+
 pub fn allocInit(
     id: uuid.Uuid,
     user: *const fido.common.User,

@@ -457,7 +457,7 @@ pub fn updateSettings(
 }
 
 pub fn readCred(
-    id: ?[]const u8,
+    param: fido.ctap.authenticator.Callbacks.ReadCredParam,
     a: std.mem.Allocator,
 ) fido.ctap.authenticator.Callbacks.LoadError![]fido.ctap.authenticator.Credential {
     var buffer: [50000]u8 = undefined;
@@ -477,18 +477,41 @@ pub fn readCred(
         arr.deinit();
     }
 
-    if (id) |_id| {
-        var meta = client.read(fido.ctap.authenticator.Credential, "passkee", _id, a) catch |err| {
-            if (err == error.NotFound) {
-                return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
-            } else {
-                return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    switch (param) {
+        .id => |id| {
+            var meta = client.read(fido.ctap.authenticator.Credential, "passkee", id, a) catch |err| {
+                if (err == error.NotFound) {
+                    return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
+                } else {
+                    return fido.ctap.authenticator.Callbacks.LoadError.Other;
+                }
+            };
+            try arr.append(meta);
+        },
+        .rpId => |id| {
+            const X = struct {
+                selector: struct {
+                    rp_id: struct {
+                        @"$eq": []const u8,
+                    },
+                },
+            };
+            // Let's find all documents that have more than 4 servings.
+            const x = X{ .selector = .{ .rp_id = .{ .@"$eq" = id } } };
+
+            var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, a) catch |err| {
+                if (err == error.NotFound) {
+                    return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
+                } else {
+                    return fido.ctap.authenticator.Callbacks.LoadError.Other;
+                }
+            };
+            defer creds.deinit(a);
+
+            for (creds.docs) |d| {
+                try arr.append(try d.copy(a));
             }
-        };
-        try arr.append(meta);
-    } else {
-        // TODO: return all credentials
-        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+        },
     }
 
     return try arr.toOwnedSlice();

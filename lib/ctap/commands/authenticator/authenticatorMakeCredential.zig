@@ -221,7 +221,10 @@ pub fn authenticatorMakeCredential(
     // same account on a single authenticator.
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |ecl| {
-            var cred = auth.callbacks.readCred(ecl.id[0..], auth.allocator) catch {
+            const uid = std.mem.bytesToValue(uuid.Uuid, ecl.id[0..16]);
+            const urn = uuid.urn.serialize(uid);
+
+            var cred = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch {
                 // TODO: return error for all errors except DoesNotExist
 
                 // If we cant find the credential, it doesn't exist
@@ -451,6 +454,7 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 19. Create attestation statement
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    const uid = try uuid.urn.deserialize(entry._id[0..]);
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{
@@ -464,8 +468,8 @@ pub fn authenticatorMakeCredential(
         .signCount = @as(u32, @intCast(usageCnt)),
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
-            .credential_length = @as(u16, @intCast(entry._id[0..].len)),
-            .credential_id = entry._id[0..],
+            .credential_length = 16,
+            .credential_id = std.mem.asBytes(&uid),
             .credential_public_key = key_pair.cose_public_key,
         },
         .extensions = extensions,

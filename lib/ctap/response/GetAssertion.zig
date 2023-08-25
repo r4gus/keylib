@@ -55,6 +55,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
                 .{ .name = "numberOfCredentials", .alias = "5", .options = .{} },
                 .{ .name = "userSelected", .alias = "6", .options = .{} },
                 .{ .name = "largeBlobKey", .alias = "7", .options = .{} },
+                .{ .name = "id", .options = .{ .slice_as_text = false } },
             },
             .from_cborStringify = true,
         },
