@@ -227,14 +227,18 @@ pub fn authenticatorMakeCredential(
                 // If we cant find the credential, it doesn't exist
                 continue;
             };
-            defer cred.deinit(auth.allocator);
+            if (cred.len == 0) continue;
+            defer {
+                cred[0].deinit(auth.allocator);
+                auth.allocator.free(cred);
+            }
             const mac_key = deriveMacKey(ms);
-            if (!cred.verifyMac(&mac_key)) {
+            if (!cred[0].verifyMac(&mac_key)) {
                 // MAC validation failed
                 continue;
             }
 
-            const cred_policy = cred.policy;
+            const cred_policy = cred[0].policy;
 
             if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired != cred_policy) {
                 var userPresentFlagValue = false;

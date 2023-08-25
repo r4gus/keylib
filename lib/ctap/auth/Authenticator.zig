@@ -29,13 +29,16 @@ token: struct {
 },
 
 credential_list: ?struct {
-    list: []const fido.ctap.crypto.Id,
+    list: []fido.ctap.authenticator.Credential,
     credentialCounter: usize = 0,
     time_stamp: i64,
     authData: fido.common.AuthenticatorData = undefined,
     clientDataHash: fido.ctap.crypto.ClientDataHash = undefined,
 
     pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+        for (self.list) |item| {
+            item.deinit(allocator);
+        }
         allocator.free(self.list);
     }
 } = null,

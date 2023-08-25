@@ -459,7 +459,7 @@ pub fn updateSettings(
 pub fn readCred(
     id: ?[]const u8,
     a: std.mem.Allocator,
-) fido.ctap.authenticator.Callbacks.LoadError!fido.ctap.authenticator.Credential {
+) fido.ctap.authenticator.Callbacks.LoadError![]fido.ctap.authenticator.Credential {
     var buffer: [50000]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const all = fba.allocator();
@@ -469,6 +469,14 @@ pub fn readCred(
     };
     defer client.deinit();
 
+    var arr = std.ArrayList(fido.ctap.authenticator.Credential).init(a);
+    errdefer {
+        for (arr.items) |item| {
+            item.deinit(a);
+        }
+        arr.deinit();
+    }
+
     if (id) |_id| {
         var meta = client.read(fido.ctap.authenticator.Credential, "passkee", _id, a) catch |err| {
             if (err == error.NotFound) {
@@ -477,11 +485,13 @@ pub fn readCred(
                 return fido.ctap.authenticator.Callbacks.LoadError.Other;
             }
         };
-        return meta;
+        try arr.append(meta);
     } else {
         // TODO: return all credentials
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     }
+
+    return try arr.toOwnedSlice();
 }
 
 pub fn updateCred(
