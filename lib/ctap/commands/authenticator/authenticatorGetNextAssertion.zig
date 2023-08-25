@@ -2,6 +2,7 @@ const std = @import("std");
 const cbor = @import("zbor");
 const cks = @import("cks");
 const fido = @import("../../../main.zig");
+const uuid = @import("uuid");
 const helper = @import("helper.zig");
 const deriveMacKey = fido.ctap.crypto.master_secret.deriveMacKey;
 const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
@@ -93,10 +94,11 @@ pub fn authenticatorGetNextAssertion(
     };
     defer auth.allocator.free(sig);
 
+    const uid = try uuid.urn.deserialize(cred._id[0..]);
     const gar = fido.ctap.response.GetAssertion{
         .credential = .{
             .type = .@"public-key",
-            .id = cred._id,
+            .id = std.mem.asBytes(&uid),
         },
         .authData = authData.items,
         .signature = sig,
