@@ -14,6 +14,12 @@ pub fn build(b: *std.build.Builder) !void {
     });
     const zbor_module = zbor_dep.module("zbor");
 
+    const uuid_dep = b.dependency("uuid", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const uuid_module = uuid_dep.module("uuid");
+
     const snorlax_dep = b.dependency("snorlax", .{
         .target = target,
         .optimize = optimize,
@@ -55,6 +61,7 @@ pub fn build(b: *std.build.Builder) !void {
         .source_file = .{ .path = "lib/main.zig" },
         .dependencies = &.{
             .{ .name = "zbor", .module = zbor_module },
+            .{ .name = "uuid", .module = uuid_module },
             .{ .name = "cks", .module = cks_module },
         },
     });
