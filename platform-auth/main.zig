@@ -183,6 +183,7 @@ pub fn main() !void {
             .updateSettings = updateSettings,
             .readCred = readCred,
             .updateCred = updateCred,
+            .deleteCred = deleteCred,
             .createEntry = createEntry,
             .getEntry = getEntry,
             .getEntries = getEntries,
@@ -496,8 +497,30 @@ pub fn readCred(
                     },
                 },
             };
-            // Let's find all documents that have more than 4 servings.
             const x = X{ .selector = .{ .rp_id = .{ .@"$eq" = id } } };
+
+            var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, a) catch |err| {
+                if (err == error.NotFound) {
+                    return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
+                } else {
+                    return fido.ctap.authenticator.Callbacks.LoadError.Other;
+                }
+            };
+            defer creds.deinit(a);
+
+            for (creds.docs) |d| {
+                try arr.append(try d.copy(a));
+            }
+        },
+        .all => |_| {
+            const X = struct {
+                selector: struct {
+                    discoverable: struct {
+                        @"$exists": bool,
+                    },
+                },
+            };
+            const x = X{ .selector = .{ .discoverable = .{ .@"$exists" = true } } };
 
             var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, a) catch |err| {
                 if (err == error.NotFound) {
@@ -540,6 +563,27 @@ pub fn updateCred(
         a.free(rev);
     }
     cred._rev = x.?.rev;
+}
+
+pub fn deleteCred(
+    cred: *fido.ctap.authenticator.Credential,
+) fido.ctap.authenticator.Callbacks.LoadError!void {
+    var buffer: [50000]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const all = fba.allocator();
+
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+        return fido.ctap.authenticator.Callbacks.LoadError.Other;
+    };
+    defer client.deinit();
+
+    _ = client.delete("passkee", cred._id, cred._rev.?, null) catch |err| {
+        if (err == error.NotFound) {
+            return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
+        } else {
+            return fido.ctap.authenticator.Callbacks.LoadError.Other;
+        }
+    };
 }
 
 pub fn createEntry(id: []const u8) cks.Error!cks.Entry {

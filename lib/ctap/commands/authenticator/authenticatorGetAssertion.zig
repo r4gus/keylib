@@ -172,7 +172,10 @@ pub fn authenticatorGetAssertion(
 
     var credentials = std.ArrayList(fido.ctap.authenticator.Credential).fromOwnedSlice(
         auth.allocator,
-        try auth.callbacks.readCred(.{ .rpId = gap.rpId }, auth.allocator),
+        auth.callbacks.readCred(.{ .rpId = gap.rpId }, auth.allocator) catch {
+            std.log.err("authenticatorGetAssertion: unable to fetch credentials", .{});
+            return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+        },
     );
 
     //if (gap.allowList) |allowList| {

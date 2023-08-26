@@ -1,6 +1,9 @@
 const std = @import("std");
 const cbor = @import("zbor");
+const uuid = @import("uuid");
 const fido = @import("../../../main.zig");
+const deriveMacKey = fido.ctap.crypto.master_secret.deriveMacKey;
+const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
 
 fn validate(
     cmReq: *const fido.ctap.request.CredentialManagement,
@@ -62,20 +65,41 @@ pub fn getKeyInfo(
     cmResp: *fido.ctap.response.CredentialManagement,
     auth: *fido.ctap.authenticator.Authenticator,
 ) ?fido.ctap.StatusCodes {
-    var entry = auth.callbacks.getEntry(id).?;
-
-    // Get the user id
-    if (entry.getField("UserId", auth.callbacks.millis())) |user| {
-        var a = auth.allocator.alloc(u8, user.len) catch {
-            std.log.err("Out of memory", .{});
-            return fido.ctap.StatusCodes.ctap1_err_other;
-        };
-        @memcpy(a, user);
-        cmResp.user = .{ .id = a };
-    } else {
-        std.log.err("authenticatorCredentialManagement (enumerateRPsBegin): unable to fetch UserId", .{});
+    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+        std.log.err("getKeyInfo: Unable to fetch Settings ({any})", .{err});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    defer settings.deinit(auth.allocator);
+    if (!settings.verifyMac(&auth.secret.mac)) {
+        std.log.err("getKeyInfo: Settings MAC validation unsuccessful", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     }
+
+    const ms = settings.getSecret(auth.secret.enc) catch {
+        std.log.err("getKeyInfo: unable to decrypt secret", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    const uid = std.mem.bytesToValue(uuid.Uuid, id[0..16]);
+    const urn = uuid.urn.serialize(uid);
+    var entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
+        std.log.err("getKeyInfo: unable to fetch credential with id {s} ({any})", .{
+            std.fmt.fmtSliceHexUpper(id),
+            err,
+        });
+        return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+    };
+    defer {
+        for (entries) |item| {
+            item.deinit(auth.allocator);
+        }
+        auth.allocator.free(entries);
+    }
+    var entry = entries[0];
+
+    cmResp.user = .{ .id = auth.allocator.dupe(u8, entry.user_id) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    } };
 
     // Get the credential id
     cmResp.credentialID = .{
@@ -83,51 +107,38 @@ pub fn getKeyInfo(
         .type = .@"public-key",
     };
 
-    // Get the public key
-    if (entry.getField("PrivateKey", auth.callbacks.millis())) |pk| {
-        if (entry.getField("Algorithm", auth.callbacks.millis())) |algo| {
-            const algorithm = std.mem.bytesToValue(cbor.cose.Algorithm, algo[0..4]);
-
-            var alg: ?fido.ctap.crypto.SigAlg = null;
-            for (auth.algorithms) |_alg| blk: {
-                if (algorithm == _alg.alg) {
-                    alg = _alg;
-                    break :blk;
-                }
-            }
-
-            if (alg == null) {
-                std.log.err("Unsupported algorithm", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            }
-
-            if (alg.?.from_priv(pk)) |public_key| {
-                cmResp.publicKey = public_key;
-            } else {
-                std.log.err("Unable to derive public key", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            }
-        } else {
-            std.log.err("Unable to fetch Algorithm", .{});
-            return fido.ctap.StatusCodes.ctap1_err_other;
+    // Get public key
+    var alg: ?fido.ctap.crypto.SigAlg = null;
+    for (auth.algorithms) |_alg| blk: {
+        if (entry.alg == _alg.alg) {
+            alg = _alg;
+            break :blk;
         }
+    }
+
+    if (alg == null) {
+        // THis is only relevant if we import keys from other authenticators
+        // or change the settings.
+        std.log.err("getKeyInfo: Unsupported algorithm {any}", .{entry.alg});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    }
+
+    const enc_key = deriveEncKey(ms);
+    const raw_key = entry.getPrivateKey(enc_key, auth.allocator) catch {
+        std.log.err("getKeyInfo: unable to decrypt private key", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    defer auth.allocator.free(raw_key);
+
+    if (alg.?.from_priv(raw_key)) |public_key| {
+        cmResp.publicKey = public_key;
     } else {
-        std.log.err("Unable to fetch PrivateKey", .{});
+        std.log.err("Unable to derive public key", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     }
 
     // Get policy
-    if (entry.getField("Policy", auth.callbacks.millis())) |pol| {
-        if (fido.ctap.extensions.CredentialCreationPolicy.fromString(pol)) |p| {
-            cmResp.credProtect = p;
-        } else {
-            std.log.err("Unable to translate Policy", .{});
-            return fido.ctap.StatusCodes.ctap1_err_other;
-        }
-    } else {
-        std.log.err("Unable to fetch Policy", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    }
+    cmResp.credProtect = entry.policy;
 
     // TODO: Return large blob key (not yet supported)
 
@@ -139,13 +150,16 @@ pub fn authenticatorCredentialManagement(
     out: anytype,
     command: []const u8,
 ) !fido.ctap.StatusCodes {
-    const cmReq = try cbor.parse(
+    const cmReq = cbor.parse(
         fido.ctap.request.CredentialManagement,
         try cbor.DataItem.new(command[1..]),
         .{
             .allocator = auth.allocator,
         },
-    );
+    ) catch |err| {
+        std.log.err("authenticatorCredentialManagement: Unable to parse arguments ({any})", .{err});
+        return err;
+    };
     defer cmReq.deinit(auth.allocator);
 
     var cmResp: fido.ctap.response.CredentialManagement = .{};
@@ -186,28 +200,48 @@ pub fn authenticatorCredentialManagement(
     }
 
     switch (cmReq.subCommand) {
-        .getCredsMetadata => {
+        .getCredsMetadata => blk: {
             if (validate(&cmReq, auth)) |r| {
                 return r;
             }
 
-            const el: u32 = if (auth.callbacks.getEntries(&.{}, auth.allocator)) |entries| blk: {
-                auth.allocator.free(entries);
-                break :blk @intCast(entries.len);
-            } else blk: {
-                break :blk 0;
+            var entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
+                std.log.err("getCredsMetadata: unable to fetch credentials ({any})", .{
+                    err,
+                });
+                cmResp.existingResidentCredentialsCount = 0;
+                cmResp.maxPossibleRemainingResidentCredentialsCount = 1;
+                break :blk;
             };
-            cmResp.existingResidentCredentialsCount = el;
-            cmResp.maxPossibleRemainingResidentCredentialsCount = if (auth.settings.remainingDiscoverableCredentials) |rdc| @as(u32, @intCast(rdc)) - el else 1;
+            defer {
+                for (entries) |item| {
+                    item.deinit(auth.allocator);
+                }
+                auth.allocator.free(entries);
+            }
+
+            cmResp.existingResidentCredentialsCount = @intCast(entries.len);
+            cmResp.maxPossibleRemainingResidentCredentialsCount = 1;
         },
         .enumerateRPsBegin => {
             if (validate(&cmReq, auth)) |r| {
                 return r;
             }
 
+            var entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
+                std.log.err("enumerateRPsBegin: unable to fetch credentials ({any})", .{
+                    err,
+                });
+                return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            };
+            defer {
+                for (entries) |item| {
+                    item.deinit(auth.allocator);
+                }
+                auth.allocator.free(entries);
+            }
+
             // check if discoverable credentials exist on this authenticator
-            const entries = if (auth.callbacks.getEntries(&.{}, auth.allocator)) |entries| entries else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
-            defer auth.allocator.free(entries);
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
             if (S.rpId == null) {
@@ -225,21 +259,14 @@ pub fn authenticatorCredentialManagement(
             }
 
             for (entries) |entry| {
-                if (entry.getField("RpId", auth.callbacks.millis())) |rpId| {
-                    var a = try auth.allocator.alloc(u8, rpId.len);
-                    @memcpy(a, rpId);
-
-                    var found: bool = false;
-                    for (S.rpId.?.ids.items) |id| {
-                        if (std.mem.eql(u8, id, a)) {
-                            found = true;
-                        }
+                var found: bool = false;
+                for (S.rpId.?.ids.items) |id| {
+                    if (std.mem.eql(u8, id, entry.rp_id)) {
+                        found = true;
                     }
-
-                    if (!found) try S.rpId.?.ids.append(a);
-                } else {
-                    std.log.warn("authenticatorCredentialManagement (enumerateRPsBegin): credential with id {s} has no associated rpId", .{std.fmt.fmtSliceHexUpper(entry.id)});
                 }
+
+                if (!found) try S.rpId.?.ids.append(try auth.allocator.dupe(u8, entry.rp_id));
             }
 
             cmResp.totalRPs = @intCast(S.rpId.?.ids.items.len);
@@ -273,8 +300,19 @@ pub fn authenticatorCredentialManagement(
 
             const rpIdHash = cmReq.subCommandParams.?.rpIDHash.?;
 
-            const entries = if (auth.callbacks.getEntries(&.{}, auth.allocator)) |entries| entries else return fido.ctap.StatusCodes.ctap2_err_no_credentials;
-            defer auth.allocator.free(entries);
+            var entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
+                std.log.err("enumerateRPsBegin: unable to fetch credentials ({any})", .{
+                    err,
+                });
+                return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            };
+            defer {
+                for (entries) |item| {
+                    item.deinit(auth.allocator);
+                }
+                auth.allocator.free(entries);
+            }
+
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
             if (S.rpId == null) {
@@ -291,21 +329,14 @@ pub fn authenticatorCredentialManagement(
                 };
             }
 
-            var RP_ID: ?[]const u8 = null;
             for (entries) |entry| {
-                if (entry.getField("RpId", auth.callbacks.millis())) |rpId| {
-                    var idh: [32]u8 = undefined;
-                    std.crypto.hash.sha2.Sha256.hash(rpId, &idh, .{});
+                var idh: [32]u8 = undefined;
+                std.crypto.hash.sha2.Sha256.hash(entry.rp_id, &idh, .{});
 
-                    if (!std.mem.eql(u8, idh[0..], rpIdHash[0..])) continue;
-                    RP_ID = rpId;
+                if (!std.mem.eql(u8, idh[0..], rpIdHash[0..])) continue;
 
-                    var a = try auth.allocator.alloc(u8, entry.id.len);
-                    @memcpy(a, entry.id);
-                    try S.rpId.?.ids.append(a);
-                } else {
-                    std.log.warn("authenticatorCredentialManagement (enumerateRPsBegin): credential with id {s} has no associated rpId", .{std.fmt.fmtSliceHexUpper(entry.id)});
-                }
+                const uid = try uuid.urn.deserialize(entry._id[0..]);
+                try S.rpId.?.ids.append(try auth.allocator.dupe(u8, std.mem.asBytes(&uid)));
             }
 
             if (S.rpId.?.ids.items.len == 0) {
@@ -342,15 +373,33 @@ pub fn authenticatorCredentialManagement(
                 return r;
             }
 
-            auth.callbacks.removeEntry(cmReq.subCommandParams.?.credentialID.?.id) catch |err| {
+            const uid = std.mem.bytesToValue(
+                uuid.Uuid,
+                cmReq.subCommandParams.?.credentialID.?.id[0..16],
+            );
+            const urn = uuid.urn.serialize(uid);
+            var entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
+                std.log.err("getCredsMetadata: unable to fetch credentials with id {s} ({any})", .{
+                    std.fmt.fmtSliceHexUpper(cmReq.subCommandParams.?.credentialID.?.id),
+                    err,
+                });
+                return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+            };
+            defer {
+                for (entries) |item| {
+                    item.deinit(auth.allocator);
+                }
+                auth.allocator.free(entries);
+            }
+            var entry = entries[0];
+
+            auth.callbacks.deleteCred(&entry) catch |err| {
                 if (err == error.DoesNotExist) {
                     return fido.ctap.StatusCodes.ctap2_err_no_credentials;
                 } else {
                     return fido.ctap.StatusCodes.ctap1_err_other;
                 }
             };
-
-            try auth.callbacks.persist();
         },
         .updateUserInformation => {
             if (cmReq.subCommandParams == null or
@@ -364,59 +413,80 @@ pub fn authenticatorCredentialManagement(
                 return r;
             }
 
-            var entry = if (auth.callbacks.getEntry(cmReq.subCommandParams.?.credentialID.?.id)) |e| e else {
+            const uid = std.mem.bytesToValue(
+                uuid.Uuid,
+                cmReq.subCommandParams.?.credentialID.?.id[0..16],
+            );
+            const urn = uuid.urn.serialize(uid);
+            var entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
+                std.log.err("getCredsMetadata: unable to fetch credentials with id {s} ({any})", .{
+                    std.fmt.fmtSliceHexUpper(cmReq.subCommandParams.?.credentialID.?.id),
+                    err,
+                });
                 return fido.ctap.StatusCodes.ctap2_err_no_credentials;
             };
-
-            if (!std.mem.eql(
-                u8,
-                cmReq.subCommandParams.?.credentialID.?.id,
-                cmReq.subCommandParams.?.user.?.id,
-            )) {
-                return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
+            defer {
+                for (entries) |item| {
+                    item.deinit(auth.allocator);
+                }
+                auth.allocator.free(entries);
             }
+            var entry = entries[0];
 
-            // Replace, add or remove the user name
+            // TODO: ???
+            //if (!std.mem.eql(
+            //    u8,
+            //    cmReq.subCommandParams.?.credentialID.?.id,
+            //    cmReq.subCommandParams.?.user.?.id,
+            //)) {
+            //    return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
+            //}
+
             if (cmReq.subCommandParams.?.user.?.name) |name| {
-                if (entry.getField("UserName", auth.callbacks.millis())) |_| {
-                    entry.updateField("UserName", name, auth.callbacks.millis()) catch {
-                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-                    };
-                } else {
-                    entry.addField(.{ .key = "UserName", .value = name }, auth.callbacks.millis()) catch {
-                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-                    };
+                if (entry.user_name) |_name| {
+                    auth.allocator.free(_name);
                 }
-            } else blk: {
-                const uname = entry.removeField("UserName", auth.callbacks.millis()) catch {
-                    break :blk; // this is a problem but not such a big one
-                };
-                if (uname) |name| {
-                    entry.allocator.free(name.key);
-                    entry.allocator.free(name.value);
+                entry.user_name = try auth.allocator.dupe(u8, name);
+            } else {
+                if (entry.user_name) |_name| {
+                    auth.allocator.free(_name);
                 }
+                entry.user_name = null;
             }
 
-            // Replace, add or remove the display name
-            if (cmReq.subCommandParams.?.user.?.displayName) |displayName| {
-                if (entry.getField("UserDisplayName", auth.callbacks.millis())) |_| {
-                    entry.updateField("UserDisplayName", displayName, auth.callbacks.millis()) catch {
-                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-                    };
-                } else {
-                    entry.addField(.{ .key = "UserDisplayName", .value = displayName }, auth.callbacks.millis()) catch {
-                        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-                    };
+            if (cmReq.subCommandParams.?.user.?.displayName) |name| {
+                if (entry.user_display_name) |_name| {
+                    auth.allocator.free(_name);
                 }
-            } else blk: {
-                const dname = entry.removeField("UserDisplayName", auth.callbacks.millis()) catch {
-                    break :blk; // this is a problem but not such a big one
-                };
-                if (dname) |name| {
-                    entry.allocator.free(name.key);
-                    entry.allocator.free(name.value);
+                entry.user_display_name = try auth.allocator.dupe(u8, name);
+            } else {
+                if (entry.user_display_name) |_name| {
+                    auth.allocator.free(_name);
                 }
+                entry.user_display_name = null;
             }
+
+            var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
+                std.log.err("getKeyInfo: Unable to fetch Settings ({any})", .{err});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
+            defer settings.deinit(auth.allocator);
+            if (!settings.verifyMac(&auth.secret.mac)) {
+                std.log.err("getKeyInfo: Settings MAC validation unsuccessful", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            }
+
+            const ms = settings.getSecret(auth.secret.enc) catch {
+                std.log.err("getKeyInfo: unable to decrypt secret", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
+
+            const mac_key = deriveMacKey(ms);
+            entry.updateMac(&mac_key);
+            auth.callbacks.updateCred(&entry, auth.allocator) catch |err| {
+                std.log.err("authenticatorMakeCredential: unable to create credential ({any})", .{err});
+                return err;
+            };
         },
     }
 

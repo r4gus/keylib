@@ -43,10 +43,11 @@ pub const CredentialSelectionResult = union(CredentialSelectionResultTag) {
     timeout: void,
 };
 
-pub const ReadCredParamId = enum { id, rpId };
+pub const ReadCredParamId = enum { id, rpId, all };
 pub const ReadCredParam = union(ReadCredParamId) {
     id: []const u8,
     rpId: []const u8,
+    all: bool,
 };
 
 /// Interface for a thread local CSPRNG
@@ -82,6 +83,7 @@ updateSettings: *const fn (settings: *fido.ctap.authenticator.Meta, a: std.mem.A
 
 readCred: *const fn (id: ReadCredParam, a: std.mem.Allocator) LoadError![]fido.ctap.authenticator.Credential,
 updateCred: *const fn (cred: *fido.ctap.authenticator.Credential, a: std.mem.Allocator) StoreError!void,
+deleteCred: *const fn (cred: *fido.ctap.authenticator.Credential) LoadError!void,
 
 createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
 getEntry: *const fn (id: []const u8) ?*cks.Entry,
