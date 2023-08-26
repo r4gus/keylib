@@ -184,12 +184,6 @@ pub fn main() !void {
             .readCred = readCred,
             .updateCred = updateCred,
             .deleteCred = deleteCred,
-            .createEntry = createEntry,
-            .getEntry = getEntry,
-            .getEntries = getEntries,
-            .addEntry = addEntry,
-            .removeEntry = removeEntry,
-            .persist = persist,
             .reset = reset,
         },
         .algorithms = &.{
@@ -583,36 +577,6 @@ pub fn deleteCred(
         } else {
             return fido.ctap.authenticator.Callbacks.LoadError.Other;
         }
-    };
-}
-
-pub fn createEntry(id: []const u8) cks.Error!cks.Entry {
-    return try store.?.createEntry(id);
-}
-
-pub fn getEntry(id: []const u8) ?*cks.Entry {
-    return store.?.getEntry(id);
-}
-
-pub fn getEntries(
-    filters: []const cks.Data.Filter,
-    a: std.mem.Allocator,
-) ?[]const *cks.Entry { // TODO: maybe rename to getResidentKeys
-    return store.?.getEntries(filters, a);
-}
-
-pub fn addEntry(entry: cks.Entry) cks.Error!void {
-    try store.?.addEntry(entry);
-}
-
-pub fn removeEntry(id: []const u8) cks.Error!void {
-    try store.?.removeEntry(id);
-}
-
-pub fn persist() error{Fatal}!void {
-    const pw = if (password(null)) |pw| pw else return error.Fatal;
-    saveKeyStore(allocator, pw) catch {
-        return error.Fatal;
     };
 }
 

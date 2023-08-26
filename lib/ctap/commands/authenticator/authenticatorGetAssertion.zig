@@ -12,7 +12,6 @@ pub fn authenticatorGetAssertion(
     gap: *const fido.ctap.request.GetAssertion,
     out: anytype,
 ) !fido.ctap.StatusCodes {
-    std.debug.print("GET ASSERTION\n", .{});
     // Remove the credential list form the previous getAssertion
     // call if one exists.
     if (auth.credential_list != null) {
@@ -23,21 +22,18 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 1\n", .{});
     var status = helper.verifyPinUvAuthParam(auth, gap);
     if (status != .ctap1_err_success) return status;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 3. we'll create the response struct later on!
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 2\n", .{});
     var uv_response = false;
     var up_response = false;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 4. Validate options
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 3\n", .{});
     var uv: bool = false;
     var uv_supported = false;
     var up: bool = true;
@@ -69,7 +65,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate alwaysUv
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 4\n", .{});
     const alwaysUv = if (auth.settings.options != null and auth.settings.options.?.alwaysUv != null) auth.settings.options.?.alwaysUv.? else false;
 
     if (alwaysUv and up) {
@@ -109,7 +104,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 6. Verify user
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 5\n", .{});
     if (auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
             var pinuvprot = switch (gap.pinUvAuthProtocol.?) {
@@ -153,7 +147,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 7. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 6\n", .{});
 
     var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
         std.log.err("authenticatorGetAssertion: Unable to fetch Settings ({any})", .{err});
@@ -178,33 +171,11 @@ pub fn authenticatorGetAssertion(
         },
     );
 
-    //if (gap.allowList) |allowList| {
-    //    for (allowList) |desc| {
-    //        const credId = fido.ctap.crypto.Id.from_raw(desc.id[0..], ms, gap.rpId) catch {
-    //            continue;
-    //        };
-    //        try credentials.append(credId);
-    //    }
-    //} else {
-    //    if (auth.callbacks.getEntries(
-    //        &.{.{ .key = "RpId", .value = gap.rpId }},
-    //        auth.allocator,
-    //    )) |entries| {
-    //        defer auth.allocator.free(entries);
-
-    //        for (entries) |entry| {
-    //            // Each credential is bound to a rpId by a MAC, i.e., if this succeeds we know
-    //            // that this credential is bound to the specified rpId
-    //            const credId = fido.ctap.crypto.Id.from_raw(entry.id[0..], ms, gap.rpId) catch {
-    //                continue;
-    //            };
-    //            try credentials.append(credId);
-    //        }
-    //    }
-    //}
-
     var i: usize = 0;
-    while (i < credentials.items.len) : (i += 1) {
+    while (true) {
+        const l = credentials.items.len;
+        if (i >= l) break;
+
         if (gap.allowList) |allowList| {
             // Remove all credentials not listed in allow list
             var found: bool = false;
@@ -221,6 +192,9 @@ pub fn authenticatorGetAssertion(
             if (!found) {
                 const item = credentials.swapRemove(i);
                 item.deinit(auth.allocator);
+                // We don't increment i because we swap the last
+                // with the current element
+                continue;
             }
         }
 
@@ -233,6 +207,9 @@ pub fn authenticatorGetAssertion(
         if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired == policy and !uv_response) {
             const item = credentials.swapRemove(i);
             item.deinit(auth.allocator);
+            // We don't increment i because we swap the last
+            // with the current element
+            continue;
         }
 
         // if credential protection for a credential is marked as
@@ -243,7 +220,12 @@ pub fn authenticatorGetAssertion(
         if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptionalWithCredentialIDList == policy and gap.allowList == null and !uv_response) {
             const item = credentials.swapRemove(i);
             item.deinit(auth.allocator);
+            // We don't increment i because we swap the last
+            // with the current element
+            continue;
         }
+
+        i += 1;
     }
 
     if (credentials.items.len == 0) {
@@ -253,7 +235,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 9. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 7\n", .{});
     if (up) {
         if (gap.pinUvAuthParam != null) {
             var token = switch (gap.pinUvAuthProtocol.?) {
@@ -297,7 +278,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Process extensions
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 8\n", .{});
 
     // We go with the weakest policy, if one wants to use a higher policy then she can
     // always provide the `credProtect` extension.
@@ -322,7 +302,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 9\n", .{});
     var cred = if (gap.allowList == null and credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null and
         (up or uv))
     blk: {
@@ -335,6 +314,7 @@ pub fn authenticatorGetAssertion(
     } else blk: {
         break :blk credentials.pop();
     };
+    defer cred.deinit(auth.allocator);
 
     // Seems like this is a discoverable credential, because we
     // just discovered it :)
@@ -388,7 +368,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.debug.print("GET ASSERTION 10\n", .{});
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{

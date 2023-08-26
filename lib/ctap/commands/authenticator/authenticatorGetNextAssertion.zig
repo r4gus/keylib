@@ -105,8 +105,6 @@ pub fn authenticatorGetNextAssertion(
         .user = user,
     };
 
-    try auth.callbacks.persist();
-
     const mac_key = deriveMacKey(ms);
     cred.updateMac(&mac_key);
     auth.callbacks.updateCred(&cred, auth.allocator) catch |err| {

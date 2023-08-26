@@ -85,13 +85,6 @@ readCred: *const fn (id: ReadCredParam, a: std.mem.Allocator) LoadError![]fido.c
 updateCred: *const fn (cred: *fido.ctap.authenticator.Credential, a: std.mem.Allocator) StoreError!void,
 deleteCred: *const fn (cred: *fido.ctap.authenticator.Credential) LoadError!void,
 
-createEntry: *const fn (id: []const u8) cks.Error!cks.Entry,
-getEntry: *const fn (id: []const u8) ?*cks.Entry,
-getEntries: *const fn (filters: []const cks.Data.Filter, a: std.mem.Allocator) ?[]const *cks.Entry,
-addEntry: *const fn (entry: cks.Entry) cks.Error!void,
-removeEntry: *const fn (id: []const u8) cks.Error!void,
-persist: *const fn () error{Fatal}!void,
-
 //// Called on a reset
 ////
 //// This callback should reset the authenticator back to the factory default state, including:
