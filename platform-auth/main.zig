@@ -29,6 +29,9 @@ var notification: [*c]notify.NotifyNotification = undefined;
 
 var quit: bool = false;
 
+var couch_user: ?[]const u8 = null;
+var couch_pw: ?[]const u8 = null;
+
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
@@ -120,7 +123,22 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
     return 1;
 }
 
+inline fn slice(in: [*:0]u8) []const u8 {
+    var i: usize = 0;
+    while (in[i] != 0) : (i += 1) {}
+    return in[0..i];
+}
+
 pub fn main() !void {
+    if (std.os.argv.len < 4) {
+        try std.io.getStdErr().writeAll("usage: ./passkee password CouchDB_USER CouchDB_PW\n");
+        return;
+    }
+
+    const password = slice(std.os.argv[1]);
+    couch_user = slice(std.os.argv[2]);
+    couch_pw = slice(std.os.argv[3]);
+
     const interval_ms: notify.guint = 10;
     var source = notify.g_timeout_source_new(interval_ms);
     notify.g_source_set_callback(source, &packet_callback, null, null);
@@ -197,7 +215,7 @@ pub fn main() !void {
         .allocator = allocator,
     };
 
-    try authenticator.init("password");
+    try authenticator.init(password);
     defer authenticator.deinit();
     // --------------------------------------------------------
 
@@ -216,18 +234,6 @@ pub fn main() !void {
 const LoadError = fido.ctap.authenticator.Callbacks.LoadError;
 const UpResult = fido.ctap.authenticator.Callbacks.UpResult;
 const UpReason = fido.ctap.authenticator.Callbacks.UpReason;
-
-pub fn password(pw: ?[]const u8) ?[]const u8 {
-    const S = struct {
-        pub var s: ?[]const u8 = null;
-    };
-
-    if (pw != null) {
-        S.s = pw.?;
-    }
-
-    return S.s;
-}
 
 /// Get the epoch time in ms
 pub fn millis() u64 {
@@ -299,7 +305,7 @@ pub fn readSettings(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const all = fba.allocator();
 
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, couch_user.?, couch_pw.?, all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
@@ -322,7 +328,7 @@ pub fn updateSettings(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const all = fba.allocator();
 
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, couch_user.?, couch_pw.?, all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
@@ -347,7 +353,7 @@ pub fn readCred(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const all = fba.allocator();
 
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, couch_user.?, couch_pw.?, all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
@@ -430,7 +436,7 @@ pub fn updateCred(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const all = fba.allocator();
 
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, couch_user.?, couch_pw.?, all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
@@ -454,7 +460,7 @@ pub fn deleteCred(
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     const all = fba.allocator();
 
-    var client = snorlax.Snorlax.init("127.0.0.1", 5984, "admin", "fido", all) catch {
+    var client = snorlax.Snorlax.init("127.0.0.1", 5984, couch_user.?, couch_pw.?, all) catch {
         return fido.ctap.authenticator.Callbacks.LoadError.Other;
     };
     defer client.deinit();
