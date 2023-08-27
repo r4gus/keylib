@@ -406,39 +406,45 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 17. + 18. Store credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-
     if (rk) {
+        var credentials: ?[]fido.ctap.authenticator.Credential = auth.callbacks.readCred(.{ .rpId = mcp.rp.id }, auth.allocator) catch |err| blk: {
+            if (err == error.DoesNotExist) {
+                break :blk null;
+            } else {
+                std.log.err("authenticatorMakeCredential: unable to fetch credentials", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            }
+        };
+        defer {
+            if (credentials != null) {
+                for (credentials.?) |item| {
+                    item.deinit(auth.allocator);
+                }
+                auth.allocator.free(credentials.?);
+            }
+        }
+
+        if (credentials) |creds| {
+            for (creds) |item| {
+                if (std.mem.eql(u8, item.user_id, entry.user_id)) {
+                    // If a credential for the same rp.id and account ID already exists
+                    // on the authenticator, overwrite that credential.
+                    std.log.warn("makeCredential: rk with the same user and rp id already exist", .{});
+                    std.log.info("makeCredential: overwriting existing credentials with id {s}", .{
+                        item._id,
+                    });
+                    auth.allocator.free(entry._id);
+                    entry._id = try auth.allocator.dupe(u8, item._id);
+                    if (item._rev) |rev| {
+                        entry._rev = try auth.allocator.dupe(u8, rev);
+                    }
+                }
+            }
+        }
+
         entry.discoverable = true;
-        // If a credential for the same rp.id and account ID already exists
-        // on the authenticator, overwrite that credential.
-        // TODO
-        //if (auth.callbacks.getEntries(
-        //    &.{
-        //        .{ .key = "RpId", .value = mcp.rp.id },
-        //        .{ .key = "UserId", .value = mcp.user.id },
-        //    },
-        //    auth.allocator,
-        //)) |entries| {
-        //    defer auth.allocator.free(entries);
-
-        //    if (entries.len > 1) {
-        //        std.log.warn("Found two discoverable credentials with the same rpId and uId. This shouldn't be!", .{});
-        //    }
-
-        //    std.log.info(
-        //        "Overwriting credential with id: {s}",
-        //        .{std.fmt.fmtSliceHexUpper(entries[0].id)},
-        //    );
-        //    // Update the old entry
-        //    try entries[0].update(&entry.?, auth.callbacks.millis());
-        //    // We don't need the new entry anymore
-        //    entry.?.deinit();
-        //} else {
-        //    auth.callbacks.addEntry(entry.?) catch {
-        //        return fido.ctap.StatusCodes.ctap2_err_key_store_full;
-        //    };
-        //}
     }
+
     std.debug.print("{any}\n", .{entry});
     const mac_key = deriveMacKey(ms);
     entry.updateMac(&mac_key);
