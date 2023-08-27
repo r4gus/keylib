@@ -170,6 +170,12 @@ pub fn authenticatorGetAssertion(
             return fido.ctap.StatusCodes.ctap2_err_no_credentials;
         },
     );
+    defer {
+        for (credentials.items) |item| {
+            item.deinit(auth.allocator);
+        }
+        credentials.deinit();
+    }
 
     var i: usize = 0;
     while (true) {
@@ -340,11 +346,6 @@ pub fn authenticatorGetAssertion(
             .list = try auth.allocator.dupe(fido.ctap.authenticator.Credential, credentials.items),
             .time_stamp = auth.callbacks.millis(),
         };
-    } else {
-        for (credentials.items) |item| {
-            item.deinit(auth.allocator);
-        }
-        credentials.deinit();
     }
 
     // select algorithm based on credential

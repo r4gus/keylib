@@ -362,11 +362,7 @@ pub fn authenticatorMakeCredential(
         // and CredRandomWithoutUV) and associates them with the credential.
         auth.callbacks.rand,
     );
-    defer {
-        if (rk) {
-            entry.deinit(auth.allocator);
-        }
-    }
+    defer entry.deinit(auth.allocator);
 
     if (mcp.extensions) |ext| {
         // Prepare hmac-secret
@@ -506,6 +502,7 @@ pub fn authenticatorMakeCredential(
             };
         },
     };
+    defer stmt.deinit(auth.allocator);
 
     const ao = fido.ctap.response.MakeCredential{
         .fmt = fido.common.AttestationStatementFormatIdentifiers.@"packed",

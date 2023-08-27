@@ -165,29 +165,8 @@ pub fn authenticatorCredentialManagement(
     var cmResp: fido.ctap.response.CredentialManagement = .{};
     defer cmResp.deinit(auth.allocator);
 
-    // State for different sub-commands
-    const S = struct {
-        pub var rpId: ?struct {
-            ids: std.ArrayList([]const u8),
-            time_stamp: i64,
-            prot: fido.ctap.pinuv.common.PinProtocol,
-            token: [32]u8,
-        } = null;
-
-        pub fn deinit(a: std.mem.Allocator) void {
-            if (rpId) |rpId_state| {
-                for (rpId_state.ids.items) |id| {
-                    a.free(id);
-                }
-                rpId_state.ids.deinit();
-
-                rpId = null;
-            }
-        }
-    };
-
     // Invalidate state after 30 seconds or if the pin token has changed
-    if (S.rpId) |rpId_state| {
+    if (auth.cred_mngmnt) |rpId_state| {
         var prot = switch (rpId_state.prot) {
             .V1 => &auth.token.one.?,
             .V2 => &auth.token.two.?,
@@ -195,7 +174,8 @@ pub fn authenticatorCredentialManagement(
         const diff: i64 = auth.callbacks.millis() - rpId_state.time_stamp;
 
         if (diff >= 30000 or !std.mem.eql(u8, prot.pin_token[0..], rpId_state.token[0..])) {
-            S.deinit(auth.allocator);
+            rpId_state.deinit(auth.allocator);
+            auth.cred_mngmnt = null;
         }
     }
 
@@ -244,13 +224,13 @@ pub fn authenticatorCredentialManagement(
             // check if discoverable credentials exist on this authenticator
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
-            if (S.rpId == null) {
+            if (auth.cred_mngmnt == null) {
                 var prot = switch (cmReq.pinUvAuthProtocol.?) {
                     .V1 => &auth.token.one.?,
                     .V2 => &auth.token.two.?,
                 };
 
-                S.rpId = .{
+                auth.cred_mngmnt = .{
                     .ids = std.ArrayList([]const u8).init(auth.allocator),
                     .time_stamp = auth.callbacks.millis(),
                     .prot = cmReq.pinUvAuthProtocol.?,
@@ -260,24 +240,24 @@ pub fn authenticatorCredentialManagement(
 
             for (entries) |entry| {
                 var found: bool = false;
-                for (S.rpId.?.ids.items) |id| {
+                for (auth.cred_mngmnt.?.ids.items) |id| {
                     if (std.mem.eql(u8, id, entry.rp_id)) {
                         found = true;
                     }
                 }
 
-                if (!found) try S.rpId.?.ids.append(try auth.allocator.dupe(u8, entry.rp_id));
+                if (!found) try auth.cred_mngmnt.?.ids.append(try auth.allocator.dupe(u8, entry.rp_id));
             }
 
-            cmResp.totalRPs = @intCast(S.rpId.?.ids.items.len);
-            const id = S.rpId.?.ids.pop();
+            cmResp.totalRPs = @intCast(auth.cred_mngmnt.?.ids.items.len);
+            const id = auth.cred_mngmnt.?.ids.pop();
             var idh: [32]u8 = undefined;
             std.crypto.hash.sha2.Sha256.hash(id, &idh, .{});
             cmResp.rpIDHash = idh;
             cmResp.rp = fido.common.RelyingParty{ .id = id };
         },
         .enumerateRPsGetNextRP => {
-            if (S.rpId) |*rpIds| {
+            if (auth.cred_mngmnt) |*rpIds| {
                 const id = rpIds.ids.pop();
                 var idh: [32]u8 = undefined;
                 std.crypto.hash.sha2.Sha256.hash(id, &idh, .{});
@@ -315,13 +295,13 @@ pub fn authenticatorCredentialManagement(
 
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
-            if (S.rpId == null) {
+            if (auth.cred_mngmnt == null) {
                 var prot = switch (cmReq.pinUvAuthProtocol.?) {
                     .V1 => &auth.token.one.?,
                     .V2 => &auth.token.two.?,
                 };
 
-                S.rpId = .{
+                auth.cred_mngmnt = .{
                     .ids = std.ArrayList([]const u8).init(auth.allocator),
                     .time_stamp = auth.callbacks.millis(),
                     .prot = cmReq.pinUvAuthProtocol.?,
@@ -336,23 +316,23 @@ pub fn authenticatorCredentialManagement(
                 if (!std.mem.eql(u8, idh[0..], rpIdHash[0..])) continue;
 
                 const uid = try uuid.urn.deserialize(entry._id[0..]);
-                try S.rpId.?.ids.append(try auth.allocator.dupe(u8, std.mem.asBytes(&uid)));
+                try auth.cred_mngmnt.?.ids.append(try auth.allocator.dupe(u8, std.mem.asBytes(&uid)));
             }
 
-            if (S.rpId.?.ids.items.len == 0) {
+            if (auth.cred_mngmnt.?.ids.items.len == 0) {
                 return fido.ctap.StatusCodes.ctap2_err_no_credentials;
             }
 
             // Get total credentials
-            cmResp.totalCredentials = @intCast(S.rpId.?.ids.items.len);
-            const id = S.rpId.?.ids.pop();
+            cmResp.totalCredentials = @intCast(auth.cred_mngmnt.?.ids.items.len);
+            const id = auth.cred_mngmnt.?.ids.pop();
 
             if (getKeyInfo(id, &cmResp, auth)) |err| {
                 return err;
             }
         },
         .enumerateCredentialsGetNextCredential => {
-            if (S.rpId) |*rpIds| {
+            if (auth.cred_mngmnt) |*rpIds| {
                 const id = rpIds.ids.pop();
 
                 if (getKeyInfo(id, &cmResp, auth)) |err| {

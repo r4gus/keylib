@@ -69,10 +69,6 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
     _ = user_data;
 
     var event = std.mem.zeroes(uhid.uhid_event);
-    //const l = device.read(std.mem.asBytes(&event)) catch {
-    //    std.log.err("unable to read from device", .{});
-    //    return 0;
-    //};
     const l = device.read(std.mem.asBytes(&event)) catch {
         return 1;
     };
@@ -116,7 +112,6 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
                         std.log.err("failed to send CTAPHID packet\n", .{});
                     };
                 }
-                //_ = gpa.detectLeaks();
             }
         },
         else => {},
@@ -202,13 +197,6 @@ pub fn main() !void {
         .allocator = allocator,
     };
 
-    if (authenticator.token.one) |*one| {
-        one.initialize();
-    }
-    if (authenticator.token.two) |*two| {
-        two.initialize();
-    }
-
     try authenticator.init("password");
     defer authenticator.deinit();
     // --------------------------------------------------------
@@ -217,6 +205,8 @@ pub fn main() !void {
     while (!quit) {
         _ = notify.g_main_context_iteration(context, 1);
     }
+
+    _ = gpa.detectLeaks();
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++
@@ -391,14 +381,14 @@ pub fn readCred(
             };
             const x = X{ .selector = .{ .rp_id = .{ .@"$eq" = id } } };
 
-            var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, a) catch |err| {
+            var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, all) catch |err| {
                 if (err == error.NotFound) {
                     return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
                 } else {
                     return fido.ctap.authenticator.Callbacks.LoadError.Other;
                 }
             };
-            defer creds.deinit(a);
+            defer creds.deinit(all);
 
             for (creds.docs) |d| {
                 try arr.append(try d.copy(a));
@@ -414,14 +404,14 @@ pub fn readCred(
             };
             const x = X{ .selector = .{ .discoverable = .{ .@"$exists" = true } } };
 
-            var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, a) catch |err| {
+            var creds = client.find("passkee", fido.ctap.authenticator.Credential, x, all) catch |err| {
                 if (err == error.NotFound) {
                     return fido.ctap.authenticator.Callbacks.LoadError.DoesNotExist;
                 } else {
                     return fido.ctap.authenticator.Callbacks.LoadError.Other;
                 }
             };
-            defer creds.deinit(a);
+            defer creds.deinit(all);
 
             for (creds.docs) |d| {
                 try arr.append(try d.copy(a));

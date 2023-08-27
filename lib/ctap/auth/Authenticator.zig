@@ -43,6 +43,20 @@ credential_list: ?struct {
     }
 } = null,
 
+cred_mngmnt: ?struct {
+    ids: std.ArrayList([]const u8),
+    time_stamp: i64,
+    prot: fido.ctap.pinuv.common.PinProtocol,
+    token: [32]u8,
+
+    pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
+        for (self.ids.items) |item| {
+            allocator.free(item);
+        }
+        self.ids.deinit();
+    }
+} = null,
+
 allocator: std.mem.Allocator,
 
 /// TODO: We use AES256-OCB and HMAC. It should be fine to use the same key
@@ -107,12 +121,24 @@ pub fn init(self: *@This(), password: []const u8) !void {
         std.log.err("MAC verification for the given settings failed", .{});
         return error.Fatal;
     }
+
+    if (self.token.one) |*one| {
+        one.initialize();
+    }
+
+    if (self.token.two) |*two| {
+        two.initialize();
+    }
 }
 
 pub fn deinit(self: *@This()) void {
     if (self.credential_list != null) {
         self.credential_list.?.deinit(self.allocator);
         self.credential_list = null;
+    }
+    if (self.cred_mngmnt != null) {
+        self.cred_mngmnt.?.deinit(self.allocator);
+        self.cred_mngmnt = null;
     }
 }
 

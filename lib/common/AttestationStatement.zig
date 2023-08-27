@@ -33,4 +33,13 @@ pub const AttestationStatement = union(fido.common.AttestationStatementFormatIde
     /// receive attestation information, see § 5.4.7 Attestation Conveyance Preference
     /// Enumeration (enum AttestationConveyancePreference).
     none: struct {}, // no attestation
+
+    pub fn deinit(self: *const @This(), a: std.mem.Allocator) void {
+        switch (self.*) {
+            .@"packed" => |x| {
+                a.free(x.sig);
+            },
+            else => {},
+        }
+    }
 };
