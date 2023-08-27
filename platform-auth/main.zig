@@ -13,7 +13,9 @@ const uhid = @cImport(
     @cInclude("linux/uhid.h"),
 );
 
-pub var loop: ?*notify.GMainLoop = null;
+const signal = @cImport(
+    @cInclude("signal.h"),
+);
 
 var store: ?cks.CKS = null;
 
@@ -25,15 +27,17 @@ var uv: ?bool = null;
 
 var notification: [*c]notify.NotifyNotification = undefined;
 
-//const la = std.heap.LoggingAllocator(.debug, .debug);
-//var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//var lagpa = la.init(gpa.allocator());
-//var allocator = lagpa.allocator();
+var quit: bool = false;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator1 = gpa.allocator();
-var pa = profiling_allocator.ProfilingAllocator.init(allocator1, std.heap.c_allocator);
-const allocator = pa.allocator();
+const allocator = gpa.allocator();
+
+fn intHandler(dummy: c_int) callconv(.C) void {
+    _ = dummy;
+    std.log.info("shutting down keepass", .{});
+    quit = true;
+    notify.g_main_context_wakeup(null);
+}
 
 fn accept_callback(
     n: [*c]notify.NotifyNotification,
@@ -65,9 +69,12 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
     _ = user_data;
 
     var event = std.mem.zeroes(uhid.uhid_event);
+    //const l = device.read(std.mem.asBytes(&event)) catch {
+    //    std.log.err("unable to read from device", .{});
+    //    return 0;
+    //};
     const l = device.read(std.mem.asBytes(&event)) catch {
-        std.log.err("unable to read from device", .{});
-        return 0;
+        return 1;
     };
     _ = l;
 
@@ -109,7 +116,7 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
                         std.log.err("failed to send CTAPHID packet\n", .{});
                     };
                 }
-                pa.printStats();
+                //_ = gpa.detectLeaks();
             }
         },
         else => {},
@@ -119,8 +126,6 @@ fn packet_callback(user_data: notify.gpointer) callconv(.C) notify.gboolean {
 }
 
 pub fn main() !void {
-    loop = notify.g_main_loop_new(null, 0);
-
     const interval_ms: notify.guint = 10;
     var source = notify.g_timeout_source_new(interval_ms);
     notify.g_source_set_callback(source, &packet_callback, null, null);
@@ -129,22 +134,23 @@ pub fn main() !void {
     _ = notify.notify_init("Hello world!");
     defer notify.notify_uninit();
 
-    // ------------------- Load db ----------------------------
-    const pw = password("password");
+    var context: ?*notify.GMainContext = notify.g_main_context_default();
 
-    store = load_key_store(allocator, pw.?) catch {
-        std.log.err("error: unable to open key store\n", .{});
-        return;
-    };
-    // --------------------------------------------------------
+    // Here we register the interrupt handler for (ctrl + c). This will
+    // allow us to break out of the main loop by setting quit to false.
+    _ = signal.signal(signal.SIGINT, intHandler);
 
     // ------------------- Setup USB HID ----------------------
     const path = "/dev/uhid";
-    device = std.fs.openFileAbsolute(path, .{ .mode = .read_write }) catch {
+    device = std.fs.openFileAbsolute(path, .{
+        .mode = .read_write,
+    }) catch {
         std.log.err("Can't open uhid-cdev {s}\n", .{path});
         return;
     };
     defer device.close();
+    const flags = try std.os.fcntl(device.handle, 3, 0);
+    _ = try std.os.fcntl(device.handle, 4, flags | 2048);
 
     try create(device);
     defer destroy(device) catch unreachable;
@@ -207,118 +213,10 @@ pub fn main() !void {
     defer authenticator.deinit();
     // --------------------------------------------------------
 
-    notify.g_main_loop_run(loop);
-}
-
-// +++++++++++++++++++++++++++++++++++++++++++++
-// Store
-// +++++++++++++++++++++++++++++++++++++++++++++
-
-const CONFIG_DIR_NAME = ".passkee";
-
-fn load_key_store(a: std.mem.Allocator, pw: []const u8) !cks.CKS {
-    // Get path to the users home folder
-    const home = try getHome(a);
-    defer a.free(home);
-
-    // Open the passkee config folder
-    var config_path = try a.alloc(u8, home.len + CONFIG_DIR_NAME.len + 1);
-    @memcpy(config_path[0..home.len], home);
-    config_path[home.len] = '/';
-    @memcpy(config_path[home.len + 1 ..], CONFIG_DIR_NAME);
-    defer a.free(config_path);
-
-    var config_dir = try openConfigFolder(config_path);
-
-    // Try to load database file
-    createFile(config_dir, "secrets.cks", pw, a) catch {}; // always try to create db
-    const data = try loadFile(config_dir, "secrets.cks", a);
-
-    return try cks.CKS.open(
-        data,
-        pw,
-        a,
-        std.crypto.random,
-        std.time.milliTimestamp,
-    );
-}
-
-pub fn saveKeyStore(a: std.mem.Allocator, pw: []const u8) !void {
-    // Get path to the users home folder
-    const home = try getHome(a);
-    defer a.free(home);
-
-    // Open the passkee config folder
-    var config_path = try a.alloc(u8, home.len + CONFIG_DIR_NAME.len + 1);
-    @memcpy(config_path[0..home.len], home);
-    config_path[home.len] = '/';
-    @memcpy(config_path[home.len + 1 ..], CONFIG_DIR_NAME);
-    defer a.free(config_path);
-
-    var config_dir = try openConfigFolder(config_path);
-
-    // Store key store
-    try writeFile(config_dir, "secrets.cks", &store.?, pw);
-}
-
-fn getHome(a: std.mem.Allocator) ![]const u8 {
-    if (std.os.getenv("HOME")) |home| {
-        var d = try a.alloc(u8, home.len);
-        @memcpy(d, home);
-        return d;
-    } else {
-        return error.NotFound;
+    //notify.g_main_loop_run(loop);
+    while (!quit) {
+        _ = notify.g_main_context_iteration(context, 1);
     }
-}
-
-pub fn openConfigFolder(path: []const u8) !std.fs.Dir {
-    return std.fs.openDirAbsolute(path, .{}) catch {
-        std.log.warn("Directory {s} doesn't exist. Try to create it...", .{path});
-        try std.fs.makeDirAbsolute(path);
-        return try std.fs.openDirAbsolute(path, .{});
-    };
-}
-
-pub fn loadFile(dir: std.fs.Dir, path: []const u8, a: std.mem.Allocator) ![]const u8 {
-    var file = try dir.openFile(path, .{ .mode = .read_write });
-    return try file.readToEndAlloc(a, 128000);
-}
-
-pub fn createFile(dir: std.fs.Dir, name: []const u8, pw: []const u8, a: std.mem.Allocator) !void {
-    // Test if file already exists
-    dir.access(name, .{ .mode = .read_write }) catch {
-        var o = try cks.CKS.new(
-            1,
-            0,
-            .ChaCha20,
-            .None,
-            .Argon2id,
-            "PassKee",
-            "PassKee-Secrets",
-            a,
-            std.crypto.random,
-            std.time.milliTimestamp,
-        );
-        defer o.deinit();
-
-        try writeFile(dir, name, &o, pw);
-        return;
-    };
-    return error.FileAlreadyExists;
-}
-
-pub fn writeFile(dir: std.fs.Dir, path: []const u8, s: *cks.CKS, pw: []const u8) !void {
-    var file = dir.openFile(path, .{ .mode = .read_write }) catch blk: {
-        break :blk try dir.createFile(path, .{ .mode = 0o600 });
-    };
-
-    try file.setEndPos(0);
-    try s.seal(file.writer(), pw);
-}
-
-/// This function MOST NOT be called if a `load` has failed!
-pub fn get() *cks.CKS {
-    return &store.?;
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++
