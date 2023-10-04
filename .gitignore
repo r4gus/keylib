@@ -1,0 +1,18 @@
+zig-cache
+zig-out
+zbor
+*.swp
+
+# Linux Kernel Modules
+*.ko
+*.mod*
+*.o
+*.order
+*.symvers
+*.cmd
+
+# Database files
+*.db
+*.cks
+
+test.csv
