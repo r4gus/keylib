@@ -46,6 +46,19 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
+pub fn requestsUv(self: *const @This()) bool {
+    return self.options != null and self.options.?.uv != null and self.options.?.uv.?;
+}
+
+pub fn requestsRk(self: *const @This()) bool {
+    return self.options != null and self.options.?.rk != null and self.options.?.rk.?;
+}
+
+pub fn requestsUp(self: *const @This()) bool {
+    // if up missing treat it as being present with the value true
+    return if (self.options != null and self.options.?.up != null) self.options.?.up.? else true;
+}
+
 pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
     return cbor.stringify(self, .{
         .allocator = options.allocator,

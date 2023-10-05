@@ -42,6 +42,8 @@ authenticator_key_agreement_key: ?fido.ctap.crypto.dh.EcdhP256.KeyPair = null,
 pin_token: [32]u8 = undefined,
 
 rand: std.rand.Random,
+
+version: fido.ctap.pinuv.common.PinProtocol,
 // ++++++++++++++++++++++++++++++++++++++++
 // Callbacks that vary from version to version
 // ++++++++++++++++++++++++++++++++++++++++
@@ -64,6 +66,7 @@ pub fn setRpId(self: *@This(), id: []const u8) void {
 /// Create a new pinUvAuth token version 1 object
 pub fn v1(rand: std.rand.Random) @This() {
     return @This(){
+        .version = .V1,
         .rand = rand,
         .kdf = kdf_v1,
         .encrypt = encrypt_v1,
@@ -76,6 +79,7 @@ pub fn v1(rand: std.rand.Random) @This() {
 /// Create a new pinUvAuth token version 2 object
 pub fn v2(rand: std.rand.Random) @This() {
     return @This(){
+        .version = .V2,
         .rand = rand,
         .kdf = kdf_v2,
         .encrypt = encrypt_v2,
@@ -85,20 +89,57 @@ pub fn v2(rand: std.rand.Random) @This() {
     };
 }
 
-//pub fn performBuiltInUv(self: *@This(), clientPin: bool, uv: fido.ctap.authenticator.Callbacks.UvCallback,) bool {
-//    const internalRetry = false;  // this defaults to false and is kept private
-//    const attemptsBeforeReturning = 1;
-//
-//    if (clientPin and self.pinRetries == 0) {
-//        // TODO: this must be be preserved across power cycles
-//        self.uvRetries = 0;
-//    }
-//
-//    if (self.uvRetries == 0) {
-//        return false;
-//    }
-//
-//}
+pub const BuiltInUvResult = enum {
+    Accepted,
+    Denied,
+    Timeout,
+    Blocked,
+};
+
+pub fn performBuiltInUv(self: *const @This(), internalRetry: bool, auth: *fido.ctap.authenticator.Auth) BuiltInUvResult {
+    _ = self;
+
+    var settings = auth.loadSettings() catch {
+        std.log.err("performBuiltInUv: unable to load settings (required for counter)", .{});
+        return .Denied;
+    };
+
+    var attemptsBeforeReturning: u8 = if (internalRetry) 3 else 1;
+
+    if (auth.clientPinSupported()) |supported| {
+        if (supported and settings.pinRetries == 0) {
+            settings.uvRetries = 0;
+            auth.writeSettings(settings) catch {
+                std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
+            };
+        }
+    }
+
+    if (settings.uvRetries == 0) {
+        return .Blocked;
+    }
+
+    while (attemptsBeforeReturning > 0) {
+        settings.uvRetries -= 1;
+        auth.writeSettings(settings) catch {
+            std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
+            return .Denied;
+        };
+        attemptsBeforeReturning -= 1;
+
+        const authenticated = auth.callbacks.uv.?();
+        if (authenticated == .Accepted) {
+            settings.uvRetries = 8;
+            auth.writeSettings(settings) catch {
+                std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
+            };
+            return .Accepted;
+        } else if (authenticated == .Timeout) {
+            return .Timeout;
+        }
+    }
+    return .Denied;
+}
 
 /// This function prepares the pinUvAuthToken for use by the platform, which has
 /// invoked one of the pinUvAuthToken-issuing operations, by setting particular

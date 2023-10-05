@@ -23,7 +23,7 @@ extensions: ?[]const fido.ctap.extensions.Extension = null,
 /// same capabilities and firmware, can share the same AAGUID.
 aaguid: [16]u8,
 /// Supported options.
-options: ?fido.ctap.authenticator.Options = null,
+options: fido.ctap.authenticator.Options = .{},
 /// Maximum message size supported by the authenticator.
 /// null = unlimited.
 maxMsgSize: ?u64 = null,

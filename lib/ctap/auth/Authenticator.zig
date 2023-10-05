@@ -14,6 +14,7 @@ const Settings = fido.ctap.authenticator.Settings;
 const PinUvAuth = fido.ctap.pinuv.PinUvAuth;
 const SigAlg = fido.ctap.crypto.SigAlg;
 const AttestationType = fido.common.AttestationType;
+const PublicKeyCredentialParameters = fido.common.PublicKeyCredentialParameters;
 
 const Response = fido.ctap.authenticator.Response;
 const StatusCodes = fido.ctap.StatusCodes;
@@ -46,7 +47,7 @@ pub const Auth = struct {
                 .extensions = &.{.credProtect},
                 .aaguid = "\x6f\x15\x82\x74\xaa\xb6\x44\x3d\x9b\xcf\x8a\x3f\x69\x29\x7c\x88".*,
                 .options = .{
-                    .credMgmt = true,
+                    .credMgmt = false,
                     .rk = true,
                     .uv = if (callbacks.uv) |_| true else null,
                     // This is a platform authenticator even if we use usb for ipc
@@ -156,6 +157,38 @@ pub const Auth = struct {
         };
 
         switch (cmd) {
+            .authenticatorMakeCredential => {
+                // Parse request
+                var di = cbor.DataItem.new(command[1..]) catch {
+                    std.log.err("handle.authenticatorMakeCredential: malformed request", .{});
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
+                };
+
+                const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{
+                    .allocator = self.allocator,
+                }) catch {
+                    std.log.err("handle.authenticatorMakeCredential: unable to map request to `MakeCredential` data type", .{});
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
+                };
+                defer mcp.deinit(self.allocator);
+
+                // Execute command
+                const status = fido.ctap.commands.authenticator.authenticatorMakeCredential(
+                    self,
+                    &mcp,
+                    response,
+                ) catch {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
+                };
+
+                if (status != .ctap1_err_success) {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(status) };
+                }
+            },
             .authenticatorGetInfo => {
                 const status = fido.ctap.commands.authenticator.authenticatorGetInfo(self, response) catch {
                     res.deinit();
@@ -174,5 +207,62 @@ pub const Auth = struct {
         }
 
         return Response{ .ok = res.toOwnedSlice() catch unreachable };
+    }
+
+    /// Given a set of credential parameters, select the first algorithm that is also supported by the authenticator.
+    pub fn selectSignatureAlgorithm(self: *@This(), params: []const PublicKeyCredentialParameters) ?SigAlg {
+        for (params) |param| {
+            for (self.algorithms) |alg| {
+                if (param.alg == alg.alg) {
+                    return alg;
+                }
+            }
+        }
+        return null;
+    }
+
+    /// Returns true if the authenticator supports (built in) user verification
+    pub fn uvSupported(self: *@This()) bool {
+        return self.settings.options.uv != null and
+            self.settings.options.uv.? and
+            self.callbacks.uv != null;
+    }
+
+    pub fn clientPinSupported(self: *@This()) ?bool {
+        _ = self;
+        // We dont support clientPin (for now). The rational for this is
+        // that the focus of this library shifted towards platform authenticators
+        // which can implement builtin user verification (even passwords if
+        // they like).
+        return null;
+    }
+
+    /// Returns true if the authenticator is protected by some form of user verification
+    pub fn isProtected(self: *@This()) bool {
+        return self.uvSupported() or if (self.clientPinSupported()) |cp| cp else false;
+    }
+
+    /// Returns true if the authenticator supports resident keys/ discoverable credentials/ passkey
+    pub fn rkSupported(self: *@This()) bool {
+        return self.settings.options.rk;
+    }
+
+    /// Returns true if always uv is enables, false otherwise
+    pub fn alwaysUv(self: *@This()) !bool {
+        const settings = self.loadSettings() catch |e| {
+            std.log.err("Auth.alwaysUv: unable to load settings ({any})", .{e});
+            return e;
+        };
+
+        return settings.always_uv;
+    }
+
+    /// Returns true if the authenticator doesn't require some form of user verification
+    pub fn makeCredUvNotRqd(self: *@This()) bool {
+        return self.settings.options.makeCredUvNotRqd;
+    }
+
+    pub fn noMcGaPermissionsWithClientPin(self: *@This()) bool {
+        return self.settings.options.noMcGaPermissionsWithClientPin;
     }
 };

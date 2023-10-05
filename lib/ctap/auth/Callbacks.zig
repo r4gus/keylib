@@ -75,14 +75,7 @@ pub const DataIterator = struct {
 /// This callback can be backed by ANY form of
 /// user verification like a password, finger
 /// print, ...
-pub const UvCallback = ?*const fn (
-    /// Information about the context (e.g., make credential)
-    info: [*c]const u8,
-    /// Information about the user (e.g., `David Sugar (david@example.com)`)
-    user: [*c]const u8,
-    /// Information about the relying party (e.g., `Github (github.com)`)
-    rp: [*c]const u8,
-) callconv(.C) bool;
+pub const UvCallback = ?*const fn () callconv(.C) UpResult;
 
 pub const UpCallback = *const fn (
     /// Information about the context (e.g., make credential)
