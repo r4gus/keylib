@@ -124,21 +124,91 @@ pub const Auth = struct {
         }
     }
 
+    // Load the credential with the given id
+    pub fn loadCredential(self: *@This(), id: []const u8) !fido.ctap.authenticator.Credential {
+        const idZ: [:0]const u8 = try self.allocator.dupeZ(u8, id);
+        defer self.allocator.free(idZ);
+        var iter = DataIterator{
+            .allocator = self.allocator,
+        };
+        defer iter.deinit();
+
+        if (self.callbacks.read(idZ, null, &iter.d) != Error.SUCCESS) {
+            return error.NoData;
+        }
+
+        if (iter.next()) |s| {
+            // Turn data hex string into a byte slice
+            var buffer: [1024]u8 = .{0} ** 256;
+            const slice = try std.fmt.hexToBytes(&buffer, s);
+
+            return try cbor.parse(
+                fido.ctap.authenticator.Credential,
+                try cbor.DataItem.new(slice),
+                .{ .allocator = self.allocator },
+            );
+        } else {
+            return error.NoData;
+        }
+    }
+
+    /// Load all credentials associated with the given relying party id
+    pub fn loadCredentials(self: *@This(), rpId: []const u8) ![]fido.ctap.authenticator.Credential {
+        const rpIdZ: [:0]const u8 = try self.allocator.dupeZ(u8, rpId);
+        defer self.allocator.free(rpIdZ);
+        var iter = DataIterator{
+            .allocator = self.allocator,
+        };
+        defer iter.deinit();
+
+        if (self.callbacks.read(null, rpIdZ, &iter.d) != Error.SUCCESS) {
+            return error.NoData;
+        }
+
+        var arr = std.ArrayList(fido.ctap.authenticator.Credential).init(self.allocator);
+        errdefer arr.deinit();
+
+        while (iter.next()) |s| {
+            // Turn data hex string into a byte slice
+            var buffer: [1024]u8 = .{0} ** 256;
+            const slice = try std.fmt.hexToBytes(&buffer, s);
+
+            try arr.append(try cbor.parse(
+                fido.ctap.authenticator.Credential,
+                try cbor.DataItem.new(slice),
+                .{ .allocator = self.allocator },
+            ));
+        }
+
+        if (arr.items.len == 0) {
+            return error.NoData;
+        } else {
+            return try arr.toOwnedSlice();
+        }
+    }
+
     /// Write settings back into permanent storage
     pub fn writeSettings(self: *@This(), meta: fido.ctap.authenticator.Meta) !void {
-        const id: [:0]const u8 = "Settings";
-        const rp: [:0]const u8 = "Root";
+        try self.writeCredential("Settings", "Root", meta);
+    }
+
+    pub fn writeCredential(self: *@This(), id: []const u8, rpId: []const u8, entry: anytype) !void {
+        const _id = try self.allocator.dupeZ(u8, id);
+        defer self.allocator.free(_id);
+        const _rpId = try self.allocator.dupeZ(u8, rpId);
+        defer self.allocator.free(_rpId);
+
         var str = std.ArrayList(u8).init(self.allocator);
         defer str.deinit();
 
-        try cbor.stringify(meta, .{}, str.writer());
+        try cbor.stringify(entry, .{}, str.writer());
 
         // Covert the data into a hex string
         var str2 = std.ArrayList(u8).init(self.allocator);
         defer str2.deinit();
         try str2.writer().print("{s}", .{std.fmt.fmtSliceHexLower(str.items)});
 
-        if (self.callbacks.write(id, rp, str2.items.ptr, @intCast(str2.items.len)) != Error.SUCCESS) {
+        if (self.callbacks.write(_id, _rpId, str2.items.ptr, @intCast(str2.items.len)) != Error.SUCCESS) {
             return error.Write;
         }
     }

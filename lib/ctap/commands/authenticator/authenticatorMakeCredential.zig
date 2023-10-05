@@ -176,6 +176,8 @@ pub fn authenticatorMakeCredential(
                 },
                 .Accepted => {
                     uv_response = true;
+                    // 13. We consider builtin uv to be a valid user presence check
+                    up_response = true;
                 },
             }
         } else {
@@ -192,9 +194,271 @@ pub fn authenticatorMakeCredential(
     // 12. Check exclude list
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
-    _ = up_response;
-    _ = alg;
-    _ = out;
+    var settings = auth.loadSettings() catch |e| {
+        std.log.err("authenticatorMakeCredential: Unable to fetch Settings ({any})", .{e});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    _ = settings;
 
+    if (mcp.excludeList) |ecllist| {
+        for (ecllist) |item| {
+            var cred = auth.loadCredential(item.id) catch {
+                continue;
+            };
+            defer cred.deinit(auth.allocator);
+            // If the credential was created by this authenticator: Return.
+
+            if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired != cred.policy) {
+                var userPresentFlagValue = false;
+                if (mcp.pinUvAuthParam) |_| {
+                    userPresentFlagValue = auth.token.getUserPresentFlagValue();
+                } else { // e.g. set because of built in uv
+                    userPresentFlagValue = up_response;
+                }
+
+                if (!userPresentFlagValue) {
+                    _ = auth.callbacks.up("Make Credential", null, null);
+                    return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                } else {
+                    return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                }
+            } else {
+                if (uv_response) {
+                    var userPresentFlagValue = false;
+                    if (mcp.pinUvAuthParam) |_| {
+                        userPresentFlagValue = auth.token.getUserPresentFlagValue();
+                    } else { // e.g. set because of built in uv
+                        userPresentFlagValue = up_response;
+                    }
+
+                    if (!userPresentFlagValue) {
+                        _ = auth.callbacks.up("Make Credential", null, null);
+                        return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                    } else {
+                        return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
+                    }
+                } else {
+                    // (implying user verification was not collected in Step 11),
+                    // remove the credential from the excludeList and continue parsing
+                    // the rest of the list.
+                    continue;
+                }
+            }
+        }
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++
+    // 13. SEE Step 11
+    // ++++++++++++++++++++++++++++++++++++++++
+
+    // ++++++++++++++++++++++++++++++++++++++++
+    // 14
+    // ++++++++++++++++++++++++++++++++++++++++
+
+    if (up) {
+        if (mcp.pinUvAuthParam != null) {
+            if (!auth.token.getUserPresentFlagValue()) {
+                if (auth.callbacks.up("Make Credential", null, null) != .Accepted) {
+                    return fido.ctap.StatusCodes.ctap2_err_operation_denied;
+                }
+            }
+        } else {
+            if (!up_response) {
+                if (auth.callbacks.up("Make Credential", null, null) != .Accepted) {
+                    return fido.ctap.StatusCodes.ctap2_err_operation_denied;
+                }
+            }
+        }
+
+        up_response = true;
+
+        auth.token.clearUserPresentFlag();
+        auth.token.clearUserVerifiedFlag();
+        auth.token.clearPinUvAuthTokenPermissionsExceptLbw();
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 15. Process extensions
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var extensions = fido.ctap.extensions.Extensions{};
+
+    // Policy
+    var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+
+    // Hmac-Secret
+    var cred_random_with_uv: [32]u8 = undefined;
+    var cred_random_without_uv: [32]u8 = undefined;
+    std.crypto.random.bytes(cred_random_with_uv[0..]);
+    std.crypto.random.bytes(cred_random_without_uv[0..]);
+
+    if (mcp.extensions) |ext| {
+        if (ext.credProtect) |pol| {
+            policy = pol;
+        }
+
+        if (ext.@"hmac-secret") |hsec| {
+            switch (hsec) {
+                .create => |flag| {
+                    if (flag) {
+                        extensions.@"hmac-secret" = .{ .create = true };
+                    }
+                },
+                else => {},
+            }
+        }
+    }
+    // We will always set a policy
+    extensions.credProtect = policy;
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 16. Create a new credential
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var userId = try auth.allocator.alloc(u8, 32);
+    userId[0] = 0xff; // this makes it an invalid utf-8 string
+    std.crypto.random.bytes(userId[1..]);
+
+    const key_pair = if (alg.create(
+        std.crypto.random,
+        auth.allocator,
+    )) |kp| kp else {
+        std.log.err("MakeCredential: unable to generate credential for alg = {any}", .{alg.alg});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+    defer {
+        auth.allocator.free(key_pair.cose_public_key);
+        auth.allocator.free(key_pair.raw_private_key);
+    }
+
+    var entry = fido.ctap.authenticator.Credential{
+        .id = userId,
+        .user = mcp.user,
+        .rp = mcp.rp,
+        .sign_count = 1, // the first signature will be included in the response
+        .alg = alg.alg,
+        .private_key = key_pair.raw_private_key,
+        .policy = policy,
+        .cred_random_with_uv = cred_random_with_uv,
+        .cred_random_without_uv = cred_random_without_uv,
+    };
+    defer auth.allocator.free(entry.id);
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 17. + 18. Store credential
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    if (rk) {
+        var credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id) catch |err| blk: {
+            if (err == error.NoData) {
+                std.log.info(
+                    "makeCredential: no credentials associated with rpId {s} found",
+                    .{std.fmt.fmtSliceHexLower(mcp.rp.id)},
+                );
+                break :blk null;
+            } else {
+                std.log.err(
+                    "makeCredential: unable to fetch credentials associated with rpId {s}",
+                    .{std.fmt.fmtSliceHexLower(mcp.rp.id)},
+                );
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            }
+        };
+        defer {
+            if (credentials) |creds| {
+                for (creds) |cred| {
+                    cred.deinit(auth.allocator);
+                }
+                auth.allocator.free(creds);
+            }
+        }
+
+        if (credentials) |creds| {
+            for (creds) |cred| {
+                if (std.mem.eql(u8, cred.user.id, entry.user.id)) {
+                    // If a credential for the same rp.id and account ID already exists
+                    // on the authenticator, overwrite that credential.
+                    std.log.warn("makeCredential: rk with the same user and rp id already exist", .{});
+                    std.log.info("makeCredential: overwriting existing credentials with id {s}", .{
+                        cred.id,
+                    });
+                    auth.allocator.free(entry.id);
+                    entry.id = try auth.allocator.dupe(u8, cred.id);
+                }
+            }
+        }
+
+        entry.discoverable = true;
+    }
+
+    auth.writeCredential(entry.id, mcp.rp.id, &entry) catch |err| {
+        std.log.err("makeCredential: unable to create credential ({any})", .{err});
+        return err;
+    };
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 19. Create attestation statement
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var auth_data = fido.common.AuthenticatorData{
+        .rpIdHash = undefined,
+        .flags = .{
+            .up = if (up_response) 1 else 0,
+            .rfu1 = 0,
+            .uv = if (uv_response) 1 else 0,
+            .rfu2 = 0,
+            .at = 1,
+            .ed = 0,
+        },
+        .signCount = 0,
+        .attestedCredentialData = .{
+            .aaguid = auth.settings.aaguid,
+            .credential_length = 32,
+            .credential_id = entry.id,
+            .credential_public_key = key_pair.cose_public_key,
+        },
+        .extensions = extensions,
+    };
+    std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
+        mcp.rp.id,
+        &auth_data.rpIdHash,
+        .{},
+    );
+
+    const stmt = switch (auth.attestation) {
+        .Self => blk: {
+            var authData = std.ArrayList(u8).init(auth.allocator);
+            defer authData.deinit();
+            try auth_data.encode(authData.writer());
+
+            const sig = alg.sign(
+                key_pair.raw_private_key,
+                &.{
+                    authData.items,
+                    &mcp.clientDataHash,
+                },
+                auth.allocator,
+            ).?;
+
+            break :blk fido.common.AttestationStatement{ .@"packed" = .{
+                .alg = alg.alg,
+                .sig = sig,
+            } };
+        },
+        else => blk: {
+            break :blk fido.common.AttestationStatement{
+                .none = .{},
+            };
+        },
+    };
+    defer stmt.deinit(auth.allocator);
+
+    const ao = fido.ctap.response.MakeCredential{
+        .fmt = fido.common.AttestationStatementFormatIdentifiers.@"packed",
+        .authData = auth_data,
+        .attStmt = stmt,
+    };
+
+    cbor.stringify(ao, .{ .allocator = auth.allocator }, out) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
+    status = fido.ctap.StatusCodes.ctap1_err_success;
     return status;
 }
