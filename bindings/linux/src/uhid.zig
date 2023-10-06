@@ -44,7 +44,7 @@ export fn uhid_read_packet(fd: c_int, out: [*c]u8) c_int {
     if (event.u.output.size < 1) return 0;
 
     @memcpy(out[0 .. event.u.output.size - 1], event.u.output.data[1..event.u.output.size]);
-    return @intCast(event.u.output.size);
+    return @intCast(event.u.output.size - 1);
 }
 
 export fn uhid_write_packet(fd: c_int, in: [*c]u8, len: usize) c_int {

@@ -54,7 +54,7 @@ pub const Auth = struct {
                     .plat = true,
                     // We don't support client pin
                     .clientPin = null,
-                    .pinUvAuthToken = true,
+                    .pinUvAuthToken = false,
                     .alwaysUv = false,
                 },
                 .pinUvAuthProtocols = &.{.V2},
@@ -229,6 +229,7 @@ pub const Auth = struct {
         switch (cmd) {
             .authenticatorMakeCredential => {
                 // Parse request
+                std.log.err("{s}", .{std.fmt.fmtSliceHexLower(command[1..])});
                 var di = cbor.DataItem.new(command[1..]) catch {
                     std.log.err("handle.authenticatorMakeCredential: malformed request", .{});
                     res.deinit();

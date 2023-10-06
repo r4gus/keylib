@@ -109,10 +109,10 @@ pub fn authenticatorMakeCredential(
     // 7. and 8. Validate makeCredUvNotRqd
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (makeCredUvNotRqd) {
-        std.log.err("makeCredential: uv required for resident key", .{});
         // This step returns an error if the platform tries to create a discoverable
         // credential without performing some form of user verification.
         if (auth.isProtected() and !uv and mcp.pinUvAuthParam == null and rk) {
+            std.log.err("makeCredential: uv required for resident key", .{});
             if (auth.clientPinSupported()) |supported| {
                 if (supported and !noMcGaPermissionsWithClientPin) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_required;
@@ -121,12 +121,12 @@ pub fn authenticatorMakeCredential(
             return fido.ctap.StatusCodes.ctap2_err_operation_denied;
         }
     } else {
-        std.log.err("makeCredential: requires user verification but uv = false and pinUvAuthParam not present", .{});
         // This step returns an error if the platform tries to create a credential
         // without performing some form of user verification when the makeCredUvNotRqd
         // option ID in authenticatorGetInfo's response is present with the value
         // false or is absent.
         if (auth.isProtected() and !uv and mcp.pinUvAuthParam == null) {
+            std.log.err("makeCredential: requires user verification but uv = false and pinUvAuthParam not present", .{});
             if (auth.clientPinSupported()) |supported| {
                 if (supported and !noMcGaPermissionsWithClientPin) {
                     return fido.ctap.StatusCodes.ctap2_err_pin_required;
