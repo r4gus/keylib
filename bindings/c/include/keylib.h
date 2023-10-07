@@ -24,12 +24,12 @@ typedef struct{
 typedef struct{
     int (*up)(const char* info, const char* user, const char* rp);
     int (*uv)(const char* info, const char* user, const char* rp);
-    int (*select)(const char* rpId, char** users, size_t len);
+    int (*select)(const char* rpId, char** users);
     // Read the payload specified by id and rp into out.
     // The allocated memory is owned by the caller and he is responsible for freeing it.
     // Returns either the length of the string assigned to out or an error.
     int (*read)(const char* id, const char* rp, Data** out);
-    int (*write)(const char* id, const char* rp, const char* data, size_t data_len);
+    int (*write)(const char* id, const char* rp, const char* data);
     int (*del)(const char* id, const char* rp);
 } Callbacks;
 

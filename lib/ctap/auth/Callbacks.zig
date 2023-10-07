@@ -92,7 +92,6 @@ pub const UpCallback = *const fn (
 pub const SelectDiscoverableCredentialCallback = ?*const fn (
     rpId: [*c]const u8,
     users: [*c][*c]const u8,
-    users_len: usize,
 ) callconv(.C) i32;
 
 /// Read the data associated with `id` and `rp` into out
@@ -123,7 +122,6 @@ pub const CreateCallback = *const fn (
     id: [*c]const u8,
     rp: [*c]const u8,
     data: [*c]const u8,
-    data_len: usize,
 ) callconv(.C) Error;
 
 /// Delete the entry with the given `id`

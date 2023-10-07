@@ -206,9 +206,9 @@ pub const Auth = struct {
         // Covert the data into a hex string
         var str2 = std.ArrayList(u8).init(self.allocator);
         defer str2.deinit();
-        try str2.writer().print("{s}", .{std.fmt.fmtSliceHexLower(str.items)});
+        try str2.writer().print("{s}\x00", .{std.fmt.fmtSliceHexLower(str.items)});
 
-        if (self.callbacks.write(_id, _rpId, str2.items.ptr, @intCast(str2.items.len)) != Error.SUCCESS) {
+        if (self.callbacks.write(_id, _rpId, str2.items.ptr) != Error.SUCCESS) {
             return error.Write;
         }
     }
