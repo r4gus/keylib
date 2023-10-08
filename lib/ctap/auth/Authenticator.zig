@@ -54,7 +54,7 @@ pub const Auth = struct {
                     .plat = true,
                     // We don't support client pin
                     .clientPin = null,
-                    .pinUvAuthToken = false,
+                    .pinUvAuthToken = true,
                     .alwaysUv = false,
                 },
                 .pinUvAuthProtocols = &.{.V2},
