@@ -23,6 +23,21 @@ options: ?fido.common.AuthenticatorOptions = null, // 5
 pinUvAuthParam: ?PinUvAuthParam = null, // 6
 /// PIN protocol version selected by client.
 pinUvAuthProtocol: ?PinProtocol = null,
+enterpriseAttestation: ?u64 = null,
+attestationFormatsPreference: ?[]const fido.common.AttestationStatementFormatIdentifiers = null,
+
+pub fn requestsUv(self: *const @This()) bool {
+    return self.options != null and self.options.?.uv != null and self.options.?.uv.?;
+}
+
+pub fn requestsRk(self: *const @This()) bool {
+    return self.options != null and self.options.?.rk != null and self.options.?.rk.?;
+}
+
+pub fn requestsUp(self: *const @This()) bool {
+    // if up missing treat it as being present with the value true
+    return if (self.options != null and self.options.?.up != null) self.options.?.up.? else true;
+}
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     allocator.free(self.rpId);
@@ -31,6 +46,9 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
             pkcd.deinit(allocator);
         }
         allocator.free(pkcds);
+    }
+    if (self.attestationFormatsPreference) |pref| {
+        allocator.free(pref);
     }
 }
 
@@ -45,6 +63,8 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
             .{ .name = "options", .alias = "5", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "6", .options = .{} },
             .{ .name = "pinUvAuthProtocol", .alias = "7", .options = .{ .enum_as_text = false } },
+            .{ .name = "enterpriseAttestation", .alias = "8", .options = .{} },
+            .{ .name = "attestationFormatsPreference", .alias = "9", .options = .{ .enum_as_text = false } },
         },
     }, out);
 }
@@ -60,6 +80,8 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
             .{ .name = "options", .alias = "5", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "6", .options = .{} },
             .{ .name = "pinUvAuthProtocol", .alias = "7", .options = .{} },
+            .{ .name = "enterpriseAttestation", .alias = "8", .options = .{} },
+            .{ .name = "attestationFormatsPreference", .alias = "9", .options = .{ .enum_as_text = false } },
         },
     });
 }

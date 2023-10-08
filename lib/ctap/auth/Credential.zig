@@ -17,7 +17,7 @@ sign_count: u64,
 /// Signature algorithm to use for the credential
 alg: cbor.cose.Algorithm,
 
-/// The AES-OCB encrypted private key
+/// Private key
 private_key: []const u8 = undefined,
 
 policy: fido.ctap.extensions.CredentialCreationPolicy = .userVerificationOptional,
@@ -27,6 +27,9 @@ cred_random_with_uv: [32]u8 = undefined,
 
 /// Belongs to hmac secret
 cred_random_without_uv: [32]u8 = undefined,
+
+/// Epoch time stamp this credential was created
+created: i64,
 
 /// Is this credential discoverable or not
 ///
@@ -41,4 +44,8 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     self.user.deinit(allocator);
     self.rp.deinit(allocator);
     allocator.free(self.private_key);
+}
+
+pub fn desc(_: void, lhs: @This(), rhs: @This()) bool {
+    return lhs.created > rhs.created;
 }

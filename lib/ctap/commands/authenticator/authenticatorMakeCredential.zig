@@ -43,7 +43,7 @@ pub fn authenticatorMakeCredential(
     if (uv and !uv_supported) {
         // If the authenticator does not support a built-in user verification
         // method end the operation by returning CTAP2_ERR_INVALID_OPTION
-        std.log.err("makeCredential: uv ({any}) requested by client but not supported", .{auth.token.version});
+        std.log.err("makeCredential: uv requested by client but not supported", .{});
         return fido.ctap.StatusCodes.ctap2_err_invalid_option;
     }
 
@@ -157,10 +157,34 @@ pub fn authenticatorMakeCredential(
     // 11. Verify user (skip if skip_auth == true)
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (!skip_auth) {
-        if (mcp.pinUvAuthParam) |_| {
-            // TODO: this is currently not supported and should be
-            // unreachable.
-            return fido.ctap.StatusCodes.ctap2_err_uv_invalid;
+        if (mcp.pinUvAuthParam) |puap| {
+            if (!auth.token.verify_token(&mcp.clientDataHash, &puap, auth.allocator)) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+            }
+
+            if (auth.token.permissions & 0x02 == 0) {
+                // Check if ga permission is set
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+            }
+
+            if (auth.token.rp_id) |rp_id| {
+                // Match rpIds if possible
+                if (!std.mem.eql(u8, mcp.rp.id, rp_id)) {
+                    // Ids don't match
+                    return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+                }
+            }
+
+            if (!auth.token.getUserVerifiedFlagValue()) {
+                return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
+            } else {
+                uv_response = true;
+            }
+
+            // associate the rpId with the token
+            if (auth.token.rp_id == null) {
+                auth.token.setRpId(mcp.rp.id);
+            }
         } else if (uv) {
             const uvState = auth.token.performBuiltInUv(true, auth);
             switch (uvState) {
@@ -339,6 +363,7 @@ pub fn authenticatorMakeCredential(
         .policy = policy,
         .cred_random_with_uv = cred_random_with_uv,
         .cred_random_without_uv = cred_random_without_uv,
+        .created = std.time.milliTimestamp(),
     };
     defer auth.allocator.free(entry.id);
 

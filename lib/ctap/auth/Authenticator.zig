@@ -229,7 +229,6 @@ pub const Auth = struct {
         switch (cmd) {
             .authenticatorMakeCredential => {
                 // Parse request
-                std.log.err("{s}", .{std.fmt.fmtSliceHexLower(command[1..])});
                 var di = cbor.DataItem.new(command[1..]) catch {
                     std.log.err("handle.authenticatorMakeCredential: malformed request", .{});
                     res.deinit();
@@ -249,6 +248,37 @@ pub const Auth = struct {
                 const status = fido.ctap.commands.authenticator.authenticatorMakeCredential(
                     self,
                     &mcp,
+                    response,
+                ) catch {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
+                };
+
+                if (status != .ctap1_err_success) {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(status) };
+                }
+            },
+            .authenticatorGetAssertion => {
+                var di = cbor.DataItem.new(command[1..]) catch {
+                    std.log.err("handle.authenticatorGetAssertion: malformed request", .{});
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
+                };
+
+                const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
+                    .allocator = self.allocator,
+                }) catch {
+                    std.log.err("handle.authenticatorGetAssertion: unable to map request to `GetAssertion` data type", .{});
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
+                };
+                defer gap.deinit(self.allocator);
+
+                // Execute command
+                const status = fido.ctap.commands.authenticator.authenticatorGetAssertion(
+                    self,
+                    &gap,
                     response,
                 ) catch {
                     res.deinit();

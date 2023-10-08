@@ -2,23 +2,13 @@ const std = @import("std");
 const cbor = @import("zbor");
 const cks = @import("cks");
 const fido = @import("../../../main.zig");
-const uuid = @import("uuid");
 const helper = @import("helper.zig");
-const deriveMacKey = fido.ctap.crypto.master_secret.deriveMacKey;
-const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
 
 pub fn authenticatorGetAssertion(
-    auth: *fido.ctap.authenticator.Authenticator,
+    auth: *fido.ctap.authenticator.Auth,
     gap: *const fido.ctap.request.GetAssertion,
     out: anytype,
 ) !fido.ctap.StatusCodes {
-    // Remove the credential list form the previous getAssertion
-    // call if one exists.
-    if (auth.credential_list != null) {
-        auth.credential_list.?.deinit(auth.allocator);
-        auth.credential_list = null;
-    }
-
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -34,71 +24,75 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 4. Validate options
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var uv: bool = false;
-    var uv_supported = false;
-    var up: bool = true;
-    var rk: bool = false;
+    var uv_supported = auth.uvSupported();
 
-    if (gap.options) |options| {
-        uv = if (options.uv) |_uv| _uv else false;
-        uv = if (gap.pinUvAuthParam) |_| false else uv;
-
-        rk = if (options.rk) |_rk| _rk else false;
-
-        up = if (options.up) |_up| _up else true;
-    }
-
-    if (auth.settings.options) |options| {
-        if (options.uv != null and options.uv.? and auth.callbacks.uv != null) {
-            uv_supported = true;
-        }
-    }
-
+    var uv = gap.requestsUv();
+    uv = if (gap.pinUvAuthParam != null) false else uv; // pin overwrites uv
     if (uv and !uv_supported) {
         return fido.ctap.StatusCodes.ctap2_err_invalid_option;
     }
 
+    const rk = gap.requestsRk();
     if (rk) {
         return fido.ctap.StatusCodes.ctap2_err_unsupported_option;
     }
 
+    const up = gap.requestsUp();
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate alwaysUv
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    const alwaysUv = if (auth.settings.options != null and auth.settings.options.?.alwaysUv != null) auth.settings.options.?.alwaysUv.? else false;
+    const alwaysUv = try auth.alwaysUv();
+    const noMcGaPermissionsWithClientPin = auth.noMcGaPermissionsWithClientPin();
 
-    if (alwaysUv and up) {
-        var skip = false;
+    if (alwaysUv and up) blk: {
+        const is_protected = auth.isProtected();
 
-        if (!auth.isProtected()) {
-            if (auth.getClientPinOption() and !auth.getNoMcGaPermissionsWithClientPinOption()) {
-                return fido.ctap.StatusCodes.ctap2_err_pin_required;
+        if (!is_protected) {
+            std.log.err("makeCredential: alwaysUv = true but not protected", .{});
+            // This handles the case that clientPin is supported in general
+            // but not configured yet.
+            if (auth.clientPinSupported()) |_| {
+                if (!noMcGaPermissionsWithClientPin) {
+                    return fido.ctap.StatusCodes.ctap2_err_pin_required;
+                }
             } else {
                 return fido.ctap.StatusCodes.ctap2_err_operation_denied;
             }
         }
 
-        if (gap.pinUvAuthParam) |_| {
-            skip = true;
+        if (gap.pinUvAuthParam != null) {
+            // Go to step 6
+            break :blk;
         }
 
-        if (!skip and auth.getUvOption()) {
-            skip = true;
+        if (uv) {
+            // Go to step 6
+            break :blk;
         }
 
-        if (!skip and !uv and auth.buildInUvEnabled()) {
-            // If the "uv" option is false and the authenticator supports a built-in
-            // user verification method, and the user verification method is enabled
-            // then: Let the "uv" option be treated as being present with the value true.
+        if (!uv and uv_supported) {
             uv = true;
-            skip = true;
+            break :blk;
         }
 
-        if (!skip and auth.getClientPinOption() and !auth.getNoMcGaPermissionsWithClientPinOption()) {
+        if (auth.clientPinSupported() != null and !noMcGaPermissionsWithClientPin) {
             return fido.ctap.StatusCodes.ctap2_err_pin_required;
-        } else if (!skip) {
-            return fido.ctap.StatusCodes.ctap2_err_operation_denied;
         }
+
+        // Else: clientPin is not supported
+        return fido.ctap.StatusCodes.ctap2_err_operation_denied;
+    }
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // 6. Validate enterpriseAttestation
+    //
+    // WE ARE CURRENTLY NOT ENTERPRISE ATTESTATION CAPABLE!
+    // ++++++++++++++++++++++++++++++++++++++++++++++++
+    if (gap.enterpriseAttestation) |ea| {
+        std.log.err("makeCredential: enterprise attestation not supported", .{});
+        _ = ea;
+        return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
     }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -106,21 +100,16 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
-            var pinuvprot = switch (gap.pinUvAuthProtocol.?) {
-                .V1 => &auth.token.one.?,
-                .V2 => &auth.token.two.?,
-            };
-
-            if (!pinuvprot.verify_token(&gap.clientDataHash, &puap, auth.allocator)) {
+            if (!auth.token.verify_token(&gap.clientDataHash, &puap, auth.allocator)) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 
-            if (pinuvprot.permissions & 0x02 == 0) {
+            if (auth.token.permissions & 0x02 == 0) {
                 // Check if ga permission is set
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 
-            if (pinuvprot.rp_id) |rp_id| {
+            if (auth.token.rp_id) |rp_id| {
                 // Match rpIds if possible
                 if (!std.mem.eql(u8, gap.rpId, rp_id)) {
                     // Ids don't match
@@ -128,44 +117,44 @@ pub fn authenticatorGetAssertion(
                 }
             }
 
-            if (!pinuvprot.getUserVerifiedFlagValue()) {
+            if (!auth.token.getUserVerifiedFlagValue()) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             } else {
                 uv_response = true;
             }
 
             // associate the rpId with the token
-            if (pinuvprot.rp_id == null) {
-                pinuvprot.setRpId(gap.rpId);
+            if (auth.token.rp_id == null) {
+                auth.token.setRpId(gap.rpId);
             }
         } else if (uv) {
-            // TODO: performBuiltInUv(internalRetry)
-            return fido.ctap.StatusCodes.ctap2_err_uv_invalid;
+            const uvState = auth.token.performBuiltInUv(true, auth);
+            switch (uvState) {
+                .Blocked => return fido.ctap.StatusCodes.ctap2_err_pin_blocked,
+                .Timeout => return fido.ctap.StatusCodes.ctap2_err_user_action_timeout,
+                .Denied => {
+                    if (auth.clientPinSupported()) |supported| {
+                        if (supported and !noMcGaPermissionsWithClientPin) {
+                            return fido.ctap.StatusCodes.ctap2_err_pin_required;
+                        }
+                    }
+                    return fido.ctap.StatusCodes.ctap2_err_operation_denied;
+                },
+                .Accepted => {
+                    uv_response = true;
+                    // 13. We consider builtin uv to be a valid user presence check
+                    up_response = true;
+                },
+            }
         }
     }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    // 7. Locate credentials
+    // 8. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-
-    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
-        std.log.err("authenticatorGetAssertion: Unable to fetch Settings ({any})", .{err});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    defer settings.deinit(auth.allocator);
-    if (!settings.verifyMac(&auth.secret.mac)) {
-        std.log.err("authenticatorGetAssertion: Settings MAC validation unsuccessful", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    }
-
-    const ms = settings.getSecret(auth.secret.enc) catch |err| {
-        std.log.err("authenticatorGetAssertion: unable to decrypt secret", .{});
-        return err;
-    };
-
     var credentials = std.ArrayList(fido.ctap.authenticator.Credential).fromOwnedSlice(
         auth.allocator,
-        auth.callbacks.readCred(.{ .rpId = gap.rpId }, auth.allocator) catch {
+        auth.loadCredentials(gap.rpId) catch {
             std.log.err("authenticatorGetAssertion: unable to fetch credentials", .{});
             return fido.ctap.StatusCodes.ctap2_err_no_credentials;
         },
@@ -183,13 +172,9 @@ pub fn authenticatorGetAssertion(
         if (i >= l) break;
 
         if (gap.allowList) |allowList| {
-            // Remove all credentials not listed in allow list
-            var found: bool = false;
+            var found = false;
             for (allowList) |desc| {
-                const uid = std.mem.bytesToValue(uuid.Uuid, desc.id[0..16]);
-                const urn = uuid.urn.serialize(uid);
-
-                if (std.mem.eql(u8, urn[0..], credentials.items[i]._id)) {
+                if (std.mem.eql(u8, desc.id, credentials.items[i].id)) {
                     found = true;
                     break;
                 }
@@ -239,30 +224,18 @@ pub fn authenticatorGetAssertion(
     }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    // 9. Check user presence
+    // 10. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    if (up) {
+    if (up and !up_response) {
         if (gap.pinUvAuthParam != null) {
-            var token = switch (gap.pinUvAuthProtocol.?) {
-                .V1 => &auth.token.one.?,
-                .V2 => &auth.token.two.?,
-            };
-            if (!token.getUserPresentFlagValue()) {
-                if (auth.callbacks.up(
-                    .GetAssertion,
-                    null,
-                    &fido.common.RelyingParty{ .id = gap.rpId },
-                ) != .Accepted) {
+            if (!auth.token.getUserPresentFlagValue()) {
+                if (auth.callbacks.up("Get Assertion", null, null) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (auth.callbacks.up(
-                    .GetAssertion,
-                    null,
-                    &fido.common.RelyingParty{ .id = gap.rpId },
-                ) != .Accepted) {
+                if (auth.callbacks.up("Get Assertion", null, null) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
@@ -270,60 +243,38 @@ pub fn authenticatorGetAssertion(
 
         up_response = true;
 
-        if (gap.pinUvAuthProtocol) |prot| {
-            var token = switch (prot) {
-                .V1 => &auth.token.one.?,
-                .V2 => &auth.token.two.?,
-            };
-            token.clearUserPresentFlag();
-            token.clearUserVerifiedFlag();
-            token.clearPinUvAuthTokenPermissionsExceptLbw();
-        }
+        auth.token.clearUserPresentFlag();
+        auth.token.clearUserVerifiedFlag();
+        auth.token.clearPinUvAuthTokenPermissionsExceptLbw();
     }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    // 10. Process extensions
+    // 11. Process extensions
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-
-    // We go with the weakest policy, if one wants to use a higher policy then she can
-    // always provide the `credProtect` extension.
-    var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
-    var extensions: ?fido.ctap.extensions.Extensions = null;
-
-    if (gap.extensions) |ext| {
-        // Set the requested policy
-        if (ext.credProtect) |pol| {
-            policy = pol;
-
-            if (extensions) |*exts| {
-                exts.credProtect = pol;
-            } else {
-                extensions = fido.ctap.extensions.Extensions{
-                    .credProtect = pol,
-                };
-            }
-        }
-    }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var cred = if (gap.allowList == null and credentials.items.len > 1 and auth.callbacks.select_discoverable_credential != null and
-        (up or uv))
-    blk: {
-        var users = std.ArrayList(fido.common.User).init(auth.allocator);
-        defer users.deinit();
+    std.mem.sort(
+        fido.ctap.authenticator.Credential,
+        credentials.items,
+        {},
+        comptime fido.ctap.authenticator.Credential.desc,
+    );
 
-        // TODO: allow selection of credential
-
-        break :blk credentials.pop();
+    var cred = if (credentials.items.len == 1) blk: {
+        break :blk credentials.orderedRemove(0);
+    } else if (auth.callbacks.select == null or (!uv and !up)) blk: {
+        // TODO
+        break :blk credentials.orderedRemove(0);
+    } else if (auth.callbacks.select != null and (uv or up)) blk: {
+        // TODO
+        break :blk credentials.orderedRemove(0);
     } else blk: {
-        break :blk credentials.pop();
+        break :blk credentials.orderedRemove(0);
     };
     defer cred.deinit(auth.allocator);
 
-    // Seems like this is a discoverable credential, because we
-    // just discovered it :)
     var usageCnt = cred.sign_count;
     cred.sign_count += 1;
 
@@ -331,40 +282,23 @@ pub fn authenticatorGetAssertion(
         // User identifiable information (name, DisplayName, icon)
         // inside the publicKeyCredentialUserEntity MUST NOT be returned
         // if user verification is not done by the authenticator
-        break :blk fido.common.User{
-            .id = cred.user_id,
-            .name = cred.user_name,
-            .displayName = cred.user_display_name,
-        };
+        break :blk cred.user;
     } else blk: {
         break :blk null;
     };
 
-    if (credentials.items.len >= 1) {
-        // Copy the remaining credential Ids for later use by authenticatorGetNextAssertion
-        auth.credential_list = .{
-            .list = try auth.allocator.dupe(fido.ctap.authenticator.Credential, credentials.items),
-            .time_stamp = auth.callbacks.millis(),
-        };
-    }
-
-    // select algorithm based on credential
     var alg: ?fido.ctap.crypto.SigAlg = null;
-    for (auth.algorithms) |_alg| blk: {
+    for (auth.algorithms) |_alg| {
         if (cred.alg == _alg.alg) {
             alg = _alg;
-            break :blk;
+            break;
         }
     }
 
     if (alg == null) {
-        std.log.err("Unknown algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred._id)});
+        std.log.err("Unsupported algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     }
-
-    const enc_key = deriveEncKey(ms);
-    const raw_key = try cred.getPrivateKey(enc_key, auth.allocator);
-    defer auth.allocator.free(raw_key);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
@@ -380,7 +314,6 @@ pub fn authenticatorGetAssertion(
             .ed = 0,
         },
         .signCount = @intCast(usageCnt),
-        .extensions = extensions,
     };
     std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
         gap.rpId,
@@ -402,40 +335,30 @@ pub fn authenticatorGetAssertion(
     //                                    v
     //                           ASSERTION SIGNATURE
     const sig = if (alg.?.sign(
-        raw_key,
+        cred.private_key,
         &.{ authData.items, &gap.clientDataHash },
         auth.allocator,
     )) |signature| signature else {
-        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred._id)});
+        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
     defer auth.allocator.free(sig);
 
-    const uid = try uuid.urn.deserialize(cred._id[0..]);
     const gar = fido.ctap.response.GetAssertion{
         .credential = .{
             .type = .@"public-key",
-            .id = std.mem.asBytes(&uid),
+            .id = cred.id,
         },
         .authData = authData.items,
         .signature = sig,
         .user = user,
     };
 
-    const mac_key = deriveMacKey(ms);
-    cred.updateMac(&mac_key);
-    auth.callbacks.updateCred(&cred, auth.allocator) catch |err| {
-        std.log.err("authenticatorGetAssertion: unable to update credential ({any})", .{err});
+    auth.writeCredential(cred.id, cred.rp.id, &cred) catch |err| {
+        std.log.err("makeCredential: unable to create credential ({any})", .{err});
         return err;
     };
 
     try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);
-
-    if (auth.credential_list) |*cl| {
-        // We remember authData and clientDataHash for authenticatorGetNextAssertion
-        cl.authData = auth_data;
-        cl.clientDataHash = gap.clientDataHash;
-    }
-
     return status;
 }
