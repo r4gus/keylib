@@ -226,6 +226,10 @@ pub const Auth = struct {
             return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_command) };
         };
 
+        // Updates (and possibly invalidates) an existing pinUvAuth token. This has to
+        // be done before handling any request.
+        self.token.pinUvAuthTokenUsageTimerObserver(std.time.milliTimestamp());
+
         switch (cmd) {
             .authenticatorMakeCredential => {
                 // Parse request
@@ -292,6 +296,17 @@ pub const Auth = struct {
             },
             .authenticatorGetInfo => {
                 const status = fido.ctap.commands.authenticator.authenticatorGetInfo(self, response) catch {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
+                };
+
+                if (status != .ctap1_err_success) {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(status) };
+                }
+            },
+            .authenticatorClientPin => {
+                const status = fido.ctap.commands.authenticator.authenticatorClientPin(self, response, command) catch {
                     res.deinit();
                     return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
                 };
