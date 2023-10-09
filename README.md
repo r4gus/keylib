@@ -45,7 +45,21 @@ FIDO2 has a lot of advantages compared to passwords:
 1. The two FIDO2 subprotocols (CTAP2 and WebAuthn) are way more difficult to implement, compared to password authentication.
 2. There are more points of failure because you have three parties that are involved in the authentication process (authenticator, client, relying party).
 3. Currently not all browsers support the CTAP2 protocol well (especially on Linux).
-4. You don't want to spend mony on an authenticator (you usually can't upgrade) and/or you don't trust platform authenticators.
+4. You don't want to spend money on an authenticator (you usually can't upgrade) and/or you don't trust platform authenticators.
+
+</details>
+
+<details>
+<summary><ins>Does this library work with all browsers?</ins></summary>
+
+Answering this question isn't straightforward. The library, by its nature, is designed to be independent of any particular platform, meaning that you have the responsibility of supplying it with data for processing. To put it differently, you're in charge of creating a functional interface for communicating with a client, typically a web browser. On Linux, we offer a wrapper for the uhid interface, simplifying the process of presenting an application as a USB HID device with a Usage Page of F1D0 on the bus. Regrettably, it appears that not all web browsers are capable of discovering uhid devices.
+
+| Browser | supported? |
+|:-------:|:----------:|
+| Chrome  |    yes     |
+| Brave   |    yes     |
+| Chromium | no |
+| Firefox  | no |
 
 </details>
 
