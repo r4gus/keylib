@@ -74,7 +74,7 @@ We offer support for operations like __authenticatorMakeCredential__, __authenti
 
 ## Design
 
-![keylib design](static/design.pdf)
+![keylib design](static/design.png)
 
 ## Gettings Started
 
