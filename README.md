@@ -72,6 +72,10 @@ We offer support for operations like __authenticatorMakeCredential__, __authenti
 
 </details>
 
+## Design
+
+![keylib design](static/design.pdf)
+
 ## Gettings Started
 
 Comming soon...
