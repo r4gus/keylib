@@ -33,6 +33,8 @@ pub const DataIterator = struct {
     allocator: std.mem.Allocator,
 
     pub fn next(self: *@This()) ?[]const u8 {
+        if (self.d == null) return null;
+
         if (self.d[self.i] == null) {
             return null;
         } else {
@@ -42,6 +44,8 @@ pub const DataIterator = struct {
     }
 
     pub fn deinit(self: *@This()) void {
+        if (self.d == null) return;
+
         var i: usize = 0;
         while (self.d[i] != null) {
             var x = self.d[i];
