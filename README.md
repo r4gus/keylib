@@ -78,7 +78,7 @@ We offer support for operations like __authenticatorMakeCredential__, __authenti
 
 ## Gettings Started
 
-Comming soon...
+Read the [getting started guide](https://codeberg.org/r4gus/keylib/wiki/Getting-Started) in the Wiki.
 
 ## Resources
 

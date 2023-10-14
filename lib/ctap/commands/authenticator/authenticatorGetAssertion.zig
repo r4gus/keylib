@@ -278,11 +278,13 @@ pub fn authenticatorGetAssertion(
     var usageCnt = cred.sign_count;
     cred.sign_count += 1;
 
-    var user = if (uv_response) blk: {
+    var user: ?fido.common.User = if (uv_response) blk: {
         // User identifiable information (name, DisplayName, icon)
         // inside the publicKeyCredentialUserEntity MUST NOT be returned
         // if user verification is not done by the authenticator
         break :blk cred.user;
+        //break :blk fido.common.User{ .id = cred.id };
+        //break :blk null;
     } else blk: {
         break :blk null;
     };

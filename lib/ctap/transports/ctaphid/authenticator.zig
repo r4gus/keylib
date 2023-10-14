@@ -190,7 +190,7 @@ pub const CtapHid = struct {
     }
 
     pub fn handle(self: *@This(), packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
-        std.log.err("{s}", .{std.fmt.fmtSliceHexLower(packet)});
+        //std.log.err("{s}", .{std.fmt.fmtSliceHexLower(packet)});
         if (self.begin != null and (std.time.milliTimestamp() - self.begin.?) > CtapHid.timeout) {
             // the previous transaction has timed out -> reset
             self.reset();
