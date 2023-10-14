@@ -27,44 +27,41 @@ pub const UpResult = enum(i32) {
     Timeout = 2,
 };
 
-pub const Data = extern struct {
-    payload: [*c]u8,
-    len: usize,
-};
-
 pub const DataIterator = struct {
-    d: [*c]Data = 0,
+    d: [*c][*c]u8 = 0,
     i: usize = 0,
     allocator: std.mem.Allocator,
 
     pub fn next(self: *@This()) ?[]const u8 {
-        if (self.d == 0) return null;
-
-        if (self.d[self.i].payload == null or self.d[self.i].len == 0) {
+        if (self.d[self.i] == null) {
             return null;
         } else {
             defer self.i += 1;
-            return self.d[self.i].payload[0..self.d[self.i].len];
+            return self.d[self.i][0..strlen(self.d[self.i])];
         }
     }
 
     pub fn deinit(self: *@This()) void {
-        if (self.d == 0) return;
-
         var i: usize = 0;
-        var x = self.d[i];
-        while (x.payload != null) {
+        while (self.d[i] != null) {
+            var x = self.d[i];
             // First overwrite the region with random data. This prevents sensitive information
             // from lingering in memory for longer than neccessary.
-            std.crypto.random.bytes(x.payload[0..x.len]);
+            std.crypto.random.bytes(x[0..strlen(x)]);
             // Then free the memory
-            self.allocator.free(x.payload[0..x.len]);
+            self.allocator.free(x[0 .. strlen(x) + 1]);
             i += 1;
             x = self.d[i];
         }
         self.allocator.free(self.d[0 .. i + 1]);
     }
 };
+
+inline fn strlen(s: [*c]const u8) usize {
+    var i: usize = 0;
+    while (s[i] != 0) : (i += 1) {}
+    return i;
+}
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
 // Callback Types
@@ -106,7 +103,7 @@ pub const SelectDiscoverableCredentialCallback = ?*const fn (
 pub const ReadCallback = *const fn (
     id: [*c]const u8,
     rp: [*c]const u8,
-    out: *[*c]Data,
+    out: *[*c][*c]u8,
 ) callconv(.C) Error;
 
 /// Write `data` to permanent storage (e.g., database, filesystem, ...)
@@ -129,7 +126,6 @@ pub const CreateCallback = *const fn (
 /// Returns either Error.SUCCESS on success or an error.
 pub const DeleteCallback = *const fn (
     id: [*c]const u8,
-    rp: [*c]const u8,
 ) callconv(.C) Error;
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++

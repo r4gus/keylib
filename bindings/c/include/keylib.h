@@ -2,24 +2,20 @@
 #include <stdlib.h>
 
 typedef enum{
-    SUCCESS = 0,
-    DoesAlreadyExist = -1,
-    DoesNotExist = -2,
-    KeyStoreFull = -3,
-    OutOfMemory = -4,
-    Timeout = -5,
-    Other = -6,
+    Error_SUCCESS = 0,
+    Error_DoesAlreadyExist = -1,
+    Error_DoesNotExist = -2,
+    Error_KeyStoreFull = -3,
+    Error_OutOfMemory = -4,
+    Error_Timeout = -5,
+    Error_Other = -6,
 } Error;
 
 typedef enum{
-    Denied = 0,
-    Accepted = 1,
+    UpResult_Denied = 0,
+    UpResult_Accepted = 1,
+    UpResult_Timeout = 2,
 } UpResult;
-
-typedef struct{
-    char* payload;
-    size_t len;
-} Data;
 
 typedef struct{
     int (*up)(const char* info, const char* user, const char* rp);
@@ -28,9 +24,9 @@ typedef struct{
     // Read the payload specified by id and rp into out.
     // The allocated memory is owned by the caller and he is responsible for freeing it.
     // Returns either the length of the string assigned to out or an error.
-    int (*read)(const char* id, const char* rp, Data** out);
+    int (*read)(const char* id, const char* rp, char*** out);
     int (*write)(const char* id, const char* rp, const char* data);
-    int (*del)(const char* id, const char* rp);
+    int (*del)(const char* id);
 } Callbacks;
 
 void* auth_init(Callbacks);
