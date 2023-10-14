@@ -381,7 +381,7 @@ pub fn authenticatorMakeCredential(
             } else {
                 std.log.err(
                     "makeCredential: unable to fetch credentials associated with rpId {s}",
-                    .{std.fmt.fmtSliceHexLower(mcp.rp.id)},
+                    .{mcp.rp.id},
                 );
                 return fido.ctap.StatusCodes.ctap1_err_other;
             }

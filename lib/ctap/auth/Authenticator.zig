@@ -169,15 +169,16 @@ pub const Auth = struct {
         errdefer arr.deinit();
 
         while (iter.next()) |s| {
+            //std.log.err("{s}", .{s});
             // Turn data hex string into a byte slice
             var buffer: [1024]u8 = .{0} ** 256;
-            const slice = try std.fmt.hexToBytes(&buffer, s);
+            const slice = std.fmt.hexToBytes(&buffer, s) catch continue;
 
-            try arr.append(try cbor.parse(
+            try arr.append(cbor.parse(
                 fido.ctap.authenticator.Credential,
-                try cbor.DataItem.new(slice),
+                cbor.DataItem.new(slice) catch continue,
                 .{ .allocator = self.allocator },
-            ));
+            ) catch continue);
         }
 
         if (arr.items.len == 0) {

@@ -1,5 +1,7 @@
 //! Representation of a user
 
+const cbor = @import("zbor");
+
 const std = @import("std");
 
 /// The user handle of the user account. A user handle is an opaque byte
@@ -24,4 +26,27 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     if (self.displayName) |name| {
         allocator.free(name);
     }
+}
+
+pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+    _ = options;
+
+    // Not perfect but this way we don't rely on options providing the allocator
+    var buffer: [2048]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const a = fba.allocator();
+
+    var b = try cbor.Builder.withType(a, .Map);
+    try b.pushTextString("id");
+    try b.pushByteString(self.id);
+    if (self.name) |name| {
+        try b.pushTextString("name");
+        try b.pushTextString(name);
+    }
+    if (self.displayName) |displayName| {
+        try b.pushTextString("displayName");
+        try b.pushTextString(displayName);
+    }
+    const x = try b.finish();
+    try out.writeAll(x);
 }

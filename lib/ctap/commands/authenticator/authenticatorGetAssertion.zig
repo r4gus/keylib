@@ -282,11 +282,13 @@ pub fn authenticatorGetAssertion(
         // User identifiable information (name, DisplayName, icon)
         // inside the publicKeyCredentialUserEntity MUST NOT be returned
         // if user verification is not done by the authenticator
-        break :blk cred.user;
-        //break :blk fido.common.User{ .id = cred.id };
-        //break :blk null;
+        if (credentials.items.len > 0) {
+            break :blk cred.user;
+        } else {
+            break :blk fido.common.User{ .id = cred.user.id };
+        }
     } else blk: {
-        break :blk null;
+        break :blk fido.common.User{ .id = cred.user.id };
     };
 
     var alg: ?fido.ctap.crypto.SigAlg = null;
