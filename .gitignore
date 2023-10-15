@@ -1,9 +1,7 @@
-build
 zig-cache
 zig-out
 zbor
 *.swp
-*.cpython*.so
 
 # Linux Kernel Modules
 *.ko
@@ -19,3 +17,7 @@ zbor
 
 test.csv
 
+# Python bindings
+*.cpython*.so
+build
+uhidmodule.c
