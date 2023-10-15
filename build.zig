@@ -29,7 +29,7 @@ pub fn build(b: *std.build.Builder) !void {
     });
     try b.modules.put(b.dupe("keylib"), keylib_module);
 
-    // C libs
+    // C bindings
     // ------------------------------------------------
 
     const c_bindings = b.addStaticLibrary(.{
@@ -62,6 +62,30 @@ pub fn build(b: *std.build.Builder) !void {
         .exclude_extensions = &.{".c"},
     });
     b.installArtifact(uhid);
+
+    // Python bindings
+    // ------------------------------------------------
+
+    // TODO: Figure out how to compile the cython code myself
+
+    //const generate_uhid_bindings = b.addSystemCommand(
+    //    &[_][]const u8{ "cython3", "bindings/python/uhidmodule.pyx", "-I", "bindings/linux/include", "-o", "bindings/python/uhidmodule.c", "-3" },
+    //);
+
+    //const uhid_py = b.addSharedLibrary(.{
+    //    .name = "uhid.linux",
+    //    .root_source_file = .{ .path = "bindings/python/uhidmodule.c" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //uhid_py.step.dependOn(&generate_uhid_bindings.step);
+    //uhid_py.linkLibrary(uhid);
+    //uhid_py.linkSystemLibrary("python3");
+    //uhid_py.linkLibC();
+    //b.installArtifact(uhid_py);
+
+    //const build_python_bindings_step = b.step("uhid-py", "Build uhid python bindings");
+    //build_python_bindings_step.dependOn(&uhid_py.step);
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Tests

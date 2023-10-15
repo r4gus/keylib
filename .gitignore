@@ -1,7 +1,9 @@
+build
 zig-cache
 zig-out
 zbor
 *.swp
+*.cpython*.so
 
 # Linux Kernel Modules
 *.ko
