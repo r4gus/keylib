@@ -29,6 +29,12 @@ pub fn build(b: *std.build.Builder) !void {
     });
     try b.modules.put(b.dupe("keylib"), keylib_module);
 
+    const uhid_module = b.addModule("uhid", .{
+        .source_file = .{ .path = "bindings/linux/src/uhid.zig" },
+        .dependencies = &.{},
+    });
+    try b.modules.put(b.dupe("uhid"), uhid_module);
+
     // C bindings
     // ------------------------------------------------
 
@@ -50,7 +56,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     const uhid = b.addStaticLibrary(.{
         .name = "uhid",
-        .root_source_file = .{ .path = "bindings/linux/src/uhid.zig" },
+        .root_source_file = .{ .path = "bindings/linux/src/uhid-c.zig" },
         .target = target,
         .optimize = optimize,
     });
