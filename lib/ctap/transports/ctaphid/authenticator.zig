@@ -261,7 +261,6 @@ pub const CtapHid = struct {
             // execute the command
             switch (self.cmd.?) {
                 .msg => {
-                    std.debug.print("message {s}\n", .{std.fmt.fmtSliceHexUpper(self.data[0..self.bcnt])});
                     var response = resp.CtapHidMessageIterator.new(self.busy.?, self.cmd.?);
 
                     if (self.data[1] == 3) {
@@ -328,6 +327,7 @@ pub const CtapHid = struct {
                     return null;
                 },
                 else => {
+                    std.debug.print("invalid {s}\n", .{std.fmt.fmtSliceHexUpper(self.data[0..self.bcnt])});
                     return self.@"error"(ErrorCodes.invalid_cmd);
                 },
             }

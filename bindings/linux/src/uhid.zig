@@ -55,8 +55,12 @@ pub const Uhid = struct {
     pub fn read(self: *const @This(), out: *[64]u8) ?[]u8 {
         var event = std.mem.zeroes(uhid.uhid_event);
         _ = self.device.read(std.mem.asBytes(&event)) catch {
-            return 0;
+            return null;
         };
+
+        if (event.type != uhid.UHID_OUTPUT) {
+            return null;
+        }
 
         if (event.u.output.size < 1) return null;
 
@@ -70,6 +74,7 @@ pub const Uhid = struct {
         var rev = std.mem.zeroes(uhid.uhid_event);
         rev.type = uhid.UHID_INPUT;
         @memcpy(rev.u.input.data[0..in.len], in[0..]);
+        rev.u.input.size = @as(c_ushort, @intCast(in.len));
 
         uhid_write(self.device, &rev) catch |e| {
             std.log.err("failed to send CTAPHID packet\n", .{});
