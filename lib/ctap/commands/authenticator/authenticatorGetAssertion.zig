@@ -128,7 +128,16 @@ pub fn authenticatorGetAssertion(
                 auth.token.setRpId(gap.rpId);
             }
         } else if (uv) {
-            const uvState = auth.token.performBuiltInUv(true, auth);
+            var r = try std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId});
+            defer auth.allocator.free(r);
+
+            const uvState = auth.token.performBuiltInUv(
+                true,
+                auth,
+                "Get Assertion",
+                null,
+                r,
+            );
             switch (uvState) {
                 .Blocked => return fido.ctap.StatusCodes.ctap2_err_pin_blocked,
                 .Timeout => return fido.ctap.StatusCodes.ctap2_err_user_action_timeout,
@@ -142,7 +151,9 @@ pub fn authenticatorGetAssertion(
                 },
                 .Accepted => {
                     uv_response = true;
-                    // 13. We consider builtin uv to be a valid user presence check
+                },
+                .AcceptedWithUp => {
+                    uv_response = true;
                     up_response = true;
                 },
             }
@@ -226,16 +237,19 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var r = try std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId});
+    defer auth.allocator.free(r);
+
     if (up and !up_response) {
         if (gap.pinUvAuthParam != null) {
             if (!auth.token.getUserPresentFlagValue()) {
-                if (auth.callbacks.up("Get Assertion", null, null) != .Accepted) {
+                if (auth.callbacks.up("Get Assertion", null, r) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (auth.callbacks.up("Get Assertion", null, null) != .Accepted) {
+                if (auth.callbacks.up("Get Assertion", null, r) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

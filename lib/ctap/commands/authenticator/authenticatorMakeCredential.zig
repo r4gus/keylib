@@ -186,7 +186,22 @@ pub fn authenticatorMakeCredential(
                 auth.token.setRpId(mcp.rp.id);
             }
         } else if (uv) {
-            const uvState = auth.token.performBuiltInUv(true, auth);
+            var u = try std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
+                if (mcp.user.displayName) |dn| dn else "???",
+                if (mcp.user.name) |dn| dn else "???",
+            });
+            defer auth.allocator.free(u);
+
+            var r = try std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id});
+            defer auth.allocator.free(r);
+
+            const uvState = auth.token.performBuiltInUv(
+                true,
+                auth,
+                "Make Credential",
+                u,
+                r,
+            );
             switch (uvState) {
                 .Blocked => return fido.ctap.StatusCodes.ctap2_err_pin_blocked,
                 .Timeout => return fido.ctap.StatusCodes.ctap2_err_user_action_timeout,
@@ -200,7 +215,9 @@ pub fn authenticatorMakeCredential(
                 },
                 .Accepted => {
                     uv_response = true;
-                    // 13. We consider builtin uv to be a valid user presence check
+                },
+                .AcceptedWithUp => {
+                    uv_response = true;
                     up_response = true;
                 },
             }
@@ -224,6 +241,15 @@ pub fn authenticatorMakeCredential(
     };
     _ = settings;
 
+    var u = try std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
+        if (mcp.user.displayName) |dn| dn else "???",
+        if (mcp.user.name) |dn| dn else "???",
+    });
+    defer auth.allocator.free(u);
+
+    var r = try std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id});
+    defer auth.allocator.free(r);
+
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |item| {
             var cred = auth.loadCredential(item.id) catch {
@@ -241,7 +267,7 @@ pub fn authenticatorMakeCredential(
                 }
 
                 if (!userPresentFlagValue) {
-                    _ = auth.callbacks.up("Make Credential", null, null);
+                    _ = auth.callbacks.up("Make Credential", u, r);
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                 } else {
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
@@ -256,7 +282,7 @@ pub fn authenticatorMakeCredential(
                     }
 
                     if (!userPresentFlagValue) {
-                        _ = auth.callbacks.up("Make Credential", null, null);
+                        _ = auth.callbacks.up("Make Credential", u, r);
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                     } else {
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
@@ -282,13 +308,13 @@ pub fn authenticatorMakeCredential(
     if (up) {
         if (mcp.pinUvAuthParam != null) {
             if (!auth.token.getUserPresentFlagValue()) {
-                if (auth.callbacks.up("Make Credential", null, null) != .Accepted) {
+                if (auth.callbacks.up("Make Credential", u, r) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (auth.callbacks.up("Make Credential", null, null) != .Accepted) {
+                if (auth.callbacks.up("Make Credential", u, r) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

@@ -27,6 +27,18 @@ pub const UpResult = enum(i32) {
     Timeout = 2,
 };
 
+/// Result value of the `uv` callback
+pub const UvResult = enum(i32) {
+    /// The user has denied the action
+    Denied = 0,
+    /// The user has accepted the action
+    Accepted = 1,
+    /// The user has accepted the action
+    AcceptedWithUp = 2,
+    /// The user presence check has timed out
+    Timeout = 3,
+};
+
 pub const DataIterator = struct {
     d: [*c][*c]u8 = 0,
     i: usize = 0,
@@ -72,13 +84,6 @@ inline fn strlen(s: [*c]const u8) usize {
 // Callback Types
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
 
-/// Type of the User Verification (UV) callback
-///
-/// This callback can be backed by ANY form of
-/// user verification like a password, finger
-/// print, ...
-pub const UvCallback = ?*const fn () callconv(.C) UpResult;
-
 pub const UpCallback = *const fn (
     /// Information about the context (e.g., make credential)
     info: [*c]const u8,
@@ -87,6 +92,20 @@ pub const UpCallback = *const fn (
     /// Information about the relying party (e.g., `Github (github.com)`)
     rp: [*c]const u8,
 ) callconv(.C) UpResult;
+
+/// Type of the User Verification (UV) callback
+///
+/// This callback can be backed by ANY form of
+/// user verification like a password, finger
+/// print, ...
+pub const UvCallback = ?*const fn (
+    /// Information about the context (e.g., make credential)
+    info: [*c]const u8,
+    /// Information about the user (e.g., `David Sugar (david@example.com)`)
+    user: [*c]const u8,
+    /// Information about the relying party (e.g., `Github (github.com)`)
+    rp: [*c]const u8,
+) callconv(.C) UvResult;
 
 /// Select a resident key for a user associated with the given RP ID
 ///

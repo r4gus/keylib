@@ -91,12 +91,20 @@ pub fn v2(rand: std.rand.Random) @This() {
 
 pub const BuiltInUvResult = enum {
     Accepted,
+    AcceptedWithUp,
     Denied,
     Timeout,
     Blocked,
 };
 
-pub fn performBuiltInUv(self: *const @This(), internalRetry: bool, auth: *fido.ctap.authenticator.Auth) BuiltInUvResult {
+pub fn performBuiltInUv(
+    self: *const @This(),
+    internalRetry: bool,
+    auth: *fido.ctap.authenticator.Auth,
+    info: ?[:0]const u8,
+    user: ?[:0]const u8,
+    rp: ?[:0]const u8,
+) BuiltInUvResult {
     _ = self;
 
     var settings = auth.loadSettings() catch {
@@ -127,13 +135,18 @@ pub fn performBuiltInUv(self: *const @This(), internalRetry: bool, auth: *fido.c
         };
         attemptsBeforeReturning -= 1;
 
-        const authenticated = auth.callbacks.uv.?();
-        if (authenticated == .Accepted) {
+        const authenticated = auth.callbacks.uv.?(
+            if (info) |i| i.ptr else null,
+            if (user) |u| u.ptr else null,
+            if (rp) |r| r.ptr else null,
+        );
+        if (authenticated == .Accepted or authenticated == .AcceptedWithUp) {
             settings.uvRetries = 8;
             auth.writeSettings(settings) catch {
                 std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
             };
-            return .Accepted;
+
+            return if (authenticated == .Accepted) .Accepted else .AcceptedWithUp;
         } else if (authenticated == .Timeout) {
             return .Timeout;
         }

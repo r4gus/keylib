@@ -104,21 +104,25 @@ pub fn authenticatorClientPin(
                 return fido.ctap.StatusCodes.ctap2_err_uv_blocked;
             }
 
-            switch (auth.token.performBuiltInUv(true, auth)) {
+            var user_present = false;
+            switch (auth.token.performBuiltInUv(
+                true,
+                auth,
+                null,
+                null,
+                null,
+            )) {
                 .Blocked => return fido.ctap.StatusCodes.ctap2_err_uv_blocked,
                 .Timeout => return fido.ctap.StatusCodes.ctap2_err_user_action_timeout,
                 .Denied => {
                     return fido.ctap.StatusCodes.ctap2_err_uv_invalid;
                 },
                 .Accepted => {},
+                .AcceptedWithUp => user_present = true,
             }
 
             auth.token.resetPinUvAuthToken(); // invalidates existing tokens
-            // Most of the uv methodes (password, biometrics, ...) require
-            // the user to interact with the computer, i.e. we set userIsPresent to true.
-            // TODO: document that authenticators that use this library should
-            // choose a method the ensures user presence.
-            auth.token.beginUsingPinUvAuthToken(true, std.time.milliTimestamp());
+            auth.token.beginUsingPinUvAuthToken(user_present, std.time.milliTimestamp());
 
             auth.token.permissions = client_pin_param.permissions.?;
 
