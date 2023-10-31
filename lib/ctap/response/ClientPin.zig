@@ -42,3 +42,17 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
         .from_cborStringify = true,
     }, out);
 }
+
+pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+    return try cbor.parse(@This(), item, .{
+        .allocator = options.allocator,
+        .from_cborParse = true, // prevent infinite loops
+        .field_settings = &.{
+            .{ .name = "keyAgreement", .alias = "1", .options = .{ .enum_as_text = false } },
+            .{ .name = "pinUvAuthToken", .alias = "2", .options = .{} },
+            .{ .name = "pinRetries", .alias = "3", .options = .{} },
+            .{ .name = "powerCycleState", .alias = "4", .options = .{} },
+            .{ .name = "uvRetries", .alias = "5", .options = .{} },
+        },
+    });
+}

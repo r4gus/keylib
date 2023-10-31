@@ -7,7 +7,7 @@ const cbor = @import("zbor");
 const fido = @import("../../main.zig");
 
 /// pinUvAuthProtocol: PIN protocol version chosen by the client.
-pinUvAuthProtocol: ?fido.ctap.pinuv.common.PinProtocol,
+pinUvAuthProtocol: ?fido.ctap.pinuv.common.PinProtocol = null,
 /// subCommand: The authenticator Client PIN sub command currently
 /// being requested.
 subCommand: fido.ctap.pinuv.common.SubCommand,
@@ -15,20 +15,20 @@ subCommand: fido.ctap.pinuv.common.SubCommand,
 /// COSE_Key-encoded public key MUST contain the optional "alg"
 /// parameter and MUST NOT contain any other optional parameters.
 /// The "alg" parameter MUST contain a COSEAlgorithmIdentifier value.
-keyAgreement: ?cbor.cose.Key,
+keyAgreement: ?cbor.cose.Key = null,
 /// pinUvAuth: HMAC-SHA-256 of encrypted contents
 /// using sharedSecret. See Setting a new PIN, Changing existing
 /// PIN and Getting pinToken from the authenticator for more details.
-pinUvAuthParam: ?[]u8,
+pinUvAuthParam: ?[]u8 = null,
 /// newPinEnc: Encrypted new PIN using sharedSecret. Encryption is
 /// done over UTF-8 representation of new PIN.
-newPinEnc: ?[]const u8, // TODO: this should always be 64 bytes
+newPinEnc: ?[]const u8 = null, // TODO: this should always be 64 bytes
 /// pinHashEnc: Encrypted SHA-256 of PIN using sharedSecret.
-pinHashEnc: ?[]u8,
+pinHashEnc: ?[]u8 = null,
 /// permissions: Bitfield of permissions. If present, MUST NOT be 0.
-permissions: ?u8,
+permissions: ?u8 = null,
 /// rpId: The RP ID to assign as the permissions RP ID.
-rpId: ?[]const u8,
+rpId: ?[]const u8 = null,
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     if (self.newPinEnc) |pin| {
@@ -53,8 +53,8 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
-            .{ .name = "pinUvAuthProtocol", .alias = "1", .options = .{} },
-            .{ .name = "subCommand", .alias = "2", .options = .{} },
+            .{ .name = "pinUvAuthProtocol", .alias = "1", .options = .{ .enum_as_text = false } },
+            .{ .name = "subCommand", .alias = "2", .options = .{ .enum_as_text = false } },
             .{ .name = "keyAgreement", .alias = "3", .options = .{} },
             .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
             .{ .name = "newPinEnc", .alias = "5", .options = .{} },

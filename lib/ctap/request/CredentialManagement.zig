@@ -85,7 +85,7 @@ pub const SubCommandParams = struct {
 
         try cbor.stringify(self, .{
             .field_settings = &.{
-                .{ .name = "rpIDHash", .alias = "1", .options = .{} },
+                .{ .name = "rpIDHash", .alias = "1", .options = .{ .slice_as_text = false } },
                 .{ .name = "credentialID", .alias = "2", .options = .{} },
                 .{ .name = "user", .alias = "3", .options = .{} },
             },
@@ -98,7 +98,7 @@ pub const SubCommandParams = struct {
             .allocator = options.allocator,
             .from_cborParse = true, // prevent infinite loops
             .field_settings = &.{
-                .{ .name = "rpIDHash", .alias = "1", .options = .{} },
+                .{ .name = "rpIDHash", .alias = "1", .options = .{ .slice_as_text = false } },
                 .{ .name = "credentialID", .alias = "2", .options = .{} },
                 .{ .name = "user", .alias = "3", .options = .{} },
             },

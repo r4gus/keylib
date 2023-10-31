@@ -14,6 +14,11 @@ pub fn build(b: *std.build.Builder) !void {
     });
     const zbor_module = zbor_dep.module("zbor");
 
+    const hidapi_dep = b.dependency("hidapi", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
     // ++++++++++++++++++++++++++++++++++++++++++++
@@ -34,6 +39,36 @@ pub fn build(b: *std.build.Builder) !void {
         .dependencies = &.{},
     });
     try b.modules.put(b.dupe("uhid"), uhid_module);
+
+    // Re-export zbor module
+    try b.modules.put(b.dupe("zbor"), zbor_module);
+
+    // Client Module
+    // ------------------------------------------------
+
+    const client_module = b.addModule("clientlib", .{
+        .source_file = .{ .path = "lib/client.zig" },
+        .dependencies = &.{
+            .{ .name = "zbor", .module = zbor_module },
+        },
+    });
+    try b.modules.put(b.dupe("clientlib"), client_module);
+
+    // Client Application (WIP/ test)
+    // Might get removed at some point
+    // ------------------------------------------------
+
+    var exe = b.addExecutable(.{
+        .name = "client",
+        .root_source_file = .{ .path = "src/client.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.addModule("client", client_module);
+    exe.linkLibrary(hidapi_dep.artifact("hidapi"));
+
+    const client_step = b.step("client", "Build the client application");
+    client_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
 
     // C bindings
     // ------------------------------------------------

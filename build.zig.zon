@@ -4,8 +4,13 @@
 
     .dependencies = .{
         .zbor = .{
-            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.11.0.tar.gz",
-            .hash = "12204bf1073e9bc1eb12d09a2c298c687ed9c782c687f98ccda3bc95daad8c216845",
+            //.url = "https://github.com/r4gus/zbor/archive/refs/tags/0.11.0.tar.gz",
+            .url = "https://github.com/r4gus/zbor/archive/master.tar.gz",
+            .hash = "1220d4d515c1b6b25ed69c5531749bf773bbee67a9ab7db9a275d852e93465a98a35",
+        },
+        .hidapi = .{
+            .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
+            .hash = "122056e386f60432792682bd40f93eceb6e14da3c57a8813d24191495744f5bc5d18",
         },
     },
 }

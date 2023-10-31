@@ -107,9 +107,7 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
         allocator.free(transports);
     }
 
-    if (self.algorithms) |algorithms| {
-        allocator.free(algorithms);
-    }
+    allocator.free(self.algorithms);
 
     if (self.vendorPrototypeConfigCommands) |vendor_prototype_config_commands| {
         allocator.free(vendor_prototype_config_commands);
@@ -145,6 +143,36 @@ pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: 
         },
         .from_cborStringify = true,
     }, out);
+}
+
+pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+    return try cbor.parse(@This(), item, .{
+        .allocator = options.allocator,
+        .from_cborParse = true, // prevent infinite loops
+        .field_settings = &.{
+            .{ .name = "versions", .alias = "1", .options = .{} },
+            .{ .name = "extensions", .alias = "2", .options = .{} },
+            .{ .name = "aaguid", .alias = "3", .options = .{} },
+            .{ .name = "options", .alias = "4", .options = .{} },
+            .{ .name = "maxMsgSize", .alias = "5", .options = .{} },
+            .{ .name = "pinUvAuthProtocols", .alias = "6", .options = .{ .enum_as_text = false } },
+            .{ .name = "maxCredentialCountInList", .alias = "7", .options = .{} },
+            .{ .name = "maxCredentialIdLength", .alias = "8", .options = .{} },
+            .{ .name = "transports", .alias = "9", .options = .{} },
+            .{ .name = "algorithms", .alias = "10", .options = .{ .enum_as_text = false } },
+            .{ .name = "maxSerializedLargeBlobArray", .alias = "11", .options = .{} },
+            .{ .name = "forcePINChange", .alias = "12", .options = .{} },
+            .{ .name = "minPINLength", .alias = "13", .options = .{} },
+            .{ .name = "firmwareVersion", .alias = "14", .options = .{} },
+            .{ .name = "maxCredBlobLength", .alias = "15", .options = .{} },
+            .{ .name = "maxRPIDsForSetMinPINLength", .alias = "16", .options = .{} },
+            .{ .name = "preferredPlatformUvAttempts", .alias = "17", .options = .{} },
+            .{ .name = "uvModality", .alias = "18", .options = .{} },
+            .{ .name = "certifications", .alias = "19", .options = .{} },
+            .{ .name = "remainingDiscoverableCredentials", .alias = "20", .options = .{} },
+            .{ .name = "vendorPrototypeConfigCommands", .alias = "21", .options = .{} },
+        },
+    });
 }
 
 pub fn to_string(self: *const @This(), out: anytype) !void {
