@@ -29,7 +29,7 @@ pub fn main() !void {
             defer enc.deinit();
             std.log.info("shared secret: {any}", .{enc});
 
-            var token = try client_pin.getPinToken(&transports.devices[0], &enc, "password", allocator);
+            var token = try client_pin.getPinToken(&transports.devices[0], &enc, "fXi93a1PvV77", allocator);
             defer allocator.free(token);
             std.log.info("token: {s}", .{std.fmt.fmtSliceHexLower(token)});
 
@@ -37,6 +37,14 @@ pub fn main() !void {
             if (rp) |_rp| {
                 defer _rp.deinit();
                 std.log.info("id: {s}", .{_rp.rp.id});
+
+                var i: usize = 0;
+                while (i < _rp.total.? - 1) : (i += 1) {
+                    if (try cred_management.enumerateRPsGetNextRP(&transports.devices[0], allocator, true)) |rp2| {
+                        defer rp2.deinit();
+                        std.log.info("id: {s}", .{rp2.rp.id});
+                    }
+                }
             } else {
                 std.log.info("no RPs", .{});
             }

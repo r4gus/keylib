@@ -306,12 +306,14 @@ pub const CredentialManagementResponse = keylib.ctap.response.CredentialManageme
 pub const cred_management = struct {
     pub const RpResponse = struct {
         rp: keylib.common.RelyingParty,
-        total: u32,
+        //rpIDHash: []const u8,
+        total: ?u32 = null,
         a: std.mem.Allocator,
 
         pub fn deinit(self: *const @This()) void {
             self.a.free(self.rp.id);
             if (self.rp.name != null) self.a.free(self.rp.name.?);
+            //self.a.free(self.rpIDHash);
         }
     };
 
@@ -366,7 +368,56 @@ pub const cred_management = struct {
                     .id = try a.dupe(u8, r.rp.?.id),
                     .name = if (r.rp.?.name != null) try a.dupe(u8, r.rp.?.name.?) else null,
                 },
+                //.rpIDHash = try a.dupe(u8, r.rpIDHash.?),
                 .total = r.totalRPs.?,
+                .a = a,
+            };
+        } else {
+            return error.MissingResponse;
+        }
+    }
+
+    pub fn enumerateRPsGetNextRP(
+        t: *Transport,
+        a: std.mem.Allocator,
+        is_yubikey: bool,
+    ) !?RpResponse {
+        const request = CredentialManagement{
+            .subCommand = .enumerateRPsGetNextRP,
+        };
+
+        var arr = std.ArrayList(u8).init(a);
+        defer arr.deinit();
+
+        try arr.append(if (is_yubikey) 0x41 else 0x0a);
+        try cbor.stringify(request, .{}, arr.writer());
+
+        try t.write(arr.items);
+
+        if (try t.read(a)) |response| {
+            defer a.free(response);
+
+            if (response[0] == 0x2e) {
+                // no credentials
+                return null;
+            }
+
+            if (response[0] != 0) {
+                return err.errorFromInt(response[0]);
+            }
+
+            var r = try cbor.parse(CredentialManagementResponse, try cbor.DataItem.new(response[1..]), .{ .allocator = a });
+            defer r.deinit(a);
+
+            if (r.rp == null) return null; // this doesn't reflect the spec but its the behaviour of yubikeys
+            if (r.rpIDHash == null) return error.MissingPar;
+
+            return .{
+                .rp = .{
+                    .id = try a.dupe(u8, r.rp.?.id),
+                    .name = if (r.rp.?.name != null) try a.dupe(u8, r.rp.?.name.?) else null,
+                },
+                //.rpIDHash = try a.dupe(u8, r.rpIDHash.?),
                 .a = a,
             };
         } else {
