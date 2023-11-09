@@ -23,6 +23,196 @@ pub fn authenticatorGetInfo(t: *Transport, a: std.mem.Allocator) !Info {
 }
 
 // ///////////////////////////////////////
+// Credential
+// ///////////////////////////////////////
+
+pub const credentials = struct {
+    pub const PublicKey = struct {
+        // https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/create#publickey_object_structure
+
+        pub const Attestation = enum {
+            none,
+            direct,
+            enterprise,
+            indirect,
+        };
+
+        pub const Formats = enum {
+            @"packed",
+            tpm,
+            @"android-key",
+            @"android-safetynet",
+            @"fido-u2f",
+            apple,
+            none,
+        };
+
+        pub const Attachment = enum {
+            platform,
+            @"cross-platform",
+        };
+
+        pub const Requirements = enum {
+            discouraged,
+            preferred,
+            required,
+        };
+
+        pub const Transports = enum {
+            ble,
+            hybrid,
+            internal,
+            nfc,
+            usb,
+        };
+
+        pub const ExcludeCredential = struct {
+            id: []const u8,
+            transports: []const Transports,
+            type: []const u8 = "public-key",
+        };
+
+        pub const PubKeyCredParam = struct {
+            alg: i32,
+            type: []const u8 = "public-key",
+        };
+
+        pub const Hints = enum {
+            @"security-key",
+            @"client-device",
+            hybrid,
+        };
+
+        pub const AllowCredential = struct {
+            id: []const u8,
+            transports: []const Transport,
+            type: []const u8 = "public-key",
+        };
+
+        attestation: ?[]const u8 = null,
+        attestationFormats: ?[]const Formats = null,
+        authenticatorSelection: ?struct {
+            authenticatorAttachment: ?Attachment = null,
+            requireResidentKey: ?bool = null,
+            residentKey: ?Requirements = null,
+            userVerification: ?Requirements = null,
+        } = null,
+        challenge: []const u8,
+        excludeCredentials: ?[]const ExcludeCredential = null,
+        allowCredentials: ?[]const AllowCredential = null,
+        pubKeyCredParams: ?[]const PubKeyCredParam = null,
+        rp: ?keylib.common.RelyingParty = null,
+        rpId: ?[]const u8 = null,
+        /// The time in ms the rp is willing to wait
+        timeout: i64 = 300000,
+        user: ?keylib.common.User = null,
+        hints: ?[]const Hints = null,
+        userVerification: ?Requirements = null,
+    };
+
+    pub const Options = struct {
+        protocol: ?keylib.ctap.pinuv.common.PinProtocol = null,
+        param: ?[]const u8 = null,
+    };
+
+    pub fn create(
+        t: *Transport,
+        public_key: PublicKey,
+        options: Options,
+        a: std.mem.Allocator,
+    ) !void {
+        _ = t;
+        _ = public_key;
+        _ = options;
+        _ = a;
+    }
+
+    pub fn get(
+        t: *Transport,
+        origin: []const u8,
+        crossOrigin: bool,
+        public_key: PublicKey,
+        options: Options,
+        a: std.mem.Allocator,
+    ) !void {
+        _ = t;
+
+        if (public_key.rpId == null) {
+            return error.RpIdMissing;
+        }
+
+        // Serialize the client data and then hash them...
+        const client_data = try serialize(
+            a,
+            "webauthn.get",
+            public_key.challenge,
+            origin,
+            crossOrigin,
+        );
+        defer a.free(client_data);
+        var client_data_hash: [Sha256.digest_length]u8 = undefined;
+        Sha256.hash(client_data, client_data_hash[0..], .{});
+
+        const cmd = 0x02;
+        var request = keylib.ctap.request.GetAssertion{
+            .rpId = try a.dupeZ(u8, public_key.rpId.?),
+            .clientDataHash = client_data_hash,
+            .pinUvAuthParam = options.param,
+            .pinUvAuthProtocol = options.protocol,
+        };
+        defer a.free(request.rpId);
+        _ = cmd;
+    }
+
+    pub fn serialize(
+        a: std.mem.Allocator,
+        @"type": []const u8,
+        challenge: []const u8,
+        origin: []const u8,
+        crossOrigin: bool,
+    ) ![]const u8 {
+        var out = std.ArrayList(u8).init(a);
+        errdefer out.deinit();
+
+        try out.appendSlice("{\"type\":");
+        try CCDToString(out.writer(), @"type");
+        try out.appendSlice(",\"challenge\":");
+        try CCDToString(out.writer(), challenge);
+        try out.appendSlice(",\"origin\":");
+        try CCDToString(out.writer(), origin);
+        try out.appendSlice(",\"crossOrigin\":");
+        try out.appendSlice(if (crossOrigin) "true" else "false");
+        // TODO: handle tokenBinding
+        try out.appendSlice("}");
+
+        return try out.toOwnedSlice();
+    }
+
+    pub fn CCDToString(out: anytype, in: []const u8) !void {
+        var i: usize = 0;
+
+        try out.writeByte(0x22);
+        while (i < in.len) : (i += 1) {
+            const l = try std.unicode.utf8ByteSequenceLength(in[i]);
+            const cp = try std.unicode.utf8Decode(in[i .. i + l]);
+
+            switch (cp) {
+                0x20, 0x21, 0x23...0x5b, 0x5d...0x10ffff => try out.writeAll(in[i .. i + l]),
+                0x22 => try out.writeAll(&.{ 0x5c, 0x22 }),
+                0x5c => try out.writeAll(&.{ 0x5c, 0x22 }),
+                else => {
+                    var tmp: [4]u8 = .{0} ** 4;
+                    @memcpy(tmp[0..l], in[i .. i + l]);
+                    try out.writeAll(&.{ 0x5c, 0x75 });
+                    try out.print("{x:2}{x:2}{x:2}{x:2}", .{ tmp[3], tmp[2], tmp[1], tmp[0] });
+                },
+            }
+        }
+        try out.writeByte(0x22);
+    }
+};
+
+// ///////////////////////////////////////
 // Client Pin
 // ///////////////////////////////////////
 

@@ -48,6 +48,17 @@ pub fn main() !void {
             } else {
                 std.log.info("no RPs", .{});
             }
+
+            try client.cbor_commands.credentials.get(
+                &transports.devices[0],
+                "127.0.0.1",
+                false,
+                .{
+                    .challenge = "\x01\x23\x45\x67\x89\xab",
+                },
+                .{},
+                allocator,
+            );
         }
     }
 
