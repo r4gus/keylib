@@ -116,7 +116,7 @@ pub const ctap = struct {
         /// Used by multiple data types
         pub const common = struct {
             /// Result of calling authenticate(pinUvAuthToken, clientDataHash)
-            pub const PinUvAuthParam = [32]u8;
+            pub const PinUvAuthParam = []const u8;
 
             /// PIN protocol versions
             pub const PinProtocol = enum(u16) {

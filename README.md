@@ -15,7 +15,9 @@ FIDO2 is a protocol designed for authentication purposes. It can be used as sing
 <details>
 <summary><ins>I've heard the term Passkey but what is that?</ins></summary>
 
-Passkey is a marketing term which is used to refer to a specific FIDO2 configuration. FIDO2 can be configured to use so called discoverable credentials (also referred to as resident keys). Those credentials are stored somewhere on your device, e.g. in a encrypted database. FIDO2 can also be protected by some form of user verification. This can be a PIN or a built in user verification method like a finger print scanner. Passkey refers to FIDO2 using discoverable credentials and some form of user verification.
+Passkey is a marketing term which is used to refer to a specific FIDO2 authenticator configuration. A authenticator can be configured to use so called discoverable credentials (also referred to as resident keys). Those credentials are stored somewhere on your device, e.g. in a encrypted database. Devices can also be protected by some form of user verification. This can be a PIN or a built in user verification method like a finger print scanner. Passkey refers to FIDO2 using discoverable credentials and some form of user verification. 
+
+Please note that this is only one interpretation of what PassKey means as the term itself is nowhere defined.
 
 </details>
 
@@ -25,6 +27,19 @@ Passkey is a marketing term which is used to refer to a specific FIDO2 configura
 FIDO2 uses asymmetric cryptography to ensure the authenticity of the user. A unique credential (key-pair) is created for each relying party (typically a web server) and bound to the relying party id (e.g., google.com). The private key stays on the authenticator and the public key is stored by the relying party. When a user wants to authenticate herself, the relying party sends a nonce (a random byte string meant to be only used once) and some other data, over the client (typically your web browser), to the authenticator. The authenticator looks up the required private key and signs the data with it. The generated signature can then be verified by the relying party using the corresponding public key.
 
 </details>
+
+<details>
+<summary><ins>What is the difference between FIDO2, PassKey and WebAuthn?</ins></summary>
+
+You might have noticed that FIDO2, PassKey and even WebAuthn are often used interchangeably by some articles and people which can be confusing, especially for people new to the protocol. Here is a short overview:
+
+* `FIDO2` Protocol consisting of two sub-protocols: Client to Authenticator Protocol 2 (`CTAP2`) and Web Authentication (`WebAuthn`)
+* `CTAP2` Specification that governs how a authenticator (e.g. YubiKey) should behave and how a authenticator and a client (e.g. web-browser) can communicate with each other.
+* `WebAuthn` Specification that defines how web applications can use a authenticator for authentication. This includes the declaration of data structures and Java Script APIs.
+* `PassKey`: A authenticator with a specific configuration (see above).
+
+</details>
+
 
 <details>
 <summary><ins>Why should I use FIDO2?</ins></summary>
