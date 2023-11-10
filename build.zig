@@ -35,6 +35,9 @@ pub fn build(b: *std.build.Builder) !void {
     });
     try b.modules.put(b.dupe("uhid"), uhid_module);
 
+    // Re-export zbor module
+    try b.modules.put(b.dupe("zbor"), zbor_module);
+
     // C bindings
     // ------------------------------------------------
 

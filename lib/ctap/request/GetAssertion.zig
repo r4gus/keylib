@@ -50,6 +50,9 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     if (self.attestationFormatsPreference) |pref| {
         allocator.free(pref);
     }
+    if (self.pinUvAuthParam) |param| {
+        allocator.free(param);
+    }
 }
 
 pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
@@ -102,7 +105,7 @@ test "get assertion parse 1" {
     try std.testing.expectEqualSlices(u8, "\xf9\xff\xff\xff\x95\xea\x72\x74\x2f\xa6\x03\xc3\x51\x9f\x9c\x17\xc0\xff\x81\xc4\x5d\xbb\x46\xe2\x3c\xff\x6f\xc1\xd0\xd5\xb3\x64\x6d\x49\x5c\xb1\x1b\x80\xe5\x78\x88\xbf\xba\xe3\x89\x8d\x69\x85\xfc\x19\x6c\x43\xfd\xfc\x2e\x80\x18\xac\x2d\x5b\xb3\x79\xa1\xf0", get_assertion_param.allowList.?[0].id);
     try std.testing.expectEqual(fido.common.PublicKeyCredentialType.@"public-key", get_assertion_param.allowList.?[0].type);
     try std.testing.expectEqual(false, get_assertion_param.options.?.up.?);
-    try std.testing.expectEqualSlices(u8, "\x30\x5b\x38\x2d\x1c\xd9\xb9\x71\x4d\x51\x98\x30\xe5\xb0\x02\xcb\x6c\x38\x25\xbc\x05\xf8\x7e\xf1\xbc\xda\x36\x4d\x2d\x4d\xb9\x10", &get_assertion_param.pinUvAuthParam.?);
+    try std.testing.expectEqualSlices(u8, "\x30\x5b\x38\x2d\x1c\xd9\xb9\x71\x4d\x51\x98\x30\xe5\xb0\x02\xcb\x6c\x38\x25\xbc\x05\xf8\x7e\xf1\xbc\xda\x36\x4d\x2d\x4d\xb9\x10", get_assertion_param.pinUvAuthParam.?);
     try std.testing.expectEqual(PinProtocol.V2, get_assertion_param.pinUvAuthProtocol.?);
 }
 
@@ -125,7 +128,7 @@ test "get assertion stringify 1" {
             .rk = null,
             .uv = null,
         },
-        .pinUvAuthParam = "\x30\x5b\x38\x2d\x1c\xd9\xb9\x71\x4d\x51\x98\x30\xe5\xb0\x02\xcb\x6c\x38\x25\xbc\x05\xf8\x7e\xf1\xbc\xda\x36\x4d\x2d\x4d\xb9\x10".*,
+        .pinUvAuthParam = "\x30\x5b\x38\x2d\x1c\xd9\xb9\x71\x4d\x51\x98\x30\xe5\xb0\x02\xcb\x6c\x38\x25\xbc\x05\xf8\x7e\xf1\xbc\xda\x36\x4d\x2d\x4d\xb9\x10",
         .pinUvAuthProtocol = .V2,
     };
 

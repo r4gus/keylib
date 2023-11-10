@@ -100,7 +100,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
-            if (!auth.token.verify_token(&gap.clientDataHash, &puap, auth.allocator)) {
+            if (!auth.token.verify_token(&gap.clientDataHash, puap, auth.allocator)) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 
