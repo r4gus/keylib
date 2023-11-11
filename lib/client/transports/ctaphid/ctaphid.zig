@@ -91,6 +91,15 @@ pub fn ctaphid_read(usb: *Usb, cmd: Cmd, cid: u32, tout_ms: i64, a: std.mem.Allo
                             0x0b => error.InvalidChannel,
                             else => error.Other,
                         };
+                    } else if (_cmd == Cmd.keepalive) {
+                        // A Keepalive is not considered a response and doesnt end a transaction!
+                        // The calling function has to check for this error and handle it
+                        // by calling ctaphid_read again!
+                        return switch (buffer[7]) {
+                            0x01 => error.Processing,
+                            0x02 => error.UpNeeded,
+                            else => error.Other,
+                        };
                     } else {
                         return error.UnexpectedCommand;
                     }

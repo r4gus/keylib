@@ -27,6 +27,8 @@ pub const Error = error{
     InvalidSequenceNumber,
     NonceMismatch,
     InvalidSize,
+    Processing,
+    UpNeeded,
     Other,
 };
 

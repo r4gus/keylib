@@ -29,7 +29,7 @@ pub fn main() !void {
             defer enc.deinit();
             std.log.info("shared secret: {any}", .{enc});
 
-            var token = try client_pin.getPinToken(&transports.devices[0], &enc, "fXi93a1PvV77", allocator);
+            var token = try client_pin.getPinToken(&transports.devices[0], &enc, "", allocator);
             defer allocator.free(token);
             std.log.info("token: {s}", .{std.fmt.fmtSliceHexLower(token)});
 
@@ -51,9 +51,10 @@ pub fn main() !void {
 
             try client.cbor_commands.credentials.get(
                 &transports.devices[0],
-                "127.0.0.1",
+                "https://github.com",
                 false,
                 .{
+                    .rpId = "github.com",
                     .challenge = "\x01\x23\x45\x67\x89\xab",
                 },
                 .{},

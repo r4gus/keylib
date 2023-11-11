@@ -83,12 +83,6 @@ pub const credentials = struct {
             hybrid,
         };
 
-        pub const AllowCredential = struct {
-            id: []const u8,
-            transports: []const Transport,
-            type: []const u8 = "public-key",
-        };
-
         attestation: ?[]const u8 = null,
         attestationFormats: ?[]const Formats = null,
         authenticatorSelection: ?struct {
@@ -99,7 +93,7 @@ pub const credentials = struct {
         } = null,
         challenge: []const u8,
         excludeCredentials: ?[]const ExcludeCredential = null,
-        allowCredentials: ?[]const AllowCredential = null,
+        allowCredentials: ?[]const keylib.common.PublicKeyCredentialDescriptor = null,
         pubKeyCredParams: ?[]const PubKeyCredParam = null,
         rp: ?keylib.common.RelyingParty = null,
         rpId: ?[]const u8 = null,
@@ -135,17 +129,21 @@ pub const credentials = struct {
         options: Options,
         a: std.mem.Allocator,
     ) !void {
-        _ = t;
-
         if (public_key.rpId == null) {
             return error.RpIdMissing;
         }
+
+        // The challenge is base64 encoded before being integrated into the client data
+        const Base64 = std.base64.url_safe.Encoder;
+        var challenge = try a.alloc(u8, Base64.calcSize(public_key.challenge.len));
+        defer a.free(challenge);
+        _ = Base64.encode(challenge, public_key.challenge);
 
         // Serialize the client data and then hash them...
         const client_data = try serialize(
             a,
             "webauthn.get",
-            public_key.challenge,
+            challenge,
             origin,
             crossOrigin,
         );
@@ -159,14 +157,54 @@ pub const credentials = struct {
             .clientDataHash = client_data_hash,
             .pinUvAuthParam = options.param,
             .pinUvAuthProtocol = options.protocol,
+            .allowList = public_key.allowCredentials,
         };
         defer a.free(request.rpId);
-        _ = cmd;
+
+        var arr = std.ArrayList(u8).init(a);
+        defer arr.deinit();
+
+        try arr.append(cmd);
+        try cbor.stringify(request, .{}, arr.writer());
+
+        try t.write(arr.items);
+
+        const start = std.time.milliTimestamp();
+
+        while (true) {
+            if (std.time.milliTimestamp() - start > public_key.timeout) return error.Timeout;
+
+            var resp = t.read(a) catch |e| {
+                if (e == error.Processing) {
+                    std.log.info("get: processing request", .{});
+                    continue;
+                } else if (e == error.UpNeeded) {
+                    std.log.info("get: waiting for user presence", .{});
+                    continue;
+                } else {
+                    // This is an error we can't handle
+                    return e;
+                }
+            };
+
+            if (resp) |response| {
+                defer a.free(response);
+
+                std.log.info("{s}", .{std.fmt.fmtSliceHexLower(response)});
+
+                if (response[0] != 0) {
+                    return err.errorFromInt(response[0]);
+                }
+            } else {
+                // read returns null on (internal) timeout
+                continue;
+            }
+        }
     }
 
     pub fn serialize(
         a: std.mem.Allocator,
-        @"type": []const u8,
+        typ: []const u8,
         challenge: []const u8,
         origin: []const u8,
         crossOrigin: bool,
@@ -175,7 +213,7 @@ pub const credentials = struct {
         errdefer out.deinit();
 
         try out.appendSlice("{\"type\":");
-        try CCDToString(out.writer(), @"type");
+        try CCDToString(out.writer(), typ);
         try out.appendSlice(",\"challenge\":");
         try CCDToString(out.writer(), challenge);
         try out.appendSlice(",\"origin\":");
@@ -190,6 +228,8 @@ pub const credentials = struct {
 
     pub fn CCDToString(out: anytype, in: []const u8) !void {
         var i: usize = 0;
+
+        std.log.info("{s}", .{in});
 
         try out.writeByte(0x22);
         while (i < in.len) : (i += 1) {

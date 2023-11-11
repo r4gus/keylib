@@ -106,6 +106,7 @@ inline fn init() Transport.Error!void {
     }
 }
 
+/// Make sure to handle error.Processing and error.UpNeeded as those MUST NOT end the transaction!
 pub fn read(self: *anyopaque, a: std.mem.Allocator) Transport.Error!?[]u8 {
     try init();
     var usb: *Usb = @ptrCast(@alignCast(self));
