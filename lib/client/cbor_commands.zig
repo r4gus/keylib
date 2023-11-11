@@ -151,11 +151,26 @@ pub const credentials = struct {
         var client_data_hash: [Sha256.digest_length]u8 = undefined;
         Sha256.hash(client_data, client_data_hash[0..], .{});
 
+        const param: ?[]const u8 = if (options.param != null and options.protocol != null) blk: {
+            const param = switch (options.protocol.?) {
+                .V1 => try PinUvAuth.authenticate_v1(options.param.?, &client_data_hash, a),
+                .V2 => try PinUvAuth.authenticate_v2(options.param.?, &client_data_hash, a),
+            };
+            break :blk param;
+        } else blk: {
+            break :blk null;
+        };
+        defer {
+            if (param) |p| {
+                a.free(p);
+            }
+        }
+
         const cmd = 0x02;
         var request = keylib.ctap.request.GetAssertion{
             .rpId = try a.dupeZ(u8, public_key.rpId.?),
             .clientDataHash = client_data_hash,
-            .pinUvAuthParam = options.param,
+            .pinUvAuthParam = param,
             .pinUvAuthProtocol = options.protocol,
             .allowList = public_key.allowCredentials,
         };
@@ -166,6 +181,8 @@ pub const credentials = struct {
 
         try arr.append(cmd);
         try cbor.stringify(request, .{}, arr.writer());
+
+        std.log.info("{s}", .{std.fmt.fmtSliceHexLower(arr.items)});
 
         try t.write(arr.items);
 
@@ -195,6 +212,8 @@ pub const credentials = struct {
                 if (response[0] != 0) {
                     return err.errorFromInt(response[0]);
                 }
+
+                return;
             } else {
                 // read returns null on (internal) timeout
                 continue;
