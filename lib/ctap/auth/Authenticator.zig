@@ -37,6 +37,17 @@ pub const Auth = struct {
 
     attestation: AttestationType = .Self,
 
+    /// Determines if the authenticator should use a constant signature counter.
+    ///
+    /// A Relying Party stores the signature counter of the most recent authenticatorGetAssertion operation.
+    /// In subsequent authenticatorGetAssertion operations, the Relying Party compares the stored signature
+    /// counter value with the new signCount value returned in the assertion’s authenticator data.
+    ///
+    /// * `false` - The signature counter is never incremented (stays always 0). This can be used for shared
+    /// resident keys (passkeys) where "clone detection" is not required.
+    /// * `true` - Increment the signature counter for each successful signature creation.
+    constSignCount: bool = false,
+
     allocator: Allocator,
 
     pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {

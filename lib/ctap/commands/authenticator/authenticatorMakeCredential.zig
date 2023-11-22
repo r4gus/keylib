@@ -383,7 +383,7 @@ pub fn authenticatorMakeCredential(
         .id = userId,
         .user = mcp.user,
         .rp = mcp.rp,
-        .sign_count = 1, // the first signature will be included in the response
+        .sign_count = 0, // the first signature will be included in the response
         .alg = alg.alg,
         .private_key = key_pair.raw_private_key,
         .policy = policy,
