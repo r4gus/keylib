@@ -10,7 +10,7 @@
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
-            .hash = "122056e386f60432792682bd40f93eceb6e14da3c57a8813d24191495744f5bc5d18",
+            .hash = "1220cea42550f2708eb81a9ed5a0e62a4cf7ecdc4c7639be3f81f89698d1a15d053d",
         },
     },
 }
