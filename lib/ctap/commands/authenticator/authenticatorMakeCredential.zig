@@ -372,6 +372,7 @@ pub fn authenticatorMakeCredential(
         }
         break;
     }
+    id[0] = 0xFF;
 
     const key_pair = if (alg.create(
         std.crypto.random,
