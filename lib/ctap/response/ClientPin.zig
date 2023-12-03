@@ -43,16 +43,16 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
+        .from_callback = true, // prevent infinite loops
         .field_settings = &.{
-            .{ .name = "keyAgreement", .alias = "1", .options = .{ .enum_as_text = false } },
-            .{ .name = "pinUvAuthToken", .alias = "2", .options = .{} },
-            .{ .name = "pinRetries", .alias = "3", .options = .{} },
-            .{ .name = "powerCycleState", .alias = "4", .options = .{} },
-            .{ .name = "uvRetries", .alias = "5", .options = .{} },
+            .{ .name = "keyAgreement", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "pinUvAuthToken", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "pinRetries", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "powerCycleState", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "uvRetries", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
         },
     });
 }

@@ -168,7 +168,7 @@ pub const credentials = struct {
 
         const cmd = 0x02;
         var request = keylib.ctap.request.GetAssertion{
-            .rpId = try a.dupeZ(u8, public_key.rpId.?),
+            .rpId = try a.dupe(u8, public_key.rpId.?),
             .clientDataHash = client_data_hash,
             .pinUvAuthParam = param,
             .pinUvAuthProtocol = options.protocol,

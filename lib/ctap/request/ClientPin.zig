@@ -53,14 +53,14 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
-            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
-            .{ .name = "subCommand", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "subCommand", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
             .{ .name = "keyAgreement", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             .{ .name = "newPinEnc", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
             .{ .name = "pinHashEnc", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
             .{ .name = "permissions", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
-            .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer } },
+            .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
         },
         .from_callback = true,
     }, out);
@@ -70,14 +70,14 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
         .field_settings = &.{
-            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
-            .{ .name = "subCommand", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "subCommand", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
             .{ .name = "keyAgreement", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             .{ .name = "newPinEnc", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
             .{ .name = "pinHashEnc", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
             .{ .name = "permissions", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
-            .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer } },
+            .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
         },
         .from_callback = true,
     });

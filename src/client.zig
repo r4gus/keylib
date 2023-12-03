@@ -8,6 +8,15 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
 pub fn main() !void {
+    const pw = if (std.os.argv.len >= 2) blk: {
+        var i: usize = 0;
+        while (std.os.argv[1][i] != 0) : (i += 1) {}
+        break :blk std.os.argv[1][0..i];
+    } else {
+        std.log.err("please provide a password", .{});
+        return;
+    };
+
     {
         // 1 The platform examines various option IDs in the authenti-
         //   catorGetInfo response to determine its course of action
@@ -108,7 +117,7 @@ pub fn main() !void {
         // 3 Optain a pinUvAuthToken from the authenticator
 
         const token = if (std.mem.eql(u8, op.?, "getPinToken")) blk: {
-            break :blk try client_pin.getPinToken(device, &enc, "", allocator);
+            break :blk try client_pin.getPinToken(device, &enc, pw[0..], allocator);
         } else if (std.mem.eql(u8, op.?, "getPinUvAuthTokenUsingUvWithPermissions")) blk: {
             break :blk "";
         } else blk: {

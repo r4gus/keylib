@@ -25,43 +25,43 @@ credProtect: ?fido.ctap.extensions.CredentialCreationPolicy = null,
 /// Large blob encryption key
 largeBlobKey: ?[]const u8 = null,
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
 
     try cbor.stringify(self, .{
         .field_settings = &.{
-            .{ .name = "existingResidentCredentialsCount", .alias = "1", .options = .{} },
-            .{ .name = "maxPossibleRemainingResidentCredentialsCount", .alias = "2", .options = .{} },
-            .{ .name = "rp", .alias = "3", .options = .{} },
-            .{ .name = "rpIDHash", .alias = "4", .options = .{} },
-            .{ .name = "totalRPs", .alias = "5", .options = .{} },
-            .{ .name = "user", .alias = "6", .options = .{} },
-            .{ .name = "credentialID", .alias = "7", .options = .{} },
-            .{ .name = "publicKey", .alias = "8", .options = .{} },
-            .{ .name = "totalCredentials", .alias = "9", .options = .{} },
-            .{ .name = "credProtect", .alias = "10", .options = .{ .enum_as_text = false } },
-            .{ .name = "largeBlobKey", .alias = "11", .options = .{} },
+            .{ .name = "existingResidentCredentialsCount", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "maxPossibleRemainingResidentCredentialsCount", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "rp", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "rpIDHash", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "totalRPs", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "user", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "credentialID", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
+            .{ .name = "publicKey", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "totalCredentials", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "credProtect", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "largeBlobKey", .field_options = .{ .alias = "11", .serialization_type = .Integer } },
         },
-        .from_cborStringify = true,
+        .from_callback = true,
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
+        .from_callback = true, // prevent infinite loops
         .field_settings = &.{
-            .{ .name = "existingResidentCredentialsCount", .alias = "1", .options = .{} },
-            .{ .name = "maxPossibleRemainingResidentCredentialsCount", .alias = "2", .options = .{} },
-            .{ .name = "rp", .alias = "3", .options = .{} },
-            .{ .name = "rpIDHash", .alias = "4", .options = .{} },
-            .{ .name = "totalRPs", .alias = "5", .options = .{} },
-            .{ .name = "user", .alias = "6", .options = .{} },
-            .{ .name = "credentialID", .alias = "7", .options = .{} },
-            .{ .name = "publicKey", .alias = "8", .options = .{} },
-            .{ .name = "totalCredentials", .alias = "9", .options = .{} },
-            .{ .name = "credProtect", .alias = "10", .options = .{} },
-            .{ .name = "largeBlobKey", .alias = "11", .options = .{} },
+            .{ .name = "existingResidentCredentialsCount", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "maxPossibleRemainingResidentCredentialsCount", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "rp", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "rpIDHash", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "totalRPs", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "user", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "credentialID", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
+            .{ .name = "publicKey", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "totalCredentials", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "credProtect", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "largeBlobKey", .field_options = .{ .alias = "11", .serialization_type = .Integer } },
         },
     });
 }
