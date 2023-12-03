@@ -15,8 +15,6 @@ pub fn create(fd: std.fs.File) !void {
         event.u.create2.rd_data[0..hid.ReportDescriptorFidoU2f[0..].len],
         hid.ReportDescriptorFidoU2f[0..],
     );
-    event.u.create2.phys[0] = 'x';
-    event.u.create2.uniq[0] = 'y';
     event.u.create2.rd_size = hid.ReportDescriptorFidoU2f[0..].len;
     event.u.create2.bus = uhid.BUS_USB;
     event.u.create2.vendor = 0x15d9;

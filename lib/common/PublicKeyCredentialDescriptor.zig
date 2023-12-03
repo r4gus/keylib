@@ -1,6 +1,8 @@
 //! Contains the attributes that are specified by a caller when referring to a
 //! public key credential. See WebAuthn §5.8.3.
 
+const std = @import("std");
+const cbor = @import("zbor");
 const fido = @import("../main.zig");
 
 const AuthenticatorTransports = fido.common.AuthenticatorTransports;
@@ -22,7 +24,6 @@ pub fn deinit(self: *const @This(), allocator: @import("std").mem.Allocator) voi
 }
 
 test "serialize PublicKeyCredentialDescriptor" {
-    const std = @import("std");
     const allocator = std.testing.allocator;
     var str = std.ArrayList(u8).init(allocator);
     defer str.deinit();

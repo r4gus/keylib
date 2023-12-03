@@ -41,23 +41,22 @@ userSelected: ?bool = null, // 6
 /// credential, and if largeBlobKey was true in the extensions input.
 largeBlobKey: ?[]const u8 = null, // 7
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
 
     try cbor.stringify(
         self,
         .{
             .field_settings = &.{
-                .{ .name = "credential", .alias = "1", .options = .{} },
-                .{ .name = "authData", .alias = "2", .options = .{} },
-                .{ .name = "signature", .alias = "3", .options = .{} },
-                .{ .name = "user", .alias = "4", .options = .{} },
-                .{ .name = "numberOfCredentials", .alias = "5", .options = .{} },
-                .{ .name = "userSelected", .alias = "6", .options = .{} },
-                .{ .name = "largeBlobKey", .alias = "7", .options = .{} },
-                .{ .name = "id", .options = .{ .slice_as_text = false } },
+                .{ .name = "credential", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+                .{ .name = "authData", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+                .{ .name = "signature", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+                .{ .name = "user", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+                .{ .name = "numberOfCredentials", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+                .{ .name = "userSelected", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+                .{ .name = "largeBlobKey", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
             },
-            .from_cborStringify = true,
+            .from_callback = true,
         },
         out,
     );

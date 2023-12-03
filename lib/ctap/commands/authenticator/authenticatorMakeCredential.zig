@@ -363,9 +363,16 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var userId = try auth.allocator.alloc(u8, 32);
-    userId[0] = 0xff; // this makes it an invalid utf-8 string
-    std.crypto.random.bytes(userId[1..]);
+    var id = try auth.allocator.alloc(u8, 32);
+    while (true) {
+        std.crypto.random.bytes(id);
+        for (id) |b| {
+            // disallow 0 bytes
+            if (b == 0) continue;
+        }
+        break;
+    }
+    id[0] = 0xFF;
 
     const key_pair = if (alg.create(
         std.crypto.random,
@@ -380,10 +387,10 @@ pub fn authenticatorMakeCredential(
     }
 
     var entry = fido.ctap.authenticator.Credential{
-        .id = userId,
+        .id = id,
         .user = mcp.user,
         .rp = mcp.rp,
-        .sign_count = 1, // the first signature will be included in the response
+        .sign_count = 0, // the first signature will be included in the response
         .alg = alg.alg,
         .private_key = key_pair.raw_private_key,
         .policy = policy,
@@ -460,7 +467,7 @@ pub fn authenticatorMakeCredential(
         .signCount = 0,
         .attestedCredentialData = .{
             .aaguid = auth.settings.aaguid,
-            .credential_length = 32,
+            .credential_length = @intCast(entry.id.len),
             .credential_id = entry.id,
             .credential_public_key = key_pair.cose_public_key,
         },

@@ -13,22 +13,22 @@ credProtect: ?fido.ctap.extensions.CredentialCreationPolicy = null,
 /// offline attacks.
 @"hmac-secret": ?fido.ctap.extensions.HmacSecret = null,
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     return cbor.stringify(self, .{
         .allocator = options.allocator,
-        .from_cborStringify = true,
+        .from_callback = true,
         .field_settings = &.{
-            .{ .name = "credProtect", .options = .{ .enum_as_text = false } },
+            .{ .name = "credProtect", .value_options = .{ .enum_serialization_type = .Integer } },
         },
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
+        .from_callback = true, // prevent infinite loops
         .field_settings = &.{
-            .{ .name = "credProtect", .options = .{} },
+            .{ .name = "credProtect", .value_options = .{ .enum_serialization_type = .Integer } },
         },
     });
 }

@@ -1,7 +1,8 @@
-> _Warning_: NOT PRODUCTION READY!
 > We track the latest stable release of Zig (`0.11.0`)
 
 FIDO2 compatible authenticator library written in [Zig](https://ziglang.org/).
+
+Checkout: [KeyPassPro](https://github.com/r4gus/keypass)
 
 ## QA
 

@@ -114,34 +114,34 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
-            .{ .name = "versions", .alias = "1", .options = .{} },
-            .{ .name = "extensions", .alias = "2", .options = .{} },
-            .{ .name = "aaguid", .alias = "3", .options = .{} },
-            .{ .name = "options", .alias = "4", .options = .{} },
-            .{ .name = "maxMsgSize", .alias = "5", .options = .{} },
-            .{ .name = "pinUvAuthProtocols", .alias = "6", .options = .{ .enum_as_text = false } },
-            .{ .name = "maxCredentialCountInList", .alias = "7", .options = .{} },
-            .{ .name = "maxCredentialIdLength", .alias = "8", .options = .{} },
-            .{ .name = "transports", .alias = "9", .options = .{} },
-            .{ .name = "algorithms", .alias = "10", .options = .{ .enum_as_text = false } },
-            .{ .name = "maxSerializedLargeBlobArray", .alias = "11", .options = .{} },
-            .{ .name = "forcePINChange", .alias = "12", .options = .{} },
-            .{ .name = "minPINLength", .alias = "13", .options = .{} },
-            .{ .name = "firmwareVersion", .alias = "14", .options = .{} },
-            .{ .name = "maxCredBlobLength", .alias = "15", .options = .{} },
-            .{ .name = "maxRPIDsForSetMinPINLength", .alias = "16", .options = .{} },
-            .{ .name = "preferredPlatformUvAttempts", .alias = "17", .options = .{} },
-            .{ .name = "uvModality", .alias = "18", .options = .{} },
-            .{ .name = "certifications", .alias = "19", .options = .{} },
-            .{ .name = "remainingDiscoverableCredentials", .alias = "20", .options = .{} },
-            .{ .name = "vendorPrototypeConfigCommands", .alias = "21", .options = .{} },
+            .{ .name = "versions", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "aaguid", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "options", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "maxMsgSize", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocols", .field_options = .{ .alias = "6", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "maxCredentialCountInList", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
+            .{ .name = "maxCredentialIdLength", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "transports", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "algorithms", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "maxSerializedLargeBlobArray", .field_options = .{ .alias = "11", .serialization_type = .Integer } },
+            .{ .name = "forcePINChange", .field_options = .{ .alias = "12", .serialization_type = .Integer } },
+            .{ .name = "minPINLength", .field_options = .{ .alias = "13", .serialization_type = .Integer } },
+            .{ .name = "firmwareVersion", .field_options = .{ .alias = "14", .serialization_type = .Integer } },
+            .{ .name = "maxCredBlobLength", .field_options = .{ .alias = "15", .serialization_type = .Integer } },
+            .{ .name = "maxRPIDsForSetMinPINLength", .field_options = .{ .alias = "16", .serialization_type = .Integer } },
+            .{ .name = "preferredPlatformUvAttempts", .field_options = .{ .alias = "17", .serialization_type = .Integer } },
+            .{ .name = "uvModality", .field_options = .{ .alias = "18", .serialization_type = .Integer } },
+            .{ .name = "certifications", .field_options = .{ .alias = "19", .serialization_type = .Integer } },
+            .{ .name = "remainingDiscoverableCredentials", .field_options = .{ .alias = "20", .serialization_type = .Integer } },
+            .{ .name = "vendorPrototypeConfigCommands", .field_options = .{ .alias = "21", .serialization_type = .Integer } },
         },
-        .from_cborStringify = true,
+        .from_callback = true,
     }, out);
 }
 

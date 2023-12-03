@@ -48,38 +48,38 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
-            .{ .name = "pinUvAuthProtocol", .alias = "1", .options = .{ .enum_as_text = false } },
-            .{ .name = "subCommand", .alias = "2", .options = .{ .enum_as_text = false } },
-            .{ .name = "keyAgreement", .alias = "3", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
-            .{ .name = "newPinEnc", .alias = "5", .options = .{} },
-            .{ .name = "pinHashEnc", .alias = "6", .options = .{} },
-            .{ .name = "permissions", .alias = "9", .options = .{} },
-            .{ .name = "rpId", .alias = "10", .options = .{} },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "subCommand", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "keyAgreement", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "newPinEnc", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "pinHashEnc", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "permissions", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer } },
         },
-        .from_cborStringify = true,
+        .from_callback = true,
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
         .field_settings = &.{
-            .{ .name = "pinUvAuthProtocol", .alias = "1", .options = .{} },
-            .{ .name = "subCommand", .alias = "2", .options = .{} },
-            .{ .name = "keyAgreement", .alias = "3", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
-            .{ .name = "newPinEnc", .alias = "5", .options = .{} },
-            .{ .name = "pinHashEnc", .alias = "6", .options = .{} },
-            .{ .name = "permissions", .alias = "9", .options = .{} },
-            .{ .name = "rpId", .alias = "10", .options = .{} },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "subCommand", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "keyAgreement", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "newPinEnc", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "pinHashEnc", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "permissions", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer } },
         },
+        .from_callback = true,
     });
 }
 

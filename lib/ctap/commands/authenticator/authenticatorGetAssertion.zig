@@ -289,8 +289,13 @@ pub fn authenticatorGetAssertion(
     };
     defer cred.deinit(auth.allocator);
 
+    var write_back: bool = false;
+    if (!auth.constSignCount) {
+        cred.sign_count += 1;
+        write_back = true;
+    }
+
     var usageCnt = cred.sign_count;
-    cred.sign_count += 1;
 
     var user: ?fido.common.User = if (uv_response) blk: {
         // User identifiable information (name, DisplayName, icon)
@@ -372,10 +377,15 @@ pub fn authenticatorGetAssertion(
         .user = user,
     };
 
-    auth.writeCredential(cred.id, cred.rp.id, &cred) catch |err| {
-        std.log.err("makeCredential: unable to create credential ({any})", .{err});
-        return err;
-    };
+    if (write_back) {
+        // If the sign count is not updated we don't need to update the
+        // credentials DB entry, i.e. shared resident keys (passkeys)
+        // are not at risk getting out of sync.
+        auth.writeCredential(cred.id, cred.rp.id, &cred) catch |err| {
+            std.log.err("makeCredential: unable to create credential ({any})", .{err});
+            return err;
+        };
+    }
 
     try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);
     return status;

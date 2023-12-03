@@ -21,30 +21,30 @@ pub const HmacSecret = union(HmacSecretTag) {
     },
     output: []const u8,
 
-    pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+    pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
         _ = options;
 
         try cbor.stringify(self.*, .{
             .field_settings = &.{
-                .{ .name = "keyAgreement", .alias = "1", .options = .{} },
-                .{ .name = "saltEnc", .alias = "2", .options = .{} },
-                .{ .name = "saltAuth", .alias = "3", .options = .{} },
-                .{ .name = "pinUvAuthProtocol", .alias = "4", .options = .{} },
+                .{ .name = "keyAgreement", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+                .{ .name = "saltEnc", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+                .{ .name = "saltAuth", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+                .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             },
-            .from_cborStringify = true,
+            .from_callback = true,
         }, out);
     }
 
-    pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+    pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
         return try cbor.parse(@This(), item, .{
             .allocator = options.allocator,
-            .from_cborParse = true, // prevent infinite loops
             .field_settings = &.{
-                .{ .name = "keyAgreement", .alias = "1", .options = .{} },
-                .{ .name = "saltEnc", .alias = "2", .options = .{} },
-                .{ .name = "saltAuth", .alias = "3", .options = .{} },
-                .{ .name = "pinUvAuthProtocol", .alias = "4", .options = .{} },
+                .{ .name = "keyAgreement", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+                .{ .name = "saltEnc", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+                .{ .name = "saltAuth", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+                .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             },
+            .from_callback = true,
         });
     }
 };

@@ -28,25 +28,14 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
-    _ = options;
-
-    // Not perfect but this way we don't rely on options providing the allocator
-    var buffer: [2048]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const a = fba.allocator();
-
-    var b = try cbor.Builder.withType(a, .Map);
-    try b.pushTextString("id");
-    try b.pushByteString(self.id);
-    if (self.name) |name| {
-        try b.pushTextString("name");
-        try b.pushTextString(name);
-    }
-    if (self.displayName) |displayName| {
-        try b.pushTextString("displayName");
-        try b.pushTextString(displayName);
-    }
-    const x = try b.finish();
-    try out.writeAll(x);
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
+    return cbor.stringify(self, .{
+        .allocator = options.allocator,
+        .from_callback = true,
+        .field_settings = &.{
+            .{ .name = "id", .value_options = .{ .slice_serialization_type = .ByteString } },
+            .{ .name = "name", .value_options = .{ .slice_serialization_type = .TextString } },
+            .{ .name = "displayName", .value_options = .{ .slice_serialization_type = .TextString } },
+        },
+    }, out);
 }

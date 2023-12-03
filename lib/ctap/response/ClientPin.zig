@@ -28,18 +28,18 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
-            .{ .name = "keyAgreement", .alias = "1", .options = .{ .enum_as_text = false } },
-            .{ .name = "pinUvAuthToken", .alias = "2", .options = .{} },
-            .{ .name = "pinRetries", .alias = "3", .options = .{} },
-            .{ .name = "powerCycleState", .alias = "4", .options = .{} },
-            .{ .name = "uvRetries", .alias = "5", .options = .{} },
+            .{ .name = "keyAgreement", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "pinUvAuthToken", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "pinRetries", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "powerCycleState", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "uvRetries", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
         },
-        .from_cborStringify = true,
+        .from_callback = true,
     }, out);
 }
 
