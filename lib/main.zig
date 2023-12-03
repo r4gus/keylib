@@ -1,5 +1,7 @@
 const std = @import("std");
 
+pub const VERSION: []const u8 = "0.1.0";
+
 /// Used by multiple data types
 pub const common = struct {
     /// Representation of a relying party
