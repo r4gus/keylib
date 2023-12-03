@@ -8,7 +8,7 @@ const PinProtocol = fido.ctap.pinuv.common.PinProtocol;
 const ClientDataHash = fido.ctap.crypto.ClientDataHash;
 
 /// Relying party identifier.
-rpId: [:0]const u8, // 1
+rpId: []const u8, // 1
 /// Hash of the serialized client data collected by the host.
 clientDataHash: ClientDataHash, // 2
 /// A sequence of PublicKeyCredentialDescriptor structures, each
@@ -55,36 +55,36 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     return cbor.stringify(self, .{
         .allocator = options.allocator,
-        .from_cborStringify = true,
+        .from_callback = true,
         .field_settings = &.{
-            .{ .name = "rpId", .alias = "1", .options = .{} },
-            .{ .name = "clientDataHash", .alias = "2", .options = .{} },
-            .{ .name = "allowList", .alias = "3", .options = .{} },
-            .{ .name = "options", .alias = "5", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "6", .options = .{} },
-            .{ .name = "pinUvAuthProtocol", .alias = "7", .options = .{ .enum_as_text = false } },
-            .{ .name = "enterpriseAttestation", .alias = "8", .options = .{} },
-            .{ .name = "attestationFormatsPreference", .alias = "9", .options = .{ .enum_as_text = false } },
+            .{ .name = "rpId", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
+            .{ .name = "clientDataHash", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "allowList", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "options", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "7", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "enterpriseAttestation", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "attestationFormatsPreference", .field_options = .{ .alias = "9", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
         },
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
+        .from_callback = true,
         .field_settings = &.{
-            .{ .name = "rpId", .alias = "1", .options = .{} },
-            .{ .name = "clientDataHash", .alias = "2", .options = .{} },
-            .{ .name = "allowList", .alias = "3", .options = .{} },
-            .{ .name = "options", .alias = "5", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "6", .options = .{} },
-            .{ .name = "pinUvAuthProtocol", .alias = "7", .options = .{} },
-            .{ .name = "enterpriseAttestation", .alias = "8", .options = .{} },
-            .{ .name = "attestationFormatsPreference", .alias = "9", .options = .{ .enum_as_text = false } },
+            .{ .name = "rpId", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
+            .{ .name = "clientDataHash", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "allowList", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "options", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "7", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "enterpriseAttestation", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "attestationFormatsPreference", .field_options = .{ .alias = "9", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
         },
     });
 }

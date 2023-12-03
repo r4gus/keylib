@@ -11,12 +11,12 @@ alg: cbor.cose.Algorithm,
 /// ignoring any PublicKeyCredentialParameters with an unknown type.
 type: PublicKeyCredentialType = .@"public-key",
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
     return cbor.stringify(self, .{
-        .from_cborStringify = true,
+        .from_callback = true,
         .field_settings = &.{
-            .{ .name = "alg", .options = .{ .enum_as_text = false } },
+            .{ .name = "alg", .value_options = .{ .enum_serialization_type = .Integer } },
         },
     }, out);
 }

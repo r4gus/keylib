@@ -34,7 +34,7 @@ pub fn create_det(seed: []const u8, allocator: std.mem.Allocator) ?SigAlg.KeyPai
     @memcpy(priv, pk[0..]);
 
     var serialized_cred = std.ArrayList(u8).init(allocator);
-    cbor.stringify(&pubk, .{ .enum_as_text = false }, serialized_cred.writer()) catch {
+    cbor.stringify(&pubk, .{ .enum_serialization_type = .Integer }, serialized_cred.writer()) catch {
         allocator.free(priv);
         serialized_cred.deinit();
         return null;

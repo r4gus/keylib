@@ -59,40 +59,40 @@ pub fn requestsUp(self: *const @This()) bool {
     return if (self.options != null and self.options.?.up != null) self.options.?.up.? else true;
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     return cbor.stringify(self, .{
         .allocator = options.allocator,
-        .from_cborStringify = true,
+        .from_callback = true,
         .field_settings = &.{
-            .{ .name = "clientDataHash", .alias = "1", .options = .{} },
-            .{ .name = "rp", .alias = "2", .options = .{} },
-            .{ .name = "user", .alias = "3", .options = .{} },
-            .{ .name = "pubKeyCredParams", .alias = "4", .options = .{} },
-            .{ .name = "excludeList", .alias = "5", .options = .{} },
-            .{ .name = "extensions", .alias = "6", .options = .{} },
-            .{ .name = "options", .alias = "7", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
-            .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
-            .{ .name = "enterpriseAttestation", .alias = "10", .options = .{} },
+            .{ .name = "clientDataHash", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "rp", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "user", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "pubKeyCredParams", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "excludeList", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "options", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "enterpriseAttestation", .field_options = .{ .alias = "10", .serialization_type = .Integer } },
         },
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
+        .from_callback = true, // prevent infinite loops
         .field_settings = &.{
-            .{ .name = "clientDataHash", .alias = "1", .options = .{} },
-            .{ .name = "rp", .alias = "2", .options = .{} },
-            .{ .name = "user", .alias = "3", .options = .{} },
-            .{ .name = "pubKeyCredParams", .alias = "4", .options = .{} },
-            .{ .name = "excludeList", .alias = "5", .options = .{} },
-            .{ .name = "extensions", .alias = "6", .options = .{} },
-            .{ .name = "options", .alias = "7", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "8", .options = .{} },
-            .{ .name = "pinUvAuthProtocol", .alias = "9", .options = .{} },
-            .{ .name = "enterpriseAttestation", .alias = "10", .options = .{} },
+            .{ .name = "clientDataHash", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "rp", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "user", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "pubKeyCredParams", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "excludeList", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
+            .{ .name = "options", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "enterpriseAttestation", .field_options = .{ .alias = "10", .serialization_type = .Integer } },
         },
     });
 }

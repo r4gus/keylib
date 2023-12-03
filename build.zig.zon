@@ -4,8 +4,8 @@
 
     .dependencies = .{
         .zbor = .{
-            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.11.2.tar.gz",
-            .hash = "1220564a05b99958e346a53930b245adb37c0be69f9faa820297234fff3d0c2cb33c",
+            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.12.2.tar.gz",
+            .hash = "12206bbb8acbd91940b4e4d5cc2b3ea9c889de0f15b696cacb46c9208dcaa83bf8a6",
         },
     },
 }
