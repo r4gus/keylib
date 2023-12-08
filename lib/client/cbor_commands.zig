@@ -109,6 +109,49 @@ pub const credentials = struct {
         param: ?[]const u8 = null,
     };
 
+    pub const Promise = struct {
+        t: *Transport,
+        start: i64,
+        timeout: i64,
+
+        pub fn new(t: *Transport, timeout: i64) @This() {
+            return .{
+                .t = t,
+                .start = std.time.milliTimestamp(),
+                .timeout = timeout,
+            };
+        }
+
+        /// Returns null while data not ready, error if there is an error and a slice on success.
+        pub fn get(self: *@This(), allocator: std.mem.Allocator) !?[]const u8 {
+            if (std.time.milliTimestamp() - self.start > self.timeout) return error.Timeout;
+
+            var resp = self.t.read(allocator) catch |e| {
+                if (e == error.Processing) {
+                    std.log.info("get: processing request", .{});
+                    return null;
+                } else if (e == error.UpNeeded) {
+                    std.log.info("get: waiting for user presence", .{});
+                    return null;
+                } else {
+                    // This is an error we can't handle
+                    return e;
+                }
+            };
+
+            if (resp) |response| {
+                if (response[0] != 0) {
+                    allocator.free(response);
+                    return err.errorFromInt(response[0]);
+                }
+
+                return response;
+            } else {
+                return null;
+            }
+        }
+    };
+
     pub fn create(
         t: *Transport,
         public_key: PublicKey,
@@ -128,7 +171,7 @@ pub const credentials = struct {
         public_key: PublicKey,
         options: Options,
         a: std.mem.Allocator,
-    ) !void {
+    ) !Promise {
         if (public_key.rpId == null) {
             return error.RpIdMissing;
         }
@@ -186,39 +229,41 @@ pub const credentials = struct {
 
         try t.write(arr.items);
 
-        const start = std.time.milliTimestamp();
+        return Promise.new(t, public_key.timeout);
 
-        while (true) {
-            if (std.time.milliTimestamp() - start > public_key.timeout) return error.Timeout;
+        //const start = std.time.milliTimestamp();
 
-            var resp = t.read(a) catch |e| {
-                if (e == error.Processing) {
-                    std.log.info("get: processing request", .{});
-                    continue;
-                } else if (e == error.UpNeeded) {
-                    std.log.info("get: waiting for user presence", .{});
-                    continue;
-                } else {
-                    // This is an error we can't handle
-                    return e;
-                }
-            };
+        //while (true) {
+        //    if (std.time.milliTimestamp() - start > public_key.timeout) return error.Timeout;
 
-            if (resp) |response| {
-                defer a.free(response);
+        //    var resp = t.read(a) catch |e| {
+        //        if (e == error.Processing) {
+        //            std.log.info("get: processing request", .{});
+        //            continue;
+        //        } else if (e == error.UpNeeded) {
+        //            std.log.info("get: waiting for user presence", .{});
+        //            continue;
+        //        } else {
+        //            // This is an error we can't handle
+        //            return e;
+        //        }
+        //    };
 
-                std.log.info("{s}", .{std.fmt.fmtSliceHexLower(response)});
+        //    if (resp) |response| {
+        //        defer a.free(response);
 
-                if (response[0] != 0) {
-                    return err.errorFromInt(response[0]);
-                }
+        //        std.log.info("{s}", .{std.fmt.fmtSliceHexLower(response)});
 
-                return;
-            } else {
-                // read returns null on (internal) timeout
-                continue;
-            }
-        }
+        //        if (response[0] != 0) {
+        //            return err.errorFromInt(response[0]);
+        //        }
+
+        //        return;
+        //    } else {
+        //        // read returns null on (internal) timeout
+        //        continue;
+        //    }
+        //}
     }
 
     pub fn serialize(

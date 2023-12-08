@@ -148,7 +148,7 @@ pub fn main() !void {
         // 5 if there has been a identity provider selected, authenticate
         //   through the selected IdP
 
-        try client.cbor_commands.credentials.get(
+        var promise = try client.cbor_commands.credentials.get(
             device,
             "https://github.com",
             false,
@@ -162,6 +162,19 @@ pub fn main() !void {
             },
             allocator,
         );
+
+        while (true) {
+            const d = promise.get(allocator) catch |e| {
+                std.log.err("{s}", .{"error while creating assertion"});
+                return e;
+            };
+
+            if (d == null) continue;
+
+            std.log.info("{s}", .{std.fmt.fmtSliceHexLower(d.?)});
+            allocator.free(d.?);
+            break;
+        }
     }
 
     //if (gpa.detectLeaks()) {
