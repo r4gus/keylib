@@ -269,6 +269,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    // Sort credentials "newest" to "oldest"
     std.mem.sort(
         fido.ctap.authenticator.Credential,
         credentials.items,
@@ -282,8 +283,37 @@ pub fn authenticatorGetAssertion(
         // TODO
         break :blk credentials.orderedRemove(0);
     } else if (auth.callbacks.select != null and (uv or up)) blk: {
-        // TODO
-        break :blk credentials.orderedRemove(0);
+        // Let the user select one of the many credentials via
+        // device specific interface
+        var users = try auth.allocator.alloc([*c]const u8, credentials.items.len + 1);
+        defer {
+            var oi: usize = 0;
+            while (oi < credentials.items.len) : (oi += 1) {
+                var ii: usize = 0;
+                while (users[oi][ii] != 0) : (ii += 1) {}
+                auth.allocator.free(users[oi][0..ii]);
+            }
+            auth.allocator.free(users);
+        }
+
+        for (credentials.items, 0..) |cred, index| {
+            users[index] = try std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
+                if (cred.user.displayName) |name| name else "",
+                if (cred.user.name) |name| name else "",
+            });
+        }
+        users[credentials.items.len] = null;
+
+        const rpId = try auth.allocator.dupeZ(u8, gap.rpId);
+        defer auth.allocator.free(rpId);
+
+        var cred_index = auth.callbacks.select.?(rpId.ptr, users.ptr);
+        if (cred_index < 0) {
+            std.log.info("no credential selected by user. using default index 0...", .{});
+            cred_index = 0;
+        }
+
+        break :blk credentials.orderedRemove(@as(usize, @intCast(cred_index)));
     } else blk: {
         break :blk credentials.orderedRemove(0);
     };
