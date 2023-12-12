@@ -8,7 +8,7 @@ pub const StatusCodes = error{
     /// Invalid message sequencing.
     ctap1_err_invalid_seq,
     /// Message timed out.
-    ctap1_err_tiemout,
+    ctap1_err_timeout,
     /// Channel busy.
     ctap1_err_channel_busy,
     /// Command requires channel lock.
@@ -103,6 +103,8 @@ pub const StatusCodes = error{
     ctap2_err_vendor_first,
     /// Vendor specific error.
     ctap2_err_vendor_last,
+    // user defined --------------
+    client_timeout,
 };
 
 pub fn errorFromInt(i: u8) StatusCodes {
@@ -110,6 +112,49 @@ pub fn errorFromInt(i: u8) StatusCodes {
         0x01 => StatusCodes.ctap1_err_invalid_command,
         0x02 => StatusCodes.ctap1_err_invalid_parameter,
         0x03 => StatusCodes.ctap1_err_invalid_length,
+        0x04 => StatusCodes.ctap1_err_invalid_seq,
+        0x05 => StatusCodes.ctap1_err_timeout,
+        0x06 => StatusCodes.ctap1_err_channel_busy,
+        0x0a => StatusCodes.ctap1_err_lock_required,
+        0x0b => StatusCodes.ctap1_err_invalid_channel,
+        0x11 => StatusCodes.ctap2_err_cbor_unexpected_type,
+        0x12 => StatusCodes.ctap2_err_invalid_cbor,
+        0x14 => StatusCodes.ctap2_err_missing_parameter,
+        0x15 => StatusCodes.ctap2_err_limit_exceeded,
+        0x16 => StatusCodes.ctap2_err_unsupported_extension,
+        0x19 => StatusCodes.ctap2_err_credential_excluded,
+        0x21 => StatusCodes.ctap2_err_processing,
+        0x22 => StatusCodes.ctap2_err_invalid_credential,
+        0x23 => StatusCodes.ctap2_err_user_action_pending,
+        0x24 => StatusCodes.ctap2_err_operation_pending,
+        0x25 => StatusCodes.ctap2_err_no_operations,
+        0x26 => StatusCodes.ctap2_err_unsupported_algorithm,
+        0x27 => StatusCodes.ctap2_err_operation_denied,
+        0x28 => StatusCodes.ctap2_err_key_store_full,
+        0x29 => StatusCodes.ctap2_err_not_busy,
+        0x2a => StatusCodes.ctap2_err_no_operation_pending,
+        0x2b => StatusCodes.ctap2_err_unsupported_option,
+        0x2c => StatusCodes.ctap2_err_invalid_option,
+        0x2d => StatusCodes.ctap2_err_keepalive_cancel,
+        0x2e => StatusCodes.ctap2_err_no_credentials,
+        0x2f => StatusCodes.ctap2_err_user_action_timeout,
+        0x30 => StatusCodes.ctap2_err_not_allowed,
+        0x31 => StatusCodes.ctap2_err_pin_invalid,
+        0x32 => StatusCodes.ctap2_err_pin_blocked,
+        0x33 => StatusCodes.ctap2_err_pin_auth_invalid,
+        0x34 => StatusCodes.ctap2_err_pin_auth_blocked,
+        0x35 => StatusCodes.ctap2_err_pin_not_set,
+        0x36 => StatusCodes.ctap2_err_pin_required,
+        0x37 => StatusCodes.ctap2_err_pin_policy_violation,
+        0x38 => StatusCodes.ctap2_err_pin_token_expired,
+        0x39 => StatusCodes.ctap2_err_request_too_large,
+        0x3a => StatusCodes.ctap2_err_action_timeout,
+        0x3b => StatusCodes.ctap2_err_up_required,
+        0x3c => StatusCodes.ctap2_err_uv_blocked,
+        0x3d => StatusCodes.ctap2_err_integrity_failure,
+        0x3e => StatusCodes.ctap2_err_invalid_subcommand,
+        0x3f => StatusCodes.ctap2_err_uv_invalid,
+        0x40 => StatusCodes.ctap2_err_unauthorized_permission,
         else => StatusCodes.ctap1_err_other,
     };
 }

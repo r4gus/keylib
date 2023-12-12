@@ -3,6 +3,7 @@ const client = @import("client");
 const authenticatorGetInfo = client.cbor_commands.authenticatorGetInfo;
 const client_pin = client.cbor_commands.client_pin;
 const cred_management = client.cbor_commands.cred_management;
+const Info = client.cbor_commands.Info;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
@@ -48,7 +49,9 @@ pub fn main() !void {
         defer device.close();
 
         // Get information about the device and its capabilities
-        const info = try authenticatorGetInfo(device, allocator);
+        const infos = try (try authenticatorGetInfo(device)).@"await"(allocator);
+        defer infos.deinit(allocator);
+        const info = try infos.deserializeCbor(Info, allocator);
         defer info.deinit(allocator);
         //std.log.info("info: {any}", .{info});
 
@@ -164,16 +167,25 @@ pub fn main() !void {
         );
 
         while (true) {
-            const d = promise.get(allocator) catch |e| {
-                std.log.err("{s}", .{"error while creating assertion"});
-                return e;
-            };
+            const S = promise.get(allocator);
+            defer S.deinit(allocator);
 
-            if (d == null) continue;
-
-            std.log.info("{s}", .{std.fmt.fmtSliceHexLower(d.?)});
-            allocator.free(d.?);
-            break;
+            switch (S) {
+                .pending => |p| {
+                    switch (p) {
+                        .processing => std.log.info("processing", .{}),
+                        .user_presence => std.log.info("user presence", .{}),
+                        .waiting => std.log.info("waiting", .{}),
+                    }
+                },
+                .fulfilled => |d| {
+                    std.log.info("{s}", .{std.fmt.fmtSliceHexLower(d)});
+                    break;
+                },
+                .rejected => |e| {
+                    return e;
+                },
+            }
         }
     }
 

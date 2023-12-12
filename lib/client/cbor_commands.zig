@@ -4,22 +4,110 @@ const cbor = @import("zbor");
 const Transport = @import("Transport.zig");
 const err = @import("error.zig");
 
+/// The Promise represents the eventual completion of a operation.
+pub const Promise = struct {
+    t: *Transport,
+    start: i64,
+    timeout: i64,
+
+    pub const StateTag = enum { pending, fulfilled, rejected };
+    pub const Pending = enum { processing, user_presence, waiting };
+    pub const State = union(StateTag) {
+        pending: Pending,
+        fulfilled: []const u8,
+        rejected: err.StatusCodes,
+
+        pub fn deinit(self: *const @This(), a: std.mem.Allocator) void {
+            switch (self.*) {
+                .pending => {},
+                .rejected => {},
+                .fulfilled => |data| {
+                    a.free(data);
+                },
+            }
+        }
+
+        pub fn deserializeCbor(self: *const @This(), comptime T: type, a: std.mem.Allocator) !T {
+            return switch (self.*) {
+                .pending => error.Pending,
+                .rejected => error.Rejected,
+                .fulfilled => |data| blk: {
+                    break :blk try cbor.parse(T, try cbor.DataItem.new(data[1..]), .{ .allocator = a });
+                },
+            };
+        }
+    };
+
+    /// Create a new Promise with a timeout in ms.
+    pub fn new(t: *Transport, timeout: i64) @This() {
+        return .{
+            .t = t,
+            .start = std.time.milliTimestamp(),
+            .timeout = timeout,
+        };
+    }
+
+    /// Wait until the promise is fulfilled.
+    ///
+    /// Either returns fulfilled or an error.
+    pub fn @"await"(self: *const @This(), allocator: std.mem.Allocator) !State {
+        while (true) {
+            const S = self.get(allocator);
+
+            switch (S) {
+                .pending => {},
+                .fulfilled => return S,
+                .rejected => |e| return e,
+            }
+        }
+    }
+
+    /// Query the current state of the Promise.
+    pub fn get(self: *const @This(), allocator: std.mem.Allocator) State {
+        if (std.time.milliTimestamp() - self.start > self.timeout) {
+            return .{ .rejected = err.StatusCodes.client_timeout };
+            // TODO: should we send a abort message or something???
+        }
+
+        var resp = self.t.read(allocator) catch |e| {
+            if (e == error.Processing) {
+                return .{ .pending = .processing };
+            } else if (e == error.UpNeeded) {
+                return .{ .pending = .user_presence };
+            } else {
+                // This is an error we can't handle
+                return .{ .rejected = err.StatusCodes.ctap1_err_other };
+            }
+        };
+
+        if (resp) |response| {
+            if (response[0] != 0) {
+                allocator.free(response);
+                return .{ .rejected = err.errorFromInt(response[0]) };
+            }
+
+            return .{ .fulfilled = response };
+        } else {
+            return .{ .pending = .waiting };
+        }
+    }
+};
+
 // ///////////////////////////////////////
 // Get Info
 // ///////////////////////////////////////
 
+/// Information about a FIDO authenticator including:
+/// * version (e.g. FIDO_2_1)
+/// * pinUvAuthProtocols (none, 1, 2): this is important when requesting a token
+/// * options: e.g. rk (supports discoverable credentials, also known as passkeys)
 pub const Info = keylib.ctap.authenticator.Settings;
 
-pub fn authenticatorGetInfo(t: *Transport, a: std.mem.Allocator) !Info {
+/// Make a authenticatorGetInfo request
+pub fn authenticatorGetInfo(t: *Transport) !Promise {
     const cmd = "\x04";
-
     try t.write(cmd);
-    if (try t.read(a)) |response| {
-        defer a.free(response);
-        return try cbor.parse(Info, try cbor.DataItem.new(response[1..]), .{ .allocator = a });
-    } else {
-        return error.MissingResponse;
-    }
+    return Promise.new(t, 500);
 }
 
 // ///////////////////////////////////////
@@ -107,49 +195,6 @@ pub const credentials = struct {
     pub const Options = struct {
         protocol: ?keylib.ctap.pinuv.common.PinProtocol = null,
         param: ?[]const u8 = null,
-    };
-
-    pub const Promise = struct {
-        t: *Transport,
-        start: i64,
-        timeout: i64,
-
-        pub fn new(t: *Transport, timeout: i64) @This() {
-            return .{
-                .t = t,
-                .start = std.time.milliTimestamp(),
-                .timeout = timeout,
-            };
-        }
-
-        /// Returns null while data not ready, error if there is an error and a slice on success.
-        pub fn get(self: *@This(), allocator: std.mem.Allocator) !?[]const u8 {
-            if (std.time.milliTimestamp() - self.start > self.timeout) return error.Timeout;
-
-            var resp = self.t.read(allocator) catch |e| {
-                if (e == error.Processing) {
-                    std.log.info("get: processing request", .{});
-                    return null;
-                } else if (e == error.UpNeeded) {
-                    std.log.info("get: waiting for user presence", .{});
-                    return null;
-                } else {
-                    // This is an error we can't handle
-                    return e;
-                }
-            };
-
-            if (resp) |response| {
-                if (response[0] != 0) {
-                    allocator.free(response);
-                    return err.errorFromInt(response[0]);
-                }
-
-                return response;
-            } else {
-                return null;
-            }
-        }
     };
 
     pub fn create(
