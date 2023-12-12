@@ -2,7 +2,9 @@
 
 FIDO2 compatible authenticator library written in [Zig](https://ziglang.org/).
 
-Checkout: [KeyPassPro](https://github.com/r4gus/keypass)
+If you want to see an example on how to use keylib, check out [PassKeeZ](https://github.com/r4gus/keypass).
+
+Also, check out the [Wiki](https://github.com/r4gus/keylib/wiki).
 
 ## QA
 
