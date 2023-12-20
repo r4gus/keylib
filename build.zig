@@ -70,6 +70,18 @@ pub fn build(b: *std.build.Builder) !void {
     const client_step = b.step("client", "Build the client application");
     client_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
 
+    var repl = b.addExecutable(.{
+        .name = "frepl",
+        .root_source_file = .{ .path = "src/repl.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    repl.addModule("client", client_module);
+    repl.linkLibrary(hidapi_dep.artifact("hidapi"));
+
+    const repl_step = b.step("repl", "Build the client repl");
+    repl_step.dependOn(&b.addInstallArtifact(repl, .{}).step);
+
     // C bindings
     // ------------------------------------------------
 

@@ -125,16 +125,6 @@ pub const credentials = struct {
             indirect,
         };
 
-        pub const Formats = enum {
-            @"packed",
-            tpm,
-            @"android-key",
-            @"android-safetynet",
-            @"fido-u2f",
-            apple,
-            none,
-        };
-
         pub const Attachment = enum {
             platform,
             @"cross-platform",
@@ -154,17 +144,6 @@ pub const credentials = struct {
             usb,
         };
 
-        pub const ExcludeCredential = struct {
-            id: []const u8,
-            transports: []const Transports,
-            type: []const u8 = "public-key",
-        };
-
-        pub const PubKeyCredParam = struct {
-            alg: i32,
-            type: []const u8 = "public-key",
-        };
-
         pub const Hints = enum {
             @"security-key",
             @"client-device",
@@ -172,7 +151,7 @@ pub const credentials = struct {
         };
 
         attestation: ?[]const u8 = null,
-        attestationFormats: ?[]const Formats = null,
+        attestationFormats: ?[]const keylib.common.AttestationStatementFormatIdentifiers = null,
         authenticatorSelection: ?struct {
             authenticatorAttachment: ?Attachment = null,
             requireResidentKey: ?bool = null,
@@ -180,9 +159,9 @@ pub const credentials = struct {
             userVerification: ?Requirements = null,
         } = null,
         challenge: []const u8,
-        excludeCredentials: ?[]const ExcludeCredential = null,
+        excludeCredentials: ?[]const keylib.common.PublicKeyCredentialDescriptor = null,
         allowCredentials: ?[]const keylib.common.PublicKeyCredentialDescriptor = null,
-        pubKeyCredParams: ?[]const PubKeyCredParam = null,
+        pubKeyCredParams: ?[]const keylib.common.PublicKeyCredentialParameters = null,
         rp: ?keylib.common.RelyingParty = null,
         rpId: ?[]const u8 = null,
         /// The time in ms the rp is willing to wait
@@ -199,14 +178,82 @@ pub const credentials = struct {
 
     pub fn create(
         t: *Transport,
+        origin: []const u8,
+        crossOrigin: bool,
         public_key: PublicKey,
         options: Options,
         a: std.mem.Allocator,
     ) !void {
-        _ = t;
-        _ = public_key;
-        _ = options;
-        _ = a;
+        if (public_key.rp == null) {
+            return error.RpMissing;
+        }
+        if (public_key.user == null) {
+            return error.UserMissing;
+        }
+        if (public_key.pubKeyCredParams == null) {
+            return error.PubKeyCredParamsMissing;
+        }
+
+        // The challenge is base64 encoded before being integrated into the client data
+        const Base64 = std.base64.url_safe.Encoder;
+        var challenge = try a.alloc(u8, Base64.calcSize(public_key.challenge.len));
+        defer a.free(challenge);
+        _ = Base64.encode(challenge, public_key.challenge);
+
+        // Serialize the client data and then hash them...
+        const client_data = try serialize(
+            a,
+            "webauthn.create",
+            challenge,
+            origin,
+            crossOrigin,
+        );
+        defer a.free(client_data);
+        var client_data_hash: [Sha256.digest_length]u8 = undefined;
+        Sha256.hash(client_data, client_data_hash[0..], .{});
+
+        // TODO: compare origin to public_key.rp.id ???
+
+        const param: ?[]const u8 = if (options.param != null and options.protocol != null) blk: {
+            const param = switch (options.protocol.?) {
+                .V1 => try PinUvAuth.authenticate_v1(options.param.?, &client_data_hash, a),
+                .V2 => try PinUvAuth.authenticate_v2(options.param.?, &client_data_hash, a),
+            };
+            break :blk param;
+        } else blk: {
+            break :blk null;
+        };
+        defer {
+            if (param) |p| {
+                a.free(p);
+            }
+        }
+
+        const cmd = 0x01;
+        var request = keylib.ctap.request.MakeCredential{
+            .clientDataHash = client_data_hash,
+            .rp = public_key.rp.?,
+            .user = public_key.user.?,
+            .pubKeyCredParams = public_key.pubKeyCredParams.?,
+            .excludeList = public_key.excludeCredentials,
+            // TODO: extensions
+            // TODO: options
+            .pinUvAuthParam = param,
+            .pinUvAuthProtocol = options.protocol,
+        };
+        defer a.free(request.rpId);
+
+        var arr = std.ArrayList(u8).init(a);
+        defer arr.deinit();
+
+        try arr.append(cmd);
+        try cbor.stringify(request, .{}, arr.writer());
+
+        std.log.info("{s}", .{std.fmt.fmtSliceHexLower(arr.items)});
+
+        try t.write(arr.items);
+
+        return Promise.new(t, public_key.timeout);
     }
 
     pub fn get(
@@ -220,6 +267,8 @@ pub const credentials = struct {
         if (public_key.rpId == null) {
             return error.RpIdMissing;
         }
+
+        // TODO: compare origin to public_key.rp.id ???
 
         // The challenge is base64 encoded before being integrated into the client data
         const Base64 = std.base64.url_safe.Encoder;
@@ -275,42 +324,11 @@ pub const credentials = struct {
         try t.write(arr.items);
 
         return Promise.new(t, public_key.timeout);
-
-        //const start = std.time.milliTimestamp();
-
-        //while (true) {
-        //    if (std.time.milliTimestamp() - start > public_key.timeout) return error.Timeout;
-
-        //    var resp = t.read(a) catch |e| {
-        //        if (e == error.Processing) {
-        //            std.log.info("get: processing request", .{});
-        //            continue;
-        //        } else if (e == error.UpNeeded) {
-        //            std.log.info("get: waiting for user presence", .{});
-        //            continue;
-        //        } else {
-        //            // This is an error we can't handle
-        //            return e;
-        //        }
-        //    };
-
-        //    if (resp) |response| {
-        //        defer a.free(response);
-
-        //        std.log.info("{s}", .{std.fmt.fmtSliceHexLower(response)});
-
-        //        if (response[0] != 0) {
-        //            return err.errorFromInt(response[0]);
-        //        }
-
-        //        return;
-        //    } else {
-        //        // read returns null on (internal) timeout
-        //        continue;
-        //    }
-        //}
     }
 
+    /// Serialize the collected client data.
+    ///
+    /// Also see: [WebAuthn](https://www.w3.org/TR/webauthn/#clientdatajson-serialization)
     pub fn serialize(
         a: std.mem.Allocator,
         typ: []const u8,

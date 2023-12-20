@@ -41,6 +41,8 @@ pub fn main() !void {
                 defer allocator.free(x);
                 std.log.info("  {d} {s}", .{ i, x });
             }
+            // Here we would actually ask for some user input but
+            // let's keep it simple...
             break :blk &transports.devices[0];
         };
 
@@ -79,6 +81,7 @@ pub fn main() !void {
         // 1.c if the uv option ID is present and set to true:
         var op: ?[]const u8 = null;
 
+        // We prefer internal uv over pin
         if (info.options.uv != null and info.options.uv.?) {
             if (info.options.pinUvAuthToken != null and info.options.pinUvAuthToken.?) {
                 op = "getPinUvAuthTokenUsingUvWithPermissions";
@@ -122,9 +125,9 @@ pub fn main() !void {
         const token = if (std.mem.eql(u8, op.?, "getPinToken")) blk: {
             break :blk try client_pin.getPinToken(device, &enc, pw[0..], allocator);
         } else if (std.mem.eql(u8, op.?, "getPinUvAuthTokenUsingUvWithPermissions")) blk: {
-            break :blk "";
+            break :blk ""; // here we would return a token generated via getPinUvAuthTokenUsingUvWithPermissions
         } else blk: {
-            break :blk "";
+            break :blk ""; // here we would return a token generated via getPinUvAuthTokenUsingPinWithPermissions
         };
         defer allocator.free(token);
         std.log.info("token: {s}", .{std.fmt.fmtSliceHexLower(token)});
@@ -132,31 +135,67 @@ pub fn main() !void {
         // 4 the platform collects all RPs present on the given authenticator, removes RPs that
         //   are not supported IdPs, and then selects the IdP for authentication
 
+        // 4.a Create a empty set of idps
+        var idps = std.ArrayList([]const u8).init(allocator);
+        defer {
+            for (idps.items) |idp| {
+                allocator.free(idp);
+            }
+        }
+
+        // 4.b Fill the set with RPs present on the authenticator
         var rp = try cred_management.enumerateRPsBegin(device, pinUvAuthProtocol, token, allocator, true);
         if (rp) |_rp| {
             defer _rp.deinit();
-            std.log.info("id: {s}", .{_rp.rp.id});
+            try idps.append(try allocator.dupe(u8, _rp.rp.id));
 
             var i: usize = 0;
             while (i < _rp.total.? - 1) : (i += 1) {
                 if (try cred_management.enumerateRPsGetNextRP(device, allocator, true)) |rp2| {
                     defer rp2.deinit();
-                    std.log.info("id: {s}", .{rp2.rp.id});
+                    try idps.append(try allocator.dupe(u8, rp2.rp.id));
                 }
             }
         } else {
-            std.log.info("no RPs", .{});
+            std.log.info("no valid RPs found", .{});
+            return;
         }
+
+        // 4.c Remove all RPs that are not valid IdPs
+        var i: usize = 0;
+        while (true) {
+            if (i >= idps.items.len) break;
+            if (!std.mem.eql(u8, "github.com", idps.items[i])) {
+                // The only valid IdP in our case is github.com
+                const s = idps.swapRemove(i);
+                allocator.free(s);
+            } else {
+                i += 1;
+            }
+        }
+
+        if (idps.items.len == 0) {
+            std.log.info("no valid RPs found", .{});
+            return;
+        }
+
+        std.log.info("IdPs found:", .{});
+        for (idps.items) |idp| {
+            std.log.info("    {s}", .{idp});
+        }
+
+        const uri = try std.fmt.allocPrint(allocator, "https://{s}", .{idps.items[0]});
+        defer allocator.free(uri);
 
         // 5 if there has been a identity provider selected, authenticate
         //   through the selected IdP
 
         var promise = try client.cbor_commands.credentials.get(
             device,
-            "https://github.com",
+            uri,
             false,
             .{
-                .rpId = "github.com",
+                .rpId = idps.items[0],
                 .challenge = "\x01\x23\x45\x67\x89\xab",
             },
             .{
