@@ -195,7 +195,7 @@ pub const CtapHid = struct {
 
     pub fn handle(self: *@This(), packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
         //std.log.err("{s}", .{std.fmt.fmtSliceHexLower(packet)});
-        if (self.begin != null and (std.time.milliTimestamp() - self.begin.?) > CtapHid.timeout) {
+        if (self.begin != null and (auth.milliTimestamp() - self.begin.?) > CtapHid.timeout) {
             // the previous transaction has timed out -> reset
             self.reset();
         }
@@ -209,7 +209,7 @@ pub const CtapHid = struct {
             }
 
             self.busy = misc.sliceToInt(Cid, packet[0..4]);
-            self.begin = std.time.milliTimestamp();
+            self.begin = auth.milliTimestamp();
 
             if (!isBroadcast(self.busy.?) and !self.isValidChannel(self.busy.?)) {
                 return self.@"error"(ErrorCodes.invalid_channel);

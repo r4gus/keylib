@@ -396,7 +396,7 @@ pub fn authenticatorMakeCredential(
         .policy = policy,
         .cred_random_with_uv = cred_random_with_uv,
         .cred_random_without_uv = cred_random_without_uv,
-        .created = std.time.milliTimestamp(),
+        .created = auth.milliTimestamp(),
     };
     defer auth.allocator.free(entry.id);
 

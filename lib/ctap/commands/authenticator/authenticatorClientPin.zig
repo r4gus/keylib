@@ -122,7 +122,7 @@ pub fn authenticatorClientPin(
             }
 
             auth.token.resetPinUvAuthToken(); // invalidates existing tokens
-            auth.token.beginUsingPinUvAuthToken(user_present, std.time.milliTimestamp());
+            auth.token.beginUsingPinUvAuthToken(user_present, auth.milliTimestamp());
 
             auth.token.permissions = client_pin_param.permissions.?;
 

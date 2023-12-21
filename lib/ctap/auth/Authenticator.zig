@@ -53,6 +53,8 @@ pub const Auth = struct {
     /// Cryptographic secure (P)RNG
     random: std.rand.Random = std.crypto.random,
 
+    milliTimestamp: *const fn () i64 = std.time.milliTimestamp,
+
     pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {
         return .{
             .callbacks = callbacks,
@@ -243,7 +245,7 @@ pub const Auth = struct {
 
         // Updates (and possibly invalidates) an existing pinUvAuth token. This has to
         // be done before handling any request.
-        self.token.pinUvAuthTokenUsageTimerObserver(std.time.milliTimestamp());
+        self.token.pinUvAuthTokenUsageTimerObserver(self.milliTimestamp());
 
         switch (cmd) {
             .authenticatorMakeCredential => {
