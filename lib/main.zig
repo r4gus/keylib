@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const VERSION: []const u8 = "0.1.0";
+pub const VERSION: []const u8 = "0.2.0";
 
 /// Used by multiple data types
 pub const common = struct {
