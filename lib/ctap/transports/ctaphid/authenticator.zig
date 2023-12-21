@@ -152,11 +152,15 @@ pub const CtapHid = struct {
 
     channels: std.ArrayList(Cid),
 
+    /// CSPRNG
+    random: std.rand.Random,
+
     const timeout: u64 = 250; // 250 milli second timeout
 
-    pub fn init(a: std.mem.Allocator) @This() {
+    pub fn init(a: std.mem.Allocator, random: std.rand.Random) @This() {
         return .{
             .channels = std.ArrayList(Cid).init(a),
+            .random = random,
         };
     }
 
@@ -174,7 +178,7 @@ pub const CtapHid = struct {
             // Remove first entry inserted
             _ = self.channels.orderedRemove(0);
         }
-        const cid = std.crypto.random.int(u32);
+        const cid = self.random.int(u32);
         self.channels.append(cid) catch |e| {
             std.log.err("unable to allocate memory for CID {d}", .{cid});
             return e;

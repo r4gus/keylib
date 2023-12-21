@@ -33,7 +33,7 @@ export fn ctaphid_init() ?*anyopaque {
         return null;
     };
 
-    c.* = CtapHid.init(allocator);
+    c.* = CtapHid.init(allocator, std.crypto.random);
 
     return @as(*anyopaque, @ptrCast(c));
 }

@@ -50,6 +50,9 @@ pub const Auth = struct {
 
     allocator: Allocator,
 
+    /// Cryptographic secure (P)RNG
+    random: std.rand.Random = std.crypto.random,
+
     pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {
         return .{
             .callbacks = callbacks,

@@ -62,9 +62,9 @@ pub const DataIterator = struct {
         while (self.d[i] != null) {
             var x = self.d[i];
             const l = strlen(x);
-            // First overwrite the region with random data. This prevents sensitive information
+            // First overwrite the region with 0. This prevents sensitive information
             // from lingering in memory for longer than neccessary.
-            std.crypto.random.bytes(x[0..l]);
+            @memset(x[0..l], 0);
             // Then free the memory
             self.allocator.free(x[0 .. l + 1]);
             i += 1;

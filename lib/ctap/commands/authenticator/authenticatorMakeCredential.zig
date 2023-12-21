@@ -338,8 +338,8 @@ pub fn authenticatorMakeCredential(
     // Hmac-Secret
     var cred_random_with_uv: [32]u8 = undefined;
     var cred_random_without_uv: [32]u8 = undefined;
-    std.crypto.random.bytes(cred_random_with_uv[0..]);
-    std.crypto.random.bytes(cred_random_without_uv[0..]);
+    auth.random.bytes(cred_random_with_uv[0..]);
+    auth.random.bytes(cred_random_without_uv[0..]);
 
     if (mcp.extensions) |ext| {
         if (ext.credProtect) |pol| {
@@ -365,7 +365,7 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var id = try auth.allocator.alloc(u8, 32);
     while (true) {
-        std.crypto.random.bytes(id);
+        auth.random.bytes(id);
         for (id) |b| {
             // disallow 0 bytes
             if (b == 0) continue;
@@ -375,7 +375,7 @@ pub fn authenticatorMakeCredential(
     id[0] = 0xFF;
 
     const key_pair = if (alg.create(
-        std.crypto.random,
+        auth.random,
         auth.allocator,
     )) |kp| kp else {
         std.log.err("MakeCredential: unable to generate credential for alg = {any}", .{alg.alg});
