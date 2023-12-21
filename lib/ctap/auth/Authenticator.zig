@@ -333,6 +333,14 @@ pub const Auth = struct {
                     return Response{ .err = @intFromEnum(status) };
                 }
             },
+            .authenticatorSelection => {
+                const status = fido.ctap.commands.authenticator.authenticatorSelection(self);
+
+                if (status != .ctap1_err_success) {
+                    res.deinit();
+                    return Response{ .err = @intFromEnum(status) };
+                }
+            },
             else => {
                 res.deinit();
                 return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
