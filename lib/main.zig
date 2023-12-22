@@ -184,6 +184,7 @@ pub const ctap = struct {
             pub const authenticatorClientPin = @import("ctap/commands/authenticator/authenticatorClientPin.zig").authenticatorClientPin;
             pub const authenticatorSelection = @import("ctap/commands/authenticator/authenticatorSelection.zig").authenticatorSelection;
             pub const authenticatorCredentialManagement = @import("ctap/commands/authenticator/authenticatorCredentialManagement.zig").authenticatorCredentialManagement;
+            pub const GaErr = @import("ctap/commands/authenticator/authenticatorGetAssertion.zig").GaErr;
         };
     };
 

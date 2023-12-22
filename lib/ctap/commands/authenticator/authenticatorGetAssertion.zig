@@ -7,8 +7,8 @@ const helper = @import("helper.zig");
 pub fn authenticatorGetAssertion(
     auth: *fido.ctap.authenticator.Auth,
     gap: *const fido.ctap.request.GetAssertion,
-    out: anytype,
-) !fido.ctap.StatusCodes {
+    out: *std.ArrayList(u8),
+) fido.ctap.StatusCodes {
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -42,14 +42,16 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate alwaysUv
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    const alwaysUv = try auth.alwaysUv();
+    const alwaysUv = auth.alwaysUv() catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
     const noMcGaPermissionsWithClientPin = auth.noMcGaPermissionsWithClientPin();
 
     if (alwaysUv and up) blk: {
         const is_protected = auth.isProtected();
 
         if (!is_protected) {
-            std.log.err("makeCredential: alwaysUv = true but not protected", .{});
+            std.log.err("getAssertion: alwaysUv = true but not protected", .{});
             // This handles the case that clientPin is supported in general
             // but not configured yet.
             if (auth.clientPinSupported()) |_| {
@@ -90,7 +92,7 @@ pub fn authenticatorGetAssertion(
     // WE ARE CURRENTLY NOT ENTERPRISE ATTESTATION CAPABLE!
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (gap.enterpriseAttestation) |ea| {
-        std.log.err("makeCredential: enterprise attestation not supported", .{});
+        std.log.err("getAssertion: enterprise attestation not supported", .{});
         _ = ea;
         return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
     }
@@ -128,7 +130,10 @@ pub fn authenticatorGetAssertion(
                 auth.token.setRpId(gap.rpId);
             }
         } else if (uv) {
-            var r = try std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId});
+            var r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
+                std.log.err("getAssertion: unable to allocate memory for rpId", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
             defer auth.allocator.free(r);
 
             const uvState = auth.token.performBuiltInUv(
@@ -166,7 +171,7 @@ pub fn authenticatorGetAssertion(
     var credentials = std.ArrayList(fido.ctap.authenticator.Credential).fromOwnedSlice(
         auth.allocator,
         auth.loadCredentials(gap.rpId) catch {
-            std.log.err("authenticatorGetAssertion: unable to fetch credentials", .{});
+            std.log.err("getAssertion: unable to fetch credentials", .{});
             return fido.ctap.StatusCodes.ctap2_err_no_credentials;
         },
     );
@@ -237,7 +242,10 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var r = try std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId});
+    var r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
+        std.log.err("getAssertion: unable to allocate memory for rpId", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
     defer auth.allocator.free(r);
 
     if (up and !up_response) {
@@ -285,7 +293,10 @@ pub fn authenticatorGetAssertion(
     } else if (auth.callbacks.select != null and (uv or up)) blk: {
         // Let the user select one of the many credentials via
         // device specific interface
-        var users = try auth.allocator.alloc([*c]const u8, credentials.items.len + 1);
+        var users = auth.allocator.alloc([*c]const u8, credentials.items.len + 1) catch {
+            std.log.err("getAssertion: unable to allocate memory for credentials", .{});
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        };
         defer {
             var oi: usize = 0;
             while (oi < credentials.items.len) : (oi += 1) {
@@ -297,14 +308,20 @@ pub fn authenticatorGetAssertion(
         }
 
         for (credentials.items, 0..) |cred, index| {
-            users[index] = try std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
+            users[index] = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
                 if (cred.user.displayName) |name| name else "",
                 if (cred.user.name) |name| name else "",
-            });
+            }) catch {
+                std.log.err("getAssertion: allocPrintZ for user data", .{});
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
         }
         users[credentials.items.len] = null;
 
-        const rpId = try auth.allocator.dupeZ(u8, gap.rpId);
+        const rpId = auth.allocator.dupeZ(u8, gap.rpId) catch {
+            std.log.err("getAssertion: allocPrintZ for rpId", .{});
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        };
         defer auth.allocator.free(rpId);
 
         var cred_index = auth.callbacks.select.?(rpId.ptr, users.ptr);
@@ -349,7 +366,7 @@ pub fn authenticatorGetAssertion(
     }
 
     if (alg == null) {
-        std.log.err("Unsupported algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        std.log.err("getAssertion: Unsupported algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     }
 
@@ -375,7 +392,10 @@ pub fn authenticatorGetAssertion(
     );
     var authData = std.ArrayList(u8).init(auth.allocator);
     defer authData.deinit();
-    try auth_data.encode(authData.writer());
+    auth_data.encode(authData.writer()) catch {
+        std.log.err("getAssertion: authData encode error", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
 
     // --------------------        ----------------
     // | authenticatorData |      | clientDataHash |
@@ -392,7 +412,7 @@ pub fn authenticatorGetAssertion(
         &.{ authData.items, &gap.clientDataHash },
         auth.allocator,
     )) |signature| signature else {
-        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        std.log.err("getAssertion: signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
     defer auth.allocator.free(sig);
@@ -411,12 +431,15 @@ pub fn authenticatorGetAssertion(
         // If the sign count is not updated we don't need to update the
         // credentials DB entry, i.e. shared resident keys (passkeys)
         // are not at risk getting out of sync.
-        auth.writeCredential(cred.id, cred.rp.id, &cred) catch |err| {
-            std.log.err("makeCredential: unable to create credential ({any})", .{err});
-            return err;
+        auth.writeCredential(cred.id, cred.rp.id, &cred) catch {
+            std.log.err("getAssertion: unable to update credential", .{});
+            return fido.ctap.StatusCodes.ctap1_err_other;
         };
     }
 
-    try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);
+    cbor.stringify(gar, .{ .allocator = auth.allocator }, out.writer()) catch {
+        std.log.err("getAssertion: cbor encoding error", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
     return status;
 }

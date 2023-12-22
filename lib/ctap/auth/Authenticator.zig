@@ -21,8 +21,21 @@ const StatusCodes = fido.ctap.StatusCodes;
 const Commands = fido.ctap.commands.Commands;
 
 pub const Auth = struct {
+    const Self = @This();
+
     /// Callbacks provided by the underlying platform
     callbacks: Callbacks,
+
+    /// Offer users the option to "override" certain functions related
+    /// to CTAP2 commands. This has (at least) two advantages:
+    /// 1. Users can use their own functions, e.g. they only need a specific
+    ///    want to experiment, want a updated version of a callback.
+    /// 2. We dont need to provide the full spec but only the basics.
+    ///    Users can then add what they need.
+    command_callbacks: struct {
+        /// This callback is invoked on a authenticatorGetAssertion request.
+        getAssertion: *const fn (*Self, *const fido.ctap.request.GetAssertion, *std.ArrayList(u8)) fido.ctap.StatusCodes = fido.ctap.commands.authenticator.authenticatorGetAssertion,
+    } = .{},
 
     /// Authenticator settings that represent the authenticators capabilities
     settings: Settings,
@@ -297,14 +310,11 @@ pub const Auth = struct {
                 defer gap.deinit(self.allocator);
 
                 // Execute command
-                const status = fido.ctap.commands.authenticator.authenticatorGetAssertion(
+                const status = self.command_callbacks.getAssertion(
                     self,
                     &gap,
-                    response,
-                ) catch {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
-                };
+                    &res,
+                );
 
                 if (status != .ctap1_err_success) {
                     res.deinit();
