@@ -35,6 +35,7 @@ pub const Auth = struct {
     command_callbacks: struct {
         /// This callback is invoked on a authenticatorGetAssertion request.
         getAssertion: *const fn (*Self, *const fido.ctap.request.GetAssertion, *std.ArrayList(u8)) fido.ctap.StatusCodes = fido.ctap.commands.authenticator.authenticatorGetAssertion,
+        makeCredential: *const fn (*Self, *const fido.ctap.request.MakeCredential, *std.ArrayList(u8)) fido.ctap.StatusCodes = fido.ctap.commands.authenticator.authenticatorMakeCredential,
     } = .{},
 
     /// Authenticator settings that represent the authenticators capabilities
@@ -279,14 +280,11 @@ pub const Auth = struct {
                 defer mcp.deinit(self.allocator);
 
                 // Execute command
-                const status = fido.ctap.commands.authenticator.authenticatorMakeCredential(
+                const status = self.command_callbacks.makeCredential(
                     self,
                     &mcp,
-                    response,
-                ) catch {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
-                };
+                    &res,
+                );
 
                 if (status != .ctap1_err_success) {
                     res.deinit();
