@@ -34,8 +34,8 @@ pub const Auth = struct {
     /// 2. We dont need to provide the full spec but only the basics.
     ///    Users can then add what they need.
     commands: []const Ctap2CommandMapping = &.{
-        .{ .cmd = 0x01, .cb = fido.ctap.commands.authenticator.authenticatorGetAssertion },
-        .{ .cmd = 0x02, .cb = fido.ctap.commands.authenticator.authenticatorMakeCredential },
+        .{ .cmd = 0x01, .cb = fido.ctap.commands.authenticator.authenticatorMakeCredential },
+        .{ .cmd = 0x02, .cb = fido.ctap.commands.authenticator.authenticatorGetAssertion },
         .{ .cmd = 0x04, .cb = fido.ctap.commands.authenticator.authenticatorGetInfo },
         .{ .cmd = 0x06, .cb = fido.ctap.commands.authenticator.authenticatorClientPin },
         .{ .cmd = 0x0b, .cb = fido.ctap.commands.authenticator.authenticatorSelection },
