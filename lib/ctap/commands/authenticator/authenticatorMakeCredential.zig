@@ -10,9 +10,20 @@ const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
 
 pub fn authenticatorMakeCredential(
     auth: *fido.ctap.authenticator.Auth,
-    mcp: *const fido.ctap.request.MakeCredential,
+    request: []const u8,
     out: *std.ArrayList(u8),
 ) fido.ctap.StatusCodes {
+    var di = cbor.DataItem.new(request) catch {
+        return .ctap2_err_invalid_cbor;
+    };
+    const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{
+        .allocator = auth.allocator,
+    }) catch {
+        std.log.err("unable to map request to `MakeCredential` data type", .{});
+        return .ctap2_err_invalid_cbor;
+    };
+    defer mcp.deinit(auth.allocator);
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++

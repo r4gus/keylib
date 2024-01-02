@@ -152,6 +152,23 @@ pub const DeleteCallback = *const fn (
     id: [*c]const u8,
 ) callconv(.C) Error;
 
+/// This callback signature is used for CTAP2 command-functions like:
+/// * `authenticatorGetAssertion`
+/// * `authenticatorMakeCredential`
+pub const Ctap2CommandCallback = *const fn (
+    /// Pointer to the authenticator struct
+    auth: *fido.ctap.authenticator.Auth,
+    /// CBOR encoded params
+    params: []const u8,
+    /// ArrayList for the respones
+    *std.ArrayList(u8),
+) fido.ctap.StatusCodes;
+
+pub const Ctap2CommandMapping = struct {
+    cmd: u8,
+    cb: Ctap2CommandCallback,
+};
+
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
 // Callbacks
 // +++++++++++++++++++++++++++++++++++++++++++++++++++

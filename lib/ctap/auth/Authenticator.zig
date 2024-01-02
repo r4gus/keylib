@@ -7,6 +7,7 @@ const fido = @import("../../main.zig");
 const Allocator = std.mem.Allocator;
 
 const Callbacks = fido.ctap.authenticator.callbacks.Callbacks;
+const Ctap2CommandMapping = fido.ctap.authenticator.callbacks.Ctap2CommandMapping;
 const Data = fido.ctap.authenticator.callbacks.Data;
 const DataIterator = fido.ctap.authenticator.callbacks.DataIterator;
 const Error = fido.ctap.authenticator.callbacks.Error;
@@ -32,11 +33,13 @@ pub const Auth = struct {
     ///    want to experiment, want a updated version of a callback.
     /// 2. We dont need to provide the full spec but only the basics.
     ///    Users can then add what they need.
-    command_callbacks: struct {
-        /// This callback is invoked on a authenticatorGetAssertion request.
-        getAssertion: *const fn (*Self, *const fido.ctap.request.GetAssertion, *std.ArrayList(u8)) fido.ctap.StatusCodes = fido.ctap.commands.authenticator.authenticatorGetAssertion,
-        makeCredential: *const fn (*Self, *const fido.ctap.request.MakeCredential, *std.ArrayList(u8)) fido.ctap.StatusCodes = fido.ctap.commands.authenticator.authenticatorMakeCredential,
-    } = .{},
+    commands: []const Ctap2CommandMapping = &.{
+        .{ .cmd = 0x01, .cb = fido.ctap.commands.authenticator.authenticatorGetAssertion },
+        .{ .cmd = 0x02, .cb = fido.ctap.commands.authenticator.authenticatorMakeCredential },
+        .{ .cmd = 0x04, .cb = fido.ctap.commands.authenticator.authenticatorGetInfo },
+        .{ .cmd = 0x06, .cb = fido.ctap.commands.authenticator.authenticatorClientPin },
+        .{ .cmd = 0x0b, .cb = fido.ctap.commands.authenticator.authenticatorSelection },
+    },
 
     /// Authenticator settings that represent the authenticators capabilities
     settings: Settings,
@@ -244,45 +247,25 @@ pub const Auth = struct {
         }
     }
 
-    pub fn handle(self: *@This(), command: []const u8) Response {
+    pub fn handle(self: *@This(), request: []const u8) Response {
         // Buffer for the response message
         var res = std.ArrayList(u8).init(self.allocator);
         var response = res.writer();
         response.writeByte(0x00) catch unreachable;
 
         // Decode the command of the given message
-        if (command.len < 1) return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_length) };
-        const cmd = Commands.fromRaw(command[0]) catch {
-            res.deinit();
-            return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_command) };
-        };
+        if (request.len < 1) return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_length) };
+        const cmd = request[0];
 
         // Updates (and possibly invalidates) an existing pinUvAuth token. This has to
         // be done before handling any request.
         self.token.pinUvAuthTokenUsageTimerObserver(self.milliTimestamp());
 
-        switch (cmd) {
-            .authenticatorMakeCredential => {
-                // Parse request
-                var di = cbor.DataItem.new(command[1..]) catch {
-                    std.log.err("handle.authenticatorMakeCredential: malformed request", .{});
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
-                };
-
-                const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{
-                    .allocator = self.allocator,
-                }) catch {
-                    std.log.err("handle.authenticatorMakeCredential: unable to map request to `MakeCredential` data type", .{});
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
-                };
-                defer mcp.deinit(self.allocator);
-
-                // Execute command
-                const status = self.command_callbacks.makeCredential(
+        for (self.commands) |command| {
+            if (command.cmd == cmd) {
+                const status = command.cb(
                     self,
-                    &mcp,
+                    request[1..],
                     &res,
                 );
 
@@ -290,69 +273,12 @@ pub const Auth = struct {
                     res.deinit();
                     return Response{ .err = @intFromEnum(status) };
                 }
-            },
-            .authenticatorGetAssertion => {
-                var di = cbor.DataItem.new(command[1..]) catch {
-                    std.log.err("handle.authenticatorGetAssertion: malformed request", .{});
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
-                };
 
-                const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
-                    .allocator = self.allocator,
-                }) catch {
-                    std.log.err("handle.authenticatorGetAssertion: unable to map request to `GetAssertion` data type", .{});
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_invalid_cbor) };
-                };
-                defer gap.deinit(self.allocator);
-
-                // Execute command
-                const status = self.command_callbacks.getAssertion(
-                    self,
-                    &gap,
-                    &res,
-                );
-
-                if (status != .ctap1_err_success) {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(status) };
-                }
-            },
-            .authenticatorGetInfo => {
-                const status = fido.ctap.commands.authenticator.authenticatorGetInfo(self, response) catch {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
-                };
-
-                if (status != .ctap1_err_success) {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(status) };
-                }
-            },
-            .authenticatorClientPin => {
-                const status = fido.ctap.commands.authenticator.authenticatorClientPin(self, response, command) catch {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_other) };
-                };
-
-                if (status != .ctap1_err_success) {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(status) };
-                }
-            },
-            .authenticatorSelection => {
-                const status = fido.ctap.commands.authenticator.authenticatorSelection(self);
-
-                if (status != .ctap1_err_success) {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(status) };
-                }
-            },
-            else => {
-                res.deinit();
-                return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
-            },
+                break;
+            }
+        } else {
+            res.deinit();
+            return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
         }
 
         return Response{ .ok = res.toOwnedSlice() catch unreachable };

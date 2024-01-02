@@ -6,9 +6,20 @@ const helper = @import("helper.zig");
 
 pub fn authenticatorGetAssertion(
     auth: *fido.ctap.authenticator.Auth,
-    gap: *const fido.ctap.request.GetAssertion,
+    request: []const u8,
     out: *std.ArrayList(u8),
 ) fido.ctap.StatusCodes {
+    var di = cbor.DataItem.new(request) catch {
+        return .ctap2_err_invalid_cbor;
+    };
+    const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
+        .allocator = auth.allocator,
+    }) catch {
+        std.log.err("unable to map request to `GetAssertion` data type", .{});
+        return .ctap2_err_invalid_cbor;
+    };
+    defer gap.deinit(auth.allocator);
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++

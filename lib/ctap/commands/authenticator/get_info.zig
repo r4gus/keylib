@@ -6,17 +6,22 @@ const fido = @import("../../../main.zig");
 /// extensions, its AAGUID, and other aspects of its overall capabilities.
 pub fn authenticatorGetInfo(
     auth: *fido.ctap.authenticator.Auth,
-    out: anytype,
-) !fido.ctap.StatusCodes {
+    request: []const u8,
+    out: *std.ArrayList(u8),
+) fido.ctap.StatusCodes {
+    _ = request;
+
     const settings = auth.loadSettings() catch |e| {
-        std.log.err("authenticatorGetInfo: unable to load settings", .{});
-        return e;
+        std.log.err("authenticatorGetInfo: unable to load settings ({any})", .{e});
+        return fido.ctap.StatusCodes.ctap1_err_other;
     };
 
     auth.settings.minPINLength = settings.min_pin_length;
     auth.settings.forcePINChange = settings.force_pin_change;
     auth.settings.options.alwaysUv = settings.always_uv;
 
-    try cbor.stringify(auth.settings, .{}, out);
+    cbor.stringify(auth.settings, .{}, out.writer()) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
     return fido.ctap.StatusCodes.ctap1_err_success;
 }
