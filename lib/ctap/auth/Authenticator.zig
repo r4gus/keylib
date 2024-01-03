@@ -247,14 +247,22 @@ pub const Auth = struct {
         }
     }
 
-    pub fn handle(self: *@This(), request: []const u8) Response {
+    pub fn handle(
+        self: *@This(),
+        out: *[fido.ctap.transports.ctaphid.authenticator.MAX_DATA_SIZE]u8,
+        request: []const u8,
+    ) []const u8 {
         // Buffer for the response message
         var res = std.ArrayList(u8).init(self.allocator);
+        defer res.deinit();
         var response = res.writer();
         response.writeByte(0x00) catch unreachable;
 
         // Decode the command of the given message
-        if (request.len < 1) return Response{ .err = @intFromEnum(StatusCodes.ctap1_err_invalid_length) };
+        if (request.len < 1) {
+            out[0] = @intFromEnum(StatusCodes.ctap1_err_invalid_length);
+            return out[0..1];
+        }
         const cmd = request[0];
 
         // Updates (and possibly invalidates) an existing pinUvAuth token. This has to
@@ -270,18 +278,19 @@ pub const Auth = struct {
                 );
 
                 if (status != .ctap1_err_success) {
-                    res.deinit();
-                    return Response{ .err = @intFromEnum(status) };
+                    out[0] = @intFromEnum(status);
+                    return out[0..1];
                 }
 
                 break;
             }
         } else {
-            res.deinit();
-            return Response{ .err = @intFromEnum(StatusCodes.ctap2_err_not_allowed) };
+            out[0] = @intFromEnum(StatusCodes.ctap2_err_not_allowed);
+            return out[0..1];
         }
 
-        return Response{ .ok = res.toOwnedSlice() catch unreachable };
+        std.mem.copy(u8, out[0..res.items.len], res.items);
+        return out[0..res.items.len];
     }
 
     /// Given a set of credential parameters, select the first algorithm that is also supported by the authenticator.
