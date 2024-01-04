@@ -94,9 +94,82 @@ We offer support for operations like __authenticatorMakeCredential__, __authenti
 
 ![keylib design](static/design.png)
 
+## Basic setup
+
+The following is a basic setup:
+
+```zig
+// Some imports are missing for clarity. gpa referres to a
+// Allocator and you also have to implement and provide the
+// required callbacks.
+const keylib = @import("keylib");
+
+// First create a new Authenticator. You will probably want
+// to customize the settings and not use the default function...
+var auth = keylib.ctap.authenticator.Auth.default(callbacks, gpa);
+// This falg tells the authenticator not to increase the signature
+// counter. This is important for authenticators that use Passkeys,
+// i.e. credentials that are shared between devices.
+auth.constSignCount = true;
+// You have to initialize the authenticator.
+try auth.init();
+
+// Here we use the CTAPHID interface for communication via USB.
+var ctaphid = keylib.ctap.transports.ctaphid.authenticator.CtapHid.init(gpa, std.crypto.random);
+defer ctaphid.deinit();
+
+// uhid allows the simulation of HID devices on linux.
+var u = try uhid.Uhid.open();
+defer u.close();
+
+// The main loop listens for incoming packets and processes them.
+while (true) {
+    var buffer: [64]u8 = .{0} ** 64;
+    if (u.read(&buffer)) |packet| {
+        // We pass incoming packets to the CTAPHID handler and either
+        // get back a struct containing the command, CID and data or null.
+        var response = ctaphid.handle(packet);
+        if (response) |*res| blk: {
+            switch (res.cmd) {
+                .cbor => {
+                    // If we received a cbor command, we pass the
+                    // data to the authenticator handler. This would
+                    // also be a good point to start a thread for the
+                    // handler.
+                    var out: [7609]u8 = undefined;
+                    const r = auth.handle(&out, res.data);
+                    // Here we take the result and overwrite the data
+                    // of the CTAPHID struct. You will see why in a second...
+                    std.mem.copy(u8, res._data[0..r.len], r);
+                    res.data = res._data[0..r.len];
+                },
+                // Here you can also handle other CTAPHID commands if desired.
+                else => {},
+            }
+            
+            // The struct returned by CTAPHIDs handle function has a
+            // iterator function that returns a CTAPHID iterator.
+            // The iterator will return CTAPHID encoded response
+            // packets ready for transmition.
+            var iter = res.iterator();
+            while (iter.next()) |p| {
+                // We use the uhid write function to transmit
+                // the packets to the host but on freestanding
+                // targets you would probably write to a register...
+                u.write(p) catch {
+                    break :blk;
+                };
+            }
+        }
+    }
+    // Here we wait a few ms but this is not required...
+    std.time.sleep(10000000);
+}
+```
+
 ## Gettings Started
 
-Read the [getting started guide](https://codeberg.org/r4gus/keylib/wiki/Getting-Started) in the Wiki.
+Read the [getting started guide](https://codeberg.org/r4gus/keylib/wiki/Getting-Started) in the Wiki (__OUTDATED!!!__).
 
 ## Resources
 
