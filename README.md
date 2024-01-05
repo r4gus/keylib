@@ -181,3 +181,34 @@ Read the [getting started guide](https://codeberg.org/r4gus/keylib/wiki/Getting-
 
 - [Passkey test site](https://passkey.org/)
 - [FIDO2 test site](https://webauthn.io/)
+
+## Random Ideas
+
+<details>
+<summary><ins>Protecting secrets using a PIN</ins></summary>
+
+Microcontrollers like the rp2040 allow the creation of cheap authenticators but they provide no means to somehow protect
+secrets like master passwords, PINs, or credentials. One way one could securely store sensitive data is by making PIN
+protection mandatory. Note that this is a tradeof and will render some counters (like the pin retry counter) useless if
+an attacker has physical access to the chip, as one can not protect the counters from manipulation.
+
+1. Your authenticator has PIN protection enabled by default, i.e. on first boot a default password is set. You should also
+set the _force pin change_ flag to "encourge" the user to change his password.
+2. Also on first boot, you create a master password which will encrypt all sensitive data using a AEAD cipher. The master
+password itself is encrypted using a secret derived from the PIN.
+3. Metadata like retry counters are not encrypted (make sure you __DONT__ store the PIN unencrypted!). This still allows
+the blocking of a authenticator (in fact you should automatically reset the authenticator if the retry counter hits zero)
+but an attack with physical access could potentially reset the counters giving him unlimited retries.
+4. Make sure you disallow any operations on sensitive data without prior authentication (__alwaysUv__).
+5. Make sure you only use PIN authentication.
+6. During authentication you intercept the PIN hash (after decryption) and derive a deterministic secret from it
+using a key derivation function of you choice (e.g. HKDF; but it must always be the same). This secret must have
+the same lifetime as the pinUvAuthToken! 
+7. When the application requires a credential (or other sensitive data) you decrypt the master secret using the
+derived secret and the decrypt the actual data with the master secret. If the application wants to overwrite data,
+you decrypt the data, update it and the encrypt it using the master secret.
+8. After you're done, make sure to overwrite any plain text information no longer required.
+9. On pin change, just decrypt the master secret and then re-encrypt it using the secret derived
+from the new PIN hash.
+
+</details>
