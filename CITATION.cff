@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: keylib
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: David Pierre
+    family-names: Sugar
+repository-code: 'https://github.com/r4gus/keylib'
+abstract: 'A FIDO2 and Passkey compatible authentication library.'
+keywords:
+  - authentication
+  - cryptography
+  - fido2
+  - passkey
+  - library
+  - zig
+license: MIT
