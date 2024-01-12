@@ -136,19 +136,23 @@ pub const CtapHidMsg = struct {
     cmd: Cmd,
     cid: Cid,
     _data: [MAX_DATA_SIZE]u8,
-    data: []const u8,
+    len: usize,
 
     pub fn new(cmd: Cmd, cid: Cid, data: []const u8) @This() {
         var self: @This() = undefined;
         self.cmd = cmd;
         self.cid = cid;
         @memcpy(self._data[0..data.len], data);
-        self.data = self._data[0..data.len];
+        self.len = data.len;
         return self;
     }
 
+    pub fn getData(self: *const @This()) []const u8 {
+        return self._data[0..self.len];
+    }
+
     pub fn iterator(self: *const @This()) CtapHidMessageIterator {
-        return resp.iterator(self.cid, self.cmd, self.data);
+        return resp.iterator(self.cid, self.cmd, self.getData());
     }
 };
 

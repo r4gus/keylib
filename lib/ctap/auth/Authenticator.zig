@@ -256,7 +256,11 @@ pub const Auth = struct {
         var res = std.ArrayList(u8).init(self.allocator);
         defer res.deinit();
         var response = res.writer();
-        response.writeByte(0x00) catch unreachable;
+        response.writeByte(0x00) catch {
+            std.log.err("Auth.handle: unable to initialize response", .{});
+            out[0] = @intFromEnum(StatusCodes.ctap1_err_other);
+            return out[0..1];
+        };
 
         // Decode the command of the given message
         if (request.len < 1) {
@@ -285,6 +289,7 @@ pub const Auth = struct {
                 break;
             }
         } else {
+            std.log.err("invalid command: {d}", .{cmd});
             out[0] = @intFromEnum(StatusCodes.ctap2_err_not_allowed);
             return out[0..1];
         }

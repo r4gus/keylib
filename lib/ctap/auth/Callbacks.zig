@@ -152,6 +152,10 @@ pub const DeleteCallback = *const fn (
     id: [*c]const u8,
 ) callconv(.C) Error;
 
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+// Data Structures for CTAP2 (CBOR) commands
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+
 /// This callback signature is used for CTAP2 command-functions like:
 /// * `authenticatorGetAssertion`
 /// * `authenticatorMakeCredential`
@@ -168,6 +172,18 @@ pub const Ctap2CommandMapping = struct {
     cmd: u8,
     cb: Ctap2CommandCallback,
 };
+
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+// Some other (optional) callbacks
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+
+/// A callback that gets the decrypted PIN hash passed to it.
+/// This allows things like deriving a secret from it for
+/// en-/decrypting secrets based on the PIN.
+///
+/// For this to work you need to use the default authenticatorClientPin
+/// function or incorporate this call into your own function.
+pub const ProcessPinHash = *const fn (ph: []const u8) void;
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
 // Callbacks
@@ -196,4 +212,5 @@ pub const Callbacks = extern struct {
     read: ReadCallback,
     write: CreateCallback,
     delete: DeleteCallback,
+    processPinHash: ?ProcessPinHash = null,
 };
