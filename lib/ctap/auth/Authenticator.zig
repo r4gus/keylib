@@ -68,9 +68,9 @@ pub const Auth = struct {
     allocator: Allocator,
 
     /// Cryptographic secure (P)RNG
-    random: std.rand.Random = std.crypto.random,
+    random: std.rand.Random,
 
-    milliTimestamp: *const fn () i64 = std.time.milliTimestamp,
+    milliTimestamp: *const fn () i64,
 
     pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {
         return .{
@@ -101,6 +101,8 @@ pub const Auth = struct {
                 fido.ctap.crypto.algorithms.Es256,
             },
             .allocator = allocator,
+            .milliTimestamp = std.time.milliTimestamp,
+            .random = std.crypto.random,
         };
     }
 

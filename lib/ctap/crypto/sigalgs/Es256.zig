@@ -2,7 +2,7 @@ const std = @import("std");
 const fido = @import("../../../main.zig");
 const cbor = @import("zbor");
 const SigAlg = fido.ctap.crypto.SigAlg;
-const EcdsaP256Sha256 = std.crypto.sign.ecdsa.EcdsaP256Sha256;
+const EcdsaP256Sha256 = @import("../ecdsa.zig").EcdsaP256Sha256;
 
 pub const Es256 = SigAlg{
     .alg = .Es256,
