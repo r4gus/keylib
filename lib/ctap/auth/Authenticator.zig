@@ -275,6 +275,10 @@ pub const Auth = struct {
         // be done before handling any request.
         self.token.pinUvAuthTokenUsageTimerObserver(self.milliTimestamp());
 
+        if (request.len > 1) {
+            std.log.info("request({d}): {s}", .{ cmd, std.fmt.fmtSliceHexLower(request[1..]) });
+        }
+
         for (self.commands) |command| {
             if (command.cmd == cmd) {
                 const status = command.cb(
@@ -283,8 +287,8 @@ pub const Auth = struct {
                     &res,
                 );
 
+                out[0] = @intFromEnum(status);
                 if (status != .ctap1_err_success) {
-                    out[0] = @intFromEnum(status);
                     return out[0..1];
                 }
 

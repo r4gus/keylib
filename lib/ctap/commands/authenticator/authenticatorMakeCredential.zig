@@ -392,15 +392,16 @@ pub fn authenticatorMakeCredential(
         std.log.err("makeCredential: unable to allocate memory for credId", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-    while (true) {
-        auth.random.bytes(id);
-        for (id) |b| {
-            // disallow 0 bytes
-            if (b == 0) continue;
+    auth.random.bytes(id);
+    for (id) |*b| {
+        // disallow 0 bytes
+        // -> The callbacks work with C strings and we don't pass a length, i.e.
+        //    0 terminates a string. If we would allow 0 bytes then the id would
+        //    get cut off.
+        while (b.* == 0) {
+            b.* = auth.random.int(u8);
         }
-        break;
     }
-    id[0] = 0xFF;
 
     const key_pair = if (alg.create(
         auth.random,
@@ -432,6 +433,7 @@ pub fn authenticatorMakeCredential(
     // 17. + 18. Store credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (rk) {
+        std.log.info("MakeCredential: creating resident key", .{});
         var credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id) catch |err| blk: {
             if (err == error.NoData) {
                 std.log.info(
