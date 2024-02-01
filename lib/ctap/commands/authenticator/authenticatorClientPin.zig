@@ -5,21 +5,25 @@ const fido = @import("../../../main.zig");
 
 pub fn authenticatorClientPin(
     auth: *fido.ctap.authenticator.Auth,
-    out: anytype,
-    command: []const u8,
-) !fido.ctap.StatusCodes {
+    request: []const u8,
+    out: *std.ArrayList(u8),
+) fido.ctap.StatusCodes {
     const retry_state = struct {
         threadlocal var ctr: u8 = 3;
         threadlocal var powerCycleState: bool = false;
     };
 
-    const client_pin_param = try cbor.parse(
+    const client_pin_param = cbor.parse(
         fido.ctap.request.ClientPin,
-        try cbor.DataItem.new(command[1..]),
+        cbor.DataItem.new(request) catch {
+            return .ctap2_err_invalid_cbor;
+        },
         .{
             .allocator = auth.allocator,
         },
-    );
+    ) catch {
+        return .ctap2_err_invalid_cbor;
+    };
     defer client_pin_param.deinit(auth.allocator);
 
     var client_pin_response: ?fido.ctap.response.ClientPin = null;
@@ -122,7 +126,7 @@ pub fn authenticatorClientPin(
             }
 
             auth.token.resetPinUvAuthToken(); // invalidates existing tokens
-            auth.token.beginUsingPinUvAuthToken(user_present, std.time.milliTimestamp());
+            auth.token.beginUsingPinUvAuthToken(user_present, auth.milliTimestamp());
 
             auth.token.permissions = client_pin_param.permissions.?;
 
@@ -163,7 +167,9 @@ pub fn authenticatorClientPin(
 
     // Serialize response and return
     if (client_pin_response) |resp| {
-        try cbor.stringify(resp, .{}, out);
+        cbor.stringify(resp, .{}, out.writer()) catch {
+            return fido.ctap.StatusCodes.ctap1_err_other;
+        };
         defer resp.deinit(auth.allocator);
     }
 

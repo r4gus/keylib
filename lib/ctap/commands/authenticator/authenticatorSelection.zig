@@ -1,9 +1,15 @@
+const std = @import("std");
 const fido = @import("../../../main.zig");
 
 pub fn authenticatorSelection(
-    auth: *fido.ctap.authenticator.Authenticator,
+    auth: *fido.ctap.authenticator.Auth,
+    request: []const u8,
+    out: *std.ArrayList(u8),
 ) fido.ctap.StatusCodes {
-    const up = auth.callbacks.up(.AuthenticatorSelection, null, null);
+    _ = request;
+    _ = out;
+
+    const up = auth.callbacks.up("Authenticator Selection", null, null);
 
     return switch (up) {
         .Denied => fido.ctap.StatusCodes.ctap2_err_operation_denied,

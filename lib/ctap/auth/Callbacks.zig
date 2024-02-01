@@ -62,9 +62,9 @@ pub const DataIterator = struct {
         while (self.d[i] != null) {
             var x = self.d[i];
             const l = strlen(x);
-            // First overwrite the region with random data. This prevents sensitive information
+            // First overwrite the region with 0. This prevents sensitive information
             // from lingering in memory for longer than neccessary.
-            std.crypto.random.bytes(x[0..l]);
+            @memset(x[0..l], 0);
             // Then free the memory
             self.allocator.free(x[0 .. l + 1]);
             i += 1;
@@ -153,6 +153,39 @@ pub const DeleteCallback = *const fn (
 ) callconv(.C) Error;
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
+// Data Structures for CTAP2 (CBOR) commands
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+
+/// This callback signature is used for CTAP2 command-functions like:
+/// * `authenticatorGetAssertion`
+/// * `authenticatorMakeCredential`
+pub const Ctap2CommandCallback = *const fn (
+    /// Pointer to the authenticator struct
+    auth: *fido.ctap.authenticator.Auth,
+    /// CBOR encoded params
+    params: []const u8,
+    /// ArrayList for the respones
+    *std.ArrayList(u8),
+) fido.ctap.StatusCodes;
+
+pub const Ctap2CommandMapping = struct {
+    cmd: u8,
+    cb: Ctap2CommandCallback,
+};
+
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+// Some other (optional) callbacks
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
+
+/// A callback that gets the decrypted PIN hash passed to it.
+/// This allows things like deriving a secret from it for
+/// en-/decrypting secrets based on the PIN.
+///
+/// For this to work you need to use the default authenticatorClientPin
+/// function or incorporate this call into your own function.
+pub const ProcessPinHash = *const fn (ph: []const u8) void;
+
+// +++++++++++++++++++++++++++++++++++++++++++++++++++
 // Callbacks
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -179,4 +212,5 @@ pub const Callbacks = extern struct {
     read: ReadCallback,
     write: CreateCallback,
     delete: DeleteCallback,
+    processPinHash: ?ProcessPinHash = null,
 };

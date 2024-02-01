@@ -146,6 +146,32 @@ pub const InitResponse = packed struct {
 // message Handler
 //--------------------------------------------------------------------+
 
+pub const MAX_DATA_SIZE = 7609;
+
+pub const CtapHidMsg = struct {
+    cmd: Cmd,
+    cid: Cid,
+    _data: [MAX_DATA_SIZE]u8,
+    len: usize,
+
+    pub fn new(cmd: Cmd, cid: Cid, data: []const u8) @This() {
+        var self: @This() = undefined;
+        self.cmd = cmd;
+        self.cid = cid;
+        @memcpy(self._data[0..data.len], data);
+        self.len = data.len;
+        return self;
+    }
+
+    pub fn getData(self: *const @This()) []const u8 {
+        return self._data[0..self.len];
+    }
+
+    pub fn iterator(self: *const @This()) CtapHidMessageIterator {
+        return resp.iterator(self.cid, self.cmd, self.getData());
+    }
+};
+
 pub const CtapHid = struct {
     // Authenticator is currently busy handling a request with the given
     // Cid. `null` means not busy.
@@ -164,15 +190,21 @@ pub const CtapHid = struct {
     // All clients (CIDs) share the same buffer, i.e. only one request
     // can be handled at a time. This buffer is also used for some of
     // the response data.
-    data: [7609]u8 = undefined,
+    data: [MAX_DATA_SIZE]u8 = undefined,
 
     channels: std.ArrayList(Cid),
 
+    /// CSPRNG
+    random: std.rand.Random,
+
+    milliTimestamp: *const fn () i64 = std.time.milliTimestamp,
+
     const timeout: u64 = 250; // 250 milli second timeout
 
-    pub fn init(a: std.mem.Allocator) @This() {
+    pub fn init(a: std.mem.Allocator, random: std.rand.Random) @This() {
         return .{
             .channels = std.ArrayList(Cid).init(a),
+            .random = random,
         };
     }
 
@@ -190,7 +222,7 @@ pub const CtapHid = struct {
             // Remove first entry inserted
             _ = self.channels.orderedRemove(0);
         }
-        const cid = std.crypto.random.int(u32);
+        const cid = self.random.int(u32);
         self.channels.append(cid) catch |e| {
             std.log.err("unable to allocate memory for CID {d}", .{cid});
             return e;
@@ -205,9 +237,9 @@ pub const CtapHid = struct {
         return false;
     }
 
-    pub fn handle(self: *@This(), packet: []const u8, auth: anytype) ?CtapHidMessageIterator {
+    pub fn handle(self: *@This(), packet: []const u8) ?CtapHidMsg {
         //std.log.err("{s}", .{std.fmt.fmtSliceHexLower(packet)});
-        if (self.begin != null and (std.time.milliTimestamp() - self.begin.?) > CtapHid.timeout) {
+        if (self.begin != null and (self.milliTimestamp() - self.begin.?) > CtapHid.timeout) {
             // the previous transaction has timed out -> reset
             self.reset();
         }
@@ -221,7 +253,7 @@ pub const CtapHid = struct {
             }
 
             self.busy = misc.sliceToInt(Cid, packet[0..4]);
-            self.begin = std.time.milliTimestamp();
+            self.begin = self.milliTimestamp();
 
             if (!isBroadcast(self.busy.?) and !self.isValidChannel(self.busy.?)) {
                 return self.@"error"(ErrorCodes.invalid_channel);
@@ -277,35 +309,10 @@ pub const CtapHid = struct {
             // execute the command
             switch (self.cmd.?) {
                 .msg => {
-                    var response = resp.CtapHidMessageIterator.new(self.busy.?, self.cmd.?);
-
-                    if (self.data[1] == 3) {
-                        return resp.iterator(self.busy.?, self.cmd.?, "CTAP2/U2F_V2\x90\x00");
-                    } else {
-                        return resp.iterator(self.busy.?, self.cmd.?, "\x69\x86");
-                    }
-
-                    return response;
+                    return CtapHidMsg.new(self.cmd.?, self.busy.?, self.data[0..self.bcnt]);
                 },
                 .cbor => {
-                    var response = resp.CtapHidMessageIterator.new(self.busy.?, self.cmd.?);
-
-                    var _data = auth.handle(self.data[0..self.bcnt]);
-                    switch (_data) {
-                        .ok => |d| {
-                            response.data = d;
-                            response.allocator = auth.allocator;
-                        },
-                        .err => |e| {
-                            // `data` is freed within handle()
-                            var d = auth.allocator.alloc(u8, 1) catch unreachable;
-                            d[0] = e;
-                            response.data = d;
-                            response.allocator = auth.allocator;
-                        },
-                    }
-
-                    return response;
+                    return CtapHidMsg.new(self.cmd.?, self.busy.?, self.data[0..self.bcnt]);
                 },
                 .init => {
                     if (isBroadcast(self.busy.?)) {
@@ -325,19 +332,16 @@ pub const CtapHid = struct {
                             false,
                         );
                         ir.serialize(self.data[0..InitResponse.SIZE]);
-                        var response = resp.iterator(self.busy.?, self.cmd.?, self.data[0..InitResponse.SIZE]);
-                        return response;
+                        return CtapHidMsg.new(self.cmd.?, self.busy.?, self.data[0..InitResponse.SIZE]);
                     } else {
                         // The device then responds with the CID of the channel it received
                         // the INIT on, using that channel.
                         misc.intToSlice(self.data[0..], self.busy.?);
-                        var response = resp.iterator(self.busy.?, self.cmd.?, self.data[0..4]);
-                        return response;
+                        return CtapHidMsg.new(self.cmd.?, self.busy.?, self.data[0..4]);
                     }
                 },
                 .ping => {
-                    var response = resp.iterator(self.busy.?, self.cmd.?, self.data[0..self.bcnt]);
-                    return response;
+                    return CtapHidMsg.new(self.cmd.?, self.busy.?, self.data[0..self.bcnt]);
                 },
                 .cancel => {
                     return null;
@@ -361,7 +365,7 @@ pub const CtapHid = struct {
         s.seq = null;
     }
 
-    fn @"error"(self: *@This(), e: ErrorCodes) CtapHidMessageIterator {
+    fn @"error"(self: *@This(), e: ErrorCodes) CtapHidMsg {
         const es = switch (e) {
             .invalid_cmd => "\x01",
             .invalid_par => "\x02",
@@ -374,7 +378,12 @@ pub const CtapHid = struct {
             else => "\x7f",
         };
 
-        const response = resp.iterator(if (self.busy) |c| c else 0xffffffff, Cmd.err, es);
+        const response = CtapHidMsg.new(
+            Cmd.err,
+            if (self.busy) |c| c else 0xffffffff,
+            es,
+        );
+
         self.reset();
         return response;
     }

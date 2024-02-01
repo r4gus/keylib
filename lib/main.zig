@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const VERSION: []const u8 = "0.1.0";
+pub const VERSION: []const u8 = "0.3.3";
 
 /// Used by multiple data types
 pub const common = struct {
@@ -184,6 +184,7 @@ pub const ctap = struct {
             pub const authenticatorClientPin = @import("ctap/commands/authenticator/authenticatorClientPin.zig").authenticatorClientPin;
             pub const authenticatorSelection = @import("ctap/commands/authenticator/authenticatorSelection.zig").authenticatorSelection;
             pub const authenticatorCredentialManagement = @import("ctap/commands/authenticator/authenticatorCredentialManagement.zig").authenticatorCredentialManagement;
+            pub const GaErr = @import("ctap/commands/authenticator/authenticatorGetAssertion.zig").GaErr;
         };
     };
 

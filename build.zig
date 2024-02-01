@@ -85,21 +85,22 @@ pub fn build(b: *std.build.Builder) !void {
     // C bindings
     // ------------------------------------------------
 
-    const c_bindings = b.addStaticLibrary(.{
-        .name = "keylib",
-        .root_source_file = .{ .path = "bindings/c/src/keylib.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    c_bindings.addModule("keylib", keylib_module);
-    c_bindings.linkLibC();
-    c_bindings.installHeadersDirectoryOptions(.{
-        .source_dir = std.Build.LazyPath{ .path = "bindings/c/include" },
-        .install_dir = .header,
-        .install_subdir = "keylib",
-        .exclude_extensions = &.{".c"},
-    });
-    b.installArtifact(c_bindings);
+    // TODO: doesn't make much sense right now to provide C bindings
+    //const c_bindings = b.addStaticLibrary(.{
+    //    .name = "keylib",
+    //    .root_source_file = .{ .path = "bindings/c/src/keylib.zig" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //c_bindings.addModule("keylib", keylib_module);
+    //c_bindings.linkLibC();
+    //c_bindings.installHeadersDirectoryOptions(.{
+    //    .source_dir = std.Build.LazyPath{ .path = "bindings/c/include" },
+    //    .install_dir = .header,
+    //    .install_subdir = "keylib",
+    //    .exclude_extensions = &.{".c"},
+    //});
+    //b.installArtifact(c_bindings);
 
     const uhid = b.addStaticLibrary(.{
         .name = "uhid",

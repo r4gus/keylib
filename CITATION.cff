@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: keylib
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: David Pierre
+    family-names: Sugar
+    orcid: "https://orcid.org/0009-0007-0056-602X"
+repository-code: 'https://github.com/r4gus/keylib'
+abstract: 'A FIDO2 and Passkey compatible authentication library.'
+version: 0.3.2
+date-released: 2024-01-13
+keywords:
+  - authentication
+  - cryptography
+  - fido2
+  - passkey
+  - library
+  - zig
+license: MIT
