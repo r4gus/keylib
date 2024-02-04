@@ -283,7 +283,9 @@ pub fn authenticatorMakeCredential(
             defer cred.deinit(auth.allocator);
             // If the credential was created by this authenticator: Return.
 
-            if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired != cred.policy) {
+            const policy_ = fido.ctap.extensions.CredentialCreationPolicy.fromString(cred.getExtensions("credProtect"));
+            const policy = if (policy_) |policy| policy else fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+            if (.userVerificationRequired != policy) {
                 var userPresentFlagValue = false;
                 if (mcp.pinUvAuthParam) |_| {
                     userPresentFlagValue = auth.token.getUserPresentFlagValue();
@@ -360,26 +362,9 @@ pub fn authenticatorMakeCredential(
     // Policy
     var policy = fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
 
-    // Hmac-Secret
-    var cred_random_with_uv: [32]u8 = undefined;
-    var cred_random_without_uv: [32]u8 = undefined;
-    auth.random.bytes(cred_random_with_uv[0..]);
-    auth.random.bytes(cred_random_without_uv[0..]);
-
     if (mcp.extensions) |ext| {
         if (ext.credProtect) |pol| {
             policy = pol;
-        }
-
-        if (ext.@"hmac-secret") |hsec| {
-            switch (hsec) {
-                .create => |flag| {
-                    if (flag) {
-                        extensions.@"hmac-secret" = .{ .create = true };
-                    }
-                },
-                else => {},
-            }
         }
     }
     // We will always set a policy
@@ -422,12 +407,13 @@ pub fn authenticatorMakeCredential(
         .sign_count = 0, // the first signature will be included in the response
         .alg = alg.alg,
         .private_key = key_pair.raw_private_key,
-        .policy = policy,
-        .cred_random_with_uv = cred_random_with_uv,
-        .cred_random_without_uv = cred_random_without_uv,
         .created = auth.milliTimestamp(),
     };
     defer auth.allocator.free(entry.id);
+    entry.setExtension("credProtect", fido.ctap.extensions.CredentialCreationPolicy.toString(policy), auth.allocator) catch {
+        std.log.err("MakeCredential: unable to set policy {any}", .{policy});
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 17. + 18. Store credential
@@ -494,7 +480,7 @@ pub fn authenticatorMakeCredential(
             .rfu1 = 0,
             .uv = if (uv_response) 1 else 0,
             .rfu2 = 0,
-            .at = 1,
+            .at = 1, // self attestation
             .ed = 0,
         },
         .signCount = 0,

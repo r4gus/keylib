@@ -206,13 +206,13 @@ pub const ctap = struct {
 
     /// CTAP extensions
     pub const extensions = struct {
-        pub const Extension = enum {
-            credProtect,
-            credBlob,
-            largeBlobKey,
-            minPinLength,
-            @"hmac-secret",
-        };
+        //pub const Extension = enum {
+        //    credProtect,
+        //    credBlob,
+        //    largeBlobKey,
+        //    minPinLength,
+        //    @"hmac-secret",
+        //};
 
         /// Map of optional extensions
         pub const Extensions = @import("ctap/extensions/Extensions.zig");

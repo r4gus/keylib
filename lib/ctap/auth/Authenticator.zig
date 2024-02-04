@@ -72,6 +72,20 @@ pub const Auth = struct {
 
     milliTimestamp: *const fn () i64,
 
+    /// A DataSet can be used by any command to keep sate beyond a
+    /// single request. The data must be stored in binary form, e.g.
+    /// by serializing it to cbor.
+    data_set: ?DataSet = null,
+
+    pub const DataSet = struct {
+        command: u8,
+        start: i64,
+        tout_ms: i64 = 15_000, // 15s default
+        key: []const u8,
+        // Depending on how much memory you have you should be carefull!
+        value: []const u8,
+    };
+
     pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {
         return .{
             .callbacks = callbacks,
@@ -188,15 +202,17 @@ pub const Auth = struct {
     }
 
     /// Load all credentials associated with the given relying party id
-    pub fn loadCredentials(self: *@This(), rpId: []const u8) ![]fido.ctap.authenticator.Credential {
-        const rpIdZ: [:0]const u8 = try self.allocator.dupeZ(u8, rpId);
-        defer self.allocator.free(rpIdZ);
+    pub fn loadCredentials(self: *@This(), rpId: ?[]const u8) ![]fido.ctap.authenticator.Credential {
+        const rpIdZ: ?[:0]const u8 = if (rpId) |rpId_| try self.allocator.dupeZ(u8, rpId_) else null;
+        if (rpIdZ != null) {
+            defer self.allocator.free(rpIdZ.?);
+        }
         var iter = DataIterator{
             .allocator = self.allocator,
         };
         defer iter.deinit();
 
-        if (self.callbacks.read(null, rpIdZ, &iter.d) != Error.SUCCESS) {
+        if (self.callbacks.read(null, if (rpIdZ != null) rpIdZ.? else null, &iter.d) != Error.SUCCESS) {
             return error.NoData;
         }
 
@@ -239,6 +255,12 @@ pub const Auth = struct {
 
         try cbor.stringify(entry, .{}, str.writer());
 
+        std.log.info("writing ({s}, {s}): {s}", .{
+            std.fmt.fmtSliceHexLower(id),
+            rpId,
+            std.fmt.fmtSliceHexLower(str.items),
+        });
+
         // Covert the data into a hex string
         var str2 = std.ArrayList(u8).init(self.allocator);
         defer str2.deinit();
@@ -275,6 +297,19 @@ pub const Auth = struct {
         // be done before handling any request.
         self.token.pinUvAuthTokenUsageTimerObserver(self.milliTimestamp());
 
+        // Check if data_set is invalid.
+        // This is the case if a) the data_set "timed out" or b) the
+        // command issued is not associated with the data set.
+        if (self.data_set != null) {
+            if (self.milliTimestamp() - self.data_set.?.start > self.data_set.?.tout_ms or
+                self.data_set.?.command != cmd)
+            {
+                self.allocator.free(self.data_set.?.key);
+                self.allocator.free(self.data_set.?.value);
+                self.data_set = null;
+            }
+        }
+
         if (request.len > 1) {
             std.log.info("request({d}): {s}", .{ cmd, std.fmt.fmtSliceHexLower(request[1..]) });
         }
@@ -300,6 +335,7 @@ pub const Auth = struct {
             return out[0..1];
         }
 
+        std.log.info("response({d}): {s}", .{ cmd, std.fmt.fmtSliceHexLower(res.items) });
         std.mem.copy(u8, out[0..res.items.len], res.items);
         return out[0..res.items.len];
     }

@@ -26,7 +26,9 @@ pub const CredentialCreationPolicy = enum(u8) {
         };
     }
 
-    pub fn fromString(s: []const u8) ?@This() {
+    pub fn fromString(s_: ?[]const u8) ?@This() {
+        if (s_ == null) return null;
+        const s = s_.?;
         if (std.mem.eql(u8, s, "userVerificationOptional")) {
             return @This().userVerificationOptional;
         } else if (std.mem.eql(u8, s, "userVerificationOptionalWithCredentialIDList")) {

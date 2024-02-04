@@ -16,8 +16,13 @@ const fido = @import("../../main.zig");
 
 /// List of supported versions.
 versions: []const fido.common.AuthenticatorVersions,
-/// List of supported extensions.
-extensions: ?[]const fido.ctap.extensions.Extension = null,
+/// List of supported extensions, e.g.:
+/// * "credProtect"
+/// * "credBlob"
+/// * "largeBlobKey"
+/// * "minPinLength"
+/// * "hmac-secret"
+extensions: ?[]const []const u8 = null,
 /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
 /// indicating the type of the authenticator. Authenticators with the
 /// same capabilities and firmware, can share the same AAGUID.
@@ -120,7 +125,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
             .{ .name = "versions", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
-            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
             .{ .name = "aaguid", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             .{ .name = "options", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             .{ .name = "maxMsgSize", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
@@ -151,7 +156,7 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
         .from_callback = true, // prevent infinite loops
         .field_settings = &.{
             .{ .name = "versions", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
-            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
             .{ .name = "aaguid", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             .{ .name = "options", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             .{ .name = "maxMsgSize", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
