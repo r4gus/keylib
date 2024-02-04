@@ -42,4 +42,14 @@ pub const AttestationStatement = union(fido.common.AttestationStatementFormatIde
             else => {},
         }
     }
+
+    pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
+        return cbor.stringify(self, .{
+            .allocator = options.allocator,
+            .from_callback = true,
+            .field_settings = &.{
+                .{ .name = "alg", .value_options = .{ .enum_serialization_type = .Integer } },
+            },
+        }, out);
+    }
 };
