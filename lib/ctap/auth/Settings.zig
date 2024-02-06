@@ -180,6 +180,16 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     });
 }
 
+pub fn extensionSupported(self: *const @This(), ext: []const u8) bool {
+    if (self.extensions == null) return false;
+
+    for (self.extensions.?) |ext_| {
+        if (std.mem.eql(u8, ext, ext_)) return true;
+    }
+
+    return false;
+}
+
 pub fn to_string(self: *const @This(), out: anytype) !void {
     try out.writeAll("versions: ");
     for (self.versions) |version| {
