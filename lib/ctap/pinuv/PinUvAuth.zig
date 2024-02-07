@@ -339,7 +339,7 @@ pub fn authenticate_v1(
     var signature = a.alloc(u8, 16) catch {
         return error.AllocationError;
     };
-    Hmac.create(buffer[0..32], message, key[0..32]);
+    Hmac.create(buffer[0..32], message, key);
     std.mem.copy(u8, signature[0..16], buffer[0..16]);
     return signature;
 }
