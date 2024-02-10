@@ -651,6 +651,65 @@ pub const client_pin = struct {
             return error.MissingResponse;
         }
     }
+
+    pub fn getPinUvAuthTokenUsingUvWithPermissions(
+        t: *Transport,
+        e: *Encapsulation,
+        permissions: Permissions,
+        rpId: ?[]const u8,
+        a: std.mem.Allocator,
+    ) ![]const u8 {
+        const cmd = 0x06;
+        var request = ClientPin{
+            .pinUvAuthProtocol = e.version,
+            .subCommand = .getPinUvAuthTokenUsingUvWithPermissions,
+            .keyAgreement = cbor.cose.Key.fromP256Pub(
+                .EcdhEsHkdf256,
+                e.platform_key_agreement_key,
+            ),
+            .permissions = std.mem.toBytes(permissions)[0],
+        };
+
+        if (rpId) |id| {
+            request.rpId = id;
+        }
+
+        var arr = std.ArrayList(u8).init(a);
+        defer arr.deinit();
+
+        try arr.append(cmd);
+        try cbor.stringify(request, .{}, arr.writer());
+
+        try t.write(arr.items);
+
+        if (try t.read(a)) |response| {
+            defer a.free(response);
+
+            if (response[0] != 0) {
+                return err.errorFromInt(response[0]);
+            }
+
+            var cpr = try cbor.parse(ClientPinResponse, try cbor.DataItem.new(response[1..]), .{ .allocator = a });
+            defer cpr.deinit(a);
+
+            if (cpr.pinUvAuthToken == null) return error.MissingPar;
+
+            var token: []u8 = undefined;
+            switch (e.version) {
+                .V1 => {
+                    token = try a.alloc(u8, cpr.pinUvAuthToken.?.len);
+                    PinUvAuth.decrypt_v1(e.shared_secret, token, cpr.pinUvAuthToken.?);
+                },
+                .V2 => {
+                    token = try a.alloc(u8, cpr.pinUvAuthToken.?.len - 16);
+                    PinUvAuth.decrypt_v2(e.shared_secret, token, cpr.pinUvAuthToken.?);
+                },
+            }
+            return token;
+        } else {
+            return error.MissingResponse;
+        }
+    }
 };
 
 // ///////////////////////////////////////

@@ -14,7 +14,7 @@ rp_id_raw: [128]u8 = undefined,
 /// The relying party id, referencing rp_id_raw.
 rp_id: ?[]const u8 = null,
 /// The permissions set for the given pin token (if set).
-permissions: u8 = 0,
+permissions: u32 = 0,
 /// The pin token is in use
 in_use: bool = false,
 /// The platform MUST invoke an authenticator operation

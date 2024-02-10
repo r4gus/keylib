@@ -90,9 +90,8 @@ pub fn authenticatorClientPin(
             const be = client_pin_param.bePermissionSet() and (options.bioEnroll == null);
             const lbw = client_pin_param.lbwPermissionSet() and (options.largeBlobs == null or options.largeBlobs.? == false);
             const acfg = client_pin_param.acfgPermissionSet() and (options.authnrCfg == null or options.authnrCfg.? == false);
-            const mc = client_pin_param.mcPermissionSet() and (options.noMcGaPermissionsWithClientPin == true);
-            const ga = client_pin_param.gaPermissionSet() and (options.noMcGaPermissionsWithClientPin == true);
-            if (cm or be or lbw or acfg or mc or ga) {
+            // The mc and ga permissions are always considered authorized, thus they are not listed below.
+            if (cm or be or lbw or acfg) {
                 return fido.ctap.StatusCodes.ctap2_err_unauthorized_permission;
             }
 

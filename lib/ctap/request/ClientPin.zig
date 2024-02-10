@@ -26,7 +26,7 @@ newPinEnc: ?[]const u8 = null, // TODO: this should always be 64 bytes
 /// pinHashEnc: Encrypted SHA-256 of PIN using sharedSecret.
 pinHashEnc: ?[]u8 = null,
 /// permissions: Bitfield of permissions. If present, MUST NOT be 0.
-permissions: ?u8 = null,
+permissions: ?u32 = null,
 /// rpId: The RP ID to assign as the permissions RP ID.
 rpId: ?[]const u8 = null,
 
