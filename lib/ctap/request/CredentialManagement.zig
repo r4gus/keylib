@@ -21,29 +21,29 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     }
 }
 
-pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
 
     try cbor.stringify(self, .{
         .field_settings = &.{
-            .{ .name = "subCommand", .alias = "1", .options = .{ .enum_as_text = false } },
-            .{ .name = "subCommandParams", .alias = "2", .options = .{} },
-            .{ .name = "pinUvAuthProtocol", .alias = "3", .options = .{ .enum_as_text = false } },
-            .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
+            .{ .name = "subCommand", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "subCommandParams", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "3", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
         },
-        .from_cborStringify = true,
+        .from_callback = true,
     }, out);
 }
 
-pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_cborParse = true, // prevent infinite loops
+        .from_callback = true, // prevent infinite loops
         .field_settings = &.{
-            .{ .name = "subCommand", .alias = "1", .options = .{} },
-            .{ .name = "subCommandParams", .alias = "2", .options = .{} },
-            .{ .name = "pinUvAuthProtocol", .alias = "3", .options = .{} },
-            .{ .name = "pinUvAuthParam", .alias = "4", .options = .{} },
+            .{ .name = "subCommand", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "subCommandParams", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "3", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "pinUvAuthParam", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
         },
     });
 }
@@ -80,27 +80,27 @@ pub const SubCommandParams = struct {
         }
     }
 
-    pub fn cborStringify(self: *const @This(), options: cbor.StringifyOptions, out: anytype) !void {
+    pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
         _ = options;
 
         try cbor.stringify(self, .{
             .field_settings = &.{
-                .{ .name = "rpIDHash", .alias = "1", .options = .{} },
-                .{ .name = "credentialID", .alias = "2", .options = .{} },
-                .{ .name = "user", .alias = "3", .options = .{} },
+                .{ .name = "rpIDHash", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+                .{ .name = "credentialID", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+                .{ .name = "user", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             },
-            .from_cborStringify = true,
+            .from_callback = true,
         }, out);
     }
 
-    pub fn cborParse(item: cbor.DataItem, options: cbor.ParseOptions) !@This() {
+    pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
         return try cbor.parse(@This(), item, .{
             .allocator = options.allocator,
-            .from_cborParse = true, // prevent infinite loops
+            .from_callback = true, // prevent infinite loops
             .field_settings = &.{
-                .{ .name = "rpIDHash", .alias = "1", .options = .{} },
-                .{ .name = "credentialID", .alias = "2", .options = .{} },
-                .{ .name = "user", .alias = "3", .options = .{} },
+                .{ .name = "rpIDHash", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+                .{ .name = "credentialID", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+                .{ .name = "user", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             },
         });
     }

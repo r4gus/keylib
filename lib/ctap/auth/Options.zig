@@ -62,5 +62,8 @@ makeCredUvNotRqd: bool = false,
 /// present + true:             pinUvAuthToken not allowd for credential creation and assertion
 /// present + false or absetn:  can be used for credential creation and assertion
 noMcGaPermissionsWithClientPin: bool = false,
+/// This is used by authenticators that implemented the credMgmt feature before
+/// if got added to the CTAP2 spec.
+credentialMgmtPreview: ?bool = null,
 
 // TODO: support remaining options

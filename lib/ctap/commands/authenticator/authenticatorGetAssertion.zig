@@ -216,7 +216,8 @@ pub fn authenticatorGetAssertion(
             }
         }
 
-        const policy = credentials.items[i].policy;
+        const policy_ = fido.ctap.extensions.CredentialCreationPolicy.fromString(credentials.items[i].getExtensions("credProtect"));
+        const policy = if (policy_) |policy| policy else fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
 
         // if credential protection for a credential is marked as
         // userVerificationRequired, and the "uv" bit is false in

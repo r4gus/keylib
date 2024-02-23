@@ -14,7 +14,7 @@ rp_id_raw: [128]u8 = undefined,
 /// The relying party id, referencing rp_id_raw.
 rp_id: ?[]const u8 = null,
 /// The permissions set for the given pin token (if set).
-permissions: u8 = 0,
+permissions: u32 = 0,
 /// The pin token is in use
 in_use: bool = false,
 /// The platform MUST invoke an authenticator operation
@@ -339,7 +339,7 @@ pub fn authenticate_v1(
     var signature = a.alloc(u8, 16) catch {
         return error.AllocationError;
     };
-    Hmac.create(buffer[0..32], message, key[0..32]);
+    Hmac.create(buffer[0..32], message, key);
     std.mem.copy(u8, signature[0..16], buffer[0..16]);
     return signature;
 }

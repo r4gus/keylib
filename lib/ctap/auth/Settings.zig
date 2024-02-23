@@ -16,8 +16,13 @@ const fido = @import("../../main.zig");
 
 /// List of supported versions.
 versions: []const fido.common.AuthenticatorVersions,
-/// List of supported extensions.
-extensions: ?[]const fido.ctap.extensions.Extension = null,
+/// List of supported extensions, e.g.:
+/// * "credProtect"
+/// * "credBlob"
+/// * "largeBlobKey"
+/// * "minPinLength"
+/// * "hmac-secret"
+extensions: ?[]const []const u8 = null,
 /// The Authenticator Attestation GUID (AAGUID) is a 128-bit identifier
 /// indicating the type of the authenticator. Authenticators with the
 /// same capabilities and firmware, can share the same AAGUID.
@@ -38,7 +43,7 @@ maxCredentialIdLength: ?u64 = null,
 /// List of supported transports.
 transports: ?[]const fido.common.AuthenticatorTransports = null,
 /// List of supported algorithms
-algorithms: []const fido.common.PublicKeyCredentialParameters,
+algorithms: []const fido.common.PublicKeyCredentialParameters = &.{},
 /// The maximum size, in bytes, of the serialized large-blob array that
 /// this authenticator can store. If the authenticatorLargeBlobs command
 /// is supported, this MUST be specified. Otherwise it MUST NOT be. If
@@ -107,9 +112,7 @@ pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
         allocator.free(transports);
     }
 
-    if (self.algorithms) |algorithms| {
-        allocator.free(algorithms);
-    }
+    allocator.free(self.algorithms);
 
     if (self.vendorPrototypeConfigCommands) |vendor_prototype_config_commands| {
         allocator.free(vendor_prototype_config_commands);
@@ -122,7 +125,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
     try cbor.stringify(self.*, .{
         .field_settings = &.{
             .{ .name = "versions", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
-            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
             .{ .name = "aaguid", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
             .{ .name = "options", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             .{ .name = "maxMsgSize", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
@@ -145,6 +148,46 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
         },
         .from_callback = true,
     }, out);
+}
+
+pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
+    return try cbor.parse(@This(), item, .{
+        .allocator = options.allocator,
+        .from_callback = true, // prevent infinite loops
+        .field_settings = &.{
+            .{ .name = "versions", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
+            .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
+            .{ .name = "aaguid", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
+            .{ .name = "options", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
+            .{ .name = "maxMsgSize", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
+            .{ .name = "pinUvAuthProtocols", .field_options = .{ .alias = "6", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "maxCredentialCountInList", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
+            .{ .name = "maxCredentialIdLength", .field_options = .{ .alias = "8", .serialization_type = .Integer } },
+            .{ .name = "transports", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
+            .{ .name = "algorithms", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
+            .{ .name = "maxSerializedLargeBlobArray", .field_options = .{ .alias = "11", .serialization_type = .Integer } },
+            .{ .name = "forcePINChange", .field_options = .{ .alias = "12", .serialization_type = .Integer } },
+            .{ .name = "minPINLength", .field_options = .{ .alias = "13", .serialization_type = .Integer } },
+            .{ .name = "firmwareVersion", .field_options = .{ .alias = "14", .serialization_type = .Integer } },
+            .{ .name = "maxCredBlobLength", .field_options = .{ .alias = "15", .serialization_type = .Integer } },
+            .{ .name = "maxRPIDsForSetMinPINLength", .field_options = .{ .alias = "16", .serialization_type = .Integer } },
+            .{ .name = "preferredPlatformUvAttempts", .field_options = .{ .alias = "17", .serialization_type = .Integer } },
+            .{ .name = "uvModality", .field_options = .{ .alias = "18", .serialization_type = .Integer } },
+            .{ .name = "certifications", .field_options = .{ .alias = "19", .serialization_type = .Integer } },
+            .{ .name = "remainingDiscoverableCredentials", .field_options = .{ .alias = "20", .serialization_type = .Integer } },
+            .{ .name = "vendorPrototypeConfigCommands", .field_options = .{ .alias = "21", .serialization_type = .Integer } },
+        },
+    });
+}
+
+pub fn extensionSupported(self: *const @This(), ext: []const u8) bool {
+    if (self.extensions == null) return false;
+
+    for (self.extensions.?) |ext_| {
+        if (std.mem.eql(u8, ext, ext_)) return true;
+    }
+
+    return false;
 }
 
 pub fn to_string(self: *const @This(), out: anytype) !void {

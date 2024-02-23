@@ -72,19 +72,19 @@ pub const InitResponse = packed struct {
     /// If set to 1, authenticator implements CTAPHID_WINK function.
     wink: bool,
     /// Reserved for future use (must be set to 0).
-    reserved1: bool,
+    reserved1: bool = false,
     /// If set to 1, authenticator implements CTAPHID_CBOR function.
     cbor: bool,
     /// If set to 1, authenticator DOES NOT implement CTAPHID_MSG function.
     nmsg: bool,
     /// Reserved for future use (must be set to 0).
-    reserved2: bool,
+    reserved2: bool = false,
     /// Reserved for future use (must be set to 0).
-    reserved3: bool,
+    reserved3: bool = false,
     /// Reserved for future use (must be set to 0).
-    reserved4: bool,
+    reserved4: bool = false,
     /// Reserved for future use (must be set to 0).
-    reserved5: bool,
+    reserved5: bool = false,
 
     pub fn new(nonce: Nonce, cid: Cid, wink: bool, cbor: bool, nmsg: bool) @This() {
         return @This(){
@@ -113,6 +113,22 @@ pub const InitResponse = packed struct {
         slice[MIDOFF] = self.minor_device_version_number;
         slice[BDOFF] = self.build_device_version_number;
         slice[FOFF] = (@as(u8, @intCast(@intFromBool(self.nmsg))) << 3) + (@as(u8, @intCast(@intFromBool(self.cbor))) << 2) + (@as(u8, @intCast(@intFromBool(self.wink))));
+    }
+
+    pub fn deserialize(slice: []const u8) !@This() {
+        if (slice.len != 17) return error.InvalidSize;
+
+        return .{
+            .nonce = misc.sliceToInt(Nonce, slice[0..8]),
+            .cid = misc.sliceToInt(u32, slice[8..12]),
+            .version_identifier = slice[12],
+            .major_device_version_number = slice[13],
+            .minor_device_version_number = slice[14],
+            .build_device_version_number = slice[15],
+            .wink = if (slice[16] & 1 == 1) true else false,
+            .cbor = if (slice[16] & 4 == 4) true else false,
+            .nmsg = if (slice[16] & 8 == 8) true else false,
+        };
     }
 
     const NOFF: usize = 0;
