@@ -54,33 +54,34 @@ pub fn build(b: *std.build.Builder) !void {
     });
     try b.modules.put(b.dupe("clientlib"), client_module);
 
-    // Client Application (WIP/ test)
-    // Might get removed at some point
+    // Examples
     // ------------------------------------------------
 
-    var exe = b.addExecutable(.{
+    var client_example = b.addExecutable(.{
         .name = "client",
-        .root_source_file = .{ .path = "src/client.zig" },
+        .root_source_file = .{ .path = "example/client.zig" },
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("client", client_module);
-    exe.linkLibrary(hidapi_dep.artifact("hidapi"));
+    client_example.addModule("client", client_module);
+    client_example.linkLibrary(hidapi_dep.artifact("hidapi"));
 
-    const client_step = b.step("client", "Build the client application");
-    client_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
+    const client_example_step = b.step("client-example", "Build the client application example");
+    client_example_step.dependOn(&b.addInstallArtifact(client_example, .{}).step);
 
-    var repl = b.addExecutable(.{
-        .name = "frepl",
-        .root_source_file = .{ .path = "src/repl.zig" },
+    var authenticator_example = b.addExecutable(.{
+        .name = "authenticator",
+        .root_source_file = .{ .path = "example/authenticator.zig" },
         .target = target,
         .optimize = optimize,
     });
-    repl.addModule("client", client_module);
-    repl.linkLibrary(hidapi_dep.artifact("hidapi"));
+    authenticator_example.addModule("keylib", keylib_module);
+    authenticator_example.addModule("uhid", uhid_module);
+    authenticator_example.addModule("zbor", zbor_dep.module("zbor"));
+    authenticator_example.linkLibC();
 
-    const repl_step = b.step("repl", "Build the client repl");
-    repl_step.dependOn(&b.addInstallArtifact(repl, .{}).step);
+    const authenticator_example_step = b.step("auth-example", "Build the authenticator example");
+    authenticator_example_step.dependOn(&b.addInstallArtifact(authenticator_example, .{}).step);
 
     // C bindings
     // ------------------------------------------------
