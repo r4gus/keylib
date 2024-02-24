@@ -204,8 +204,10 @@ pub const Auth = struct {
     /// Load all credentials associated with the given relying party id
     pub fn loadCredentials(self: *@This(), rpId: ?[]const u8) ![]fido.ctap.authenticator.Credential {
         const rpIdZ: ?[:0]const u8 = if (rpId) |rpId_| try self.allocator.dupeZ(u8, rpId_) else null;
-        if (rpIdZ != null) {
-            defer self.allocator.free(rpIdZ.?);
+        defer {
+            if (rpIdZ != null) {
+                self.allocator.free(rpIdZ.?);
+            }
         }
         var iter = DataIterator{
             .allocator = self.allocator,
