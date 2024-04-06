@@ -29,13 +29,13 @@ typedef enum{
 
 typedef enum{
     // The user has denied the action
-    UpResult_Denied = 0,
+    UvResult_Denied = 0,
     // The user has accepted the action
-    UpResult_Accepted = 1,
+    UvResult_Accepted = 1,
     // The user has accepted the action
-    UpResult_AcceptedWithUp = 2,
+    UvResult_AcceptedWithUp = 2,
     // The user presence check has timed out
-    UpResult_Timeout = 3,
+    UvResult_Timeout = 3,
 } UvResult;
 
 typedef enum{
@@ -62,11 +62,18 @@ typedef struct{
     int (*del)(const char* id);
 } Callbacks;
 
+typedef struct{
+    // A UUID/ String representing the type of authenticator.
+    char aaguid[16];
+} AuthSettings;
+
 void* auth_init(Callbacks);
 void auth_deinit(void*);
+void auth_handle(void*, void*);
 
 void* ctaphid_init();
 void ctaphid_deinit(void*);
-void* ctaphid_handle(void*, const char*, size_t, void*);
+void* ctaphid_handle(void*, const char*, size_t);
+void* ctaphid_iterator(void*);
 int ctaphid_iterator_next(void*, char*);
 void ctaphid_iterator_deinit(void*);
