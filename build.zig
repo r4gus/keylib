@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -27,16 +27,16 @@ pub fn build(b: *std.build.Builder) !void {
     // ------------------------------------------------
 
     const keylib_module = b.addModule("keylib", .{
-        .source_file = .{ .path = "lib/main.zig" },
-        .dependencies = &.{
+        .root_source_file = .{ .path = "lib/main.zig" },
+        .imports = &.{
             .{ .name = "zbor", .module = zbor_module },
         },
     });
     try b.modules.put(b.dupe("keylib"), keylib_module);
 
     const uhid_module = b.addModule("uhid", .{
-        .source_file = .{ .path = "bindings/linux/src/uhid.zig" },
-        .dependencies = &.{},
+        .root_source_file = .{ .path = "bindings/linux/src/uhid.zig" },
+        .imports = &.{},
     });
     try b.modules.put(b.dupe("uhid"), uhid_module);
 
@@ -47,8 +47,8 @@ pub fn build(b: *std.build.Builder) !void {
     // ------------------------------------------------
 
     const client_module = b.addModule("clientlib", .{
-        .source_file = .{ .path = "lib/client.zig" },
-        .dependencies = &.{
+        .root_source_file = .{ .path = "lib/client.zig" },
+        .imports = &.{
             .{ .name = "zbor", .module = zbor_module },
         },
     });
@@ -63,7 +63,7 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
-    client_example.addModule("client", client_module);
+    client_example.root_module.addImport("client", client_module);
     client_example.linkLibrary(hidapi_dep.artifact("hidapi"));
 
     const client_example_step = b.step("client-example", "Build the client application example");
@@ -75,9 +75,9 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
-    authenticator_example.addModule("keylib", keylib_module);
-    authenticator_example.addModule("uhid", uhid_module);
-    authenticator_example.addModule("zbor", zbor_dep.module("zbor"));
+    authenticator_example.root_module.addImport("keylib", keylib_module);
+    authenticator_example.root_module.addImport("uhid", uhid_module);
+    authenticator_example.root_module.addImport("zbor", zbor_dep.module("zbor"));
     authenticator_example.linkLibC();
 
     const authenticator_example_step = b.step("auth-example", "Build the authenticator example");
@@ -92,14 +92,16 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
-    c_bindings.addModule("keylib", keylib_module);
+    c_bindings.root_module.addImport("keylib", keylib_module);
     c_bindings.linkLibC();
-    c_bindings.installHeadersDirectoryOptions(.{
-        .source_dir = std.Build.LazyPath{ .path = "bindings/c/include" },
-        .install_dir = .header,
-        .install_subdir = "keylib",
-        .exclude_extensions = &.{".c"},
-    });
+    c_bindings.installHeadersDirectory(
+        std.Build.LazyPath{ .path = "bindings/c/include" },
+        "keylib",
+        .{
+            .exclude_extensions = &.{},
+            .include_extensions = &.{".h"},
+        },
+    );
     b.installArtifact(c_bindings);
 
     const uhid = b.addStaticLibrary(.{
@@ -109,12 +111,14 @@ pub fn build(b: *std.build.Builder) !void {
         .optimize = optimize,
     });
     uhid.linkLibC();
-    uhid.installHeadersDirectoryOptions(.{
-        .source_dir = std.Build.LazyPath{ .path = "bindings/linux/include" },
-        .install_dir = .header,
-        .install_subdir = "keylib",
-        .exclude_extensions = &.{".c"},
-    });
+    uhid.installHeadersDirectory(
+        std.Build.LazyPath{ .path = "bindings/linux/include" },
+        "keylib",
+        .{
+            .exclude_extensions = &.{},
+            .include_extensions = &.{".h"},
+        },
+    );
     b.installArtifact(uhid);
 
     // Python bindings
@@ -151,7 +155,7 @@ pub fn build(b: *std.build.Builder) !void {
         .target = target,
         .optimize = optimize,
     });
-    lib_tests.addModule("zbor", zbor_module);
+    lib_tests.root_module.addImport("zbor", zbor_module);
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&b.addRunArtifact(lib_tests).step);

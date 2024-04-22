@@ -199,17 +199,17 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
 
                 const k = deterministicScalar(h_slice.*, self.secret_key.bytes, self.noise);
 
-                const p = try Curve.basePoint.mul(k.toBytes(.Big), .Big);
-                const xs = p.affineCoordinates().x.toBytes(.Big);
+                const p = try Curve.basePoint.mul(k.toBytes(.big), .big);
+                const xs = p.affineCoordinates().x.toBytes(.big);
                 const r = reduceToScalar(Curve.Fe.encoded_length, xs);
                 if (r.isZero()) return error.IdentityElement;
 
                 const k_inv = k.invert();
-                const zrs = z.add(r.mul(try Curve.scalar.Scalar.fromBytes(self.secret_key.bytes, .Big)));
+                const zrs = z.add(r.mul(try Curve.scalar.Scalar.fromBytes(self.secret_key.bytes, .big)));
                 const s = k_inv.mul(zrs);
                 if (s.isZero()) return error.IdentityElement;
 
-                return Signature{ .r = r.toBytes(.Big), .s = s.toBytes(.Big) };
+                return Signature{ .r = r.toBytes(.big), .s = s.toBytes(.big) };
             }
         };
 
@@ -222,8 +222,8 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
             public_key: PublicKey,
 
             fn init(sig: Signature, public_key: PublicKey) (IdentityElementError || NonCanonicalError)!Verifier {
-                const r = try Curve.scalar.Scalar.fromBytes(sig.r, .Big);
-                const s = try Curve.scalar.Scalar.fromBytes(sig.s, .Big);
+                const r = try Curve.scalar.Scalar.fromBytes(sig.r, .big);
+                const s = try Curve.scalar.Scalar.fromBytes(sig.s, .big);
                 if (r.isZero() or s.isZero()) return error.IdentityElement;
 
                 return Verifier{
@@ -256,7 +256,7 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
                 const v2 = self.r.mul(s_inv).toBytes(.little);
                 const v1g = try Curve.basePoint.mulPublic(v1, .little);
                 const v2pk = try self.public_key.p.mulPublic(v2, .little);
-                const vxs = v1g.add(v2pk).affineCoordinates().x.toBytes(.Big);
+                const vxs = v1g.add(v2pk).affineCoordinates().x.toBytes(.big);
                 const vr = reduceToScalar(Curve.Fe.encoded_length, vxs);
                 if (!self.r.equivalent(vr)) {
                     return error.SignatureVerificationFailed;
@@ -277,16 +277,16 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
             /// Create a new key pair. The seed must be secret and indistinguishable from random.
             /// The seed can also be left to null in order to generate a random key pair.
             pub fn create(seed: [seed_length]u8) IdentityElementError!KeyPair {
-                var seed_ = seed;
+                const seed_ = seed;
                 const h = [_]u8{0x00} ** Hash.digest_length;
                 const k0 = [_]u8{0x01} ** SecretKey.encoded_length;
-                const secret_key = deterministicScalar(h, k0, seed_).toBytes(.Big);
+                const secret_key = deterministicScalar(h, k0, seed_).toBytes(.big);
                 return fromSecretKey(SecretKey{ .bytes = secret_key });
             }
 
             /// Return the public key corresponding to the secret key.
             pub fn fromSecretKey(secret_key: SecretKey) IdentityElementError!KeyPair {
-                const public_key = try Curve.basePoint.mul(secret_key.bytes, .Big);
+                const public_key = try Curve.basePoint.mul(secret_key.bytes, .big);
                 return KeyPair{ .secret_key = secret_key, .public_key = PublicKey{ .p = public_key } };
             }
 
@@ -311,11 +311,11 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
             if (unreduced_len >= 48) {
                 var xs = [_]u8{0} ** 64;
                 @memcpy(xs[xs.len - s.len ..], s[0..]);
-                return Curve.scalar.Scalar.fromBytes64(xs, .Big);
+                return Curve.scalar.Scalar.fromBytes64(xs, .big);
             }
             var xs = [_]u8{0} ** 48;
             @memcpy(xs[xs.len - s.len ..], s[0..]);
-            return Curve.scalar.Scalar.fromBytes48(xs, .Big);
+            return Curve.scalar.Scalar.fromBytes48(xs, .big);
         }
 
         // Create a deterministic scalar according to a secret key and optional noise.
@@ -347,7 +347,7 @@ pub fn Ecdsa(comptime Curve: type, comptime Hash: type) type {
                     Hmac.create(m_v, m_v, &k);
                     @memcpy(t[t_off..t_end], m_v[0 .. t_end - t_off]);
                 }
-                if (Curve.scalar.Scalar.fromBytes(t, .Big)) |s| return s else |_| {}
+                if (Curve.scalar.Scalar.fromBytes(t, .big)) |s| return s else |_| {}
                 m_i.* = 0x00;
                 Hmac.create(&k, m[0 .. m_v.len + 1], &k);
                 Hmac.create(m_v, m_v, &k);

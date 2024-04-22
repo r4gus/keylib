@@ -122,7 +122,7 @@ pub fn main() !void {
                     .cbor => {
                         var out: [7609]u8 = undefined;
                         const r = auth.handle(&out, res.getData());
-                        std.mem.copy(u8, res._data[0..r.len], r);
+                        @memcpy(res._data[0..r.len], r);
                         res.len = r.len;
                     },
                     else => {},

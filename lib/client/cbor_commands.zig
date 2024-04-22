@@ -69,7 +69,7 @@ pub const Promise = struct {
             // TODO: should we send a abort message or something???
         }
 
-        var resp = self.t.read(allocator) catch |e| {
+        const resp = self.t.read(allocator) catch |e| {
             if (e == error.Processing) {
                 return .{ .pending = .processing };
             } else if (e == error.UpNeeded) {
@@ -196,7 +196,7 @@ pub const credentials = struct {
 
         // The challenge is base64 encoded before being integrated into the client data
         const Base64 = std.base64.url_safe.Encoder;
-        var challenge = try a.alloc(u8, Base64.calcSize(public_key.challenge.len));
+        const challenge = try a.alloc(u8, Base64.calcSize(public_key.challenge.len));
         defer a.free(challenge);
         _ = Base64.encode(challenge, public_key.challenge);
 
@@ -230,7 +230,7 @@ pub const credentials = struct {
         }
 
         const cmd = 0x01;
-        var request = keylib.ctap.request.MakeCredential{
+        const request = keylib.ctap.request.MakeCredential{
             .clientDataHash = client_data_hash,
             .rp = public_key.rp.?,
             .user = public_key.user.?,
@@ -272,7 +272,7 @@ pub const credentials = struct {
 
         // The challenge is base64 encoded before being integrated into the client data
         const Base64 = std.base64.url_safe.Encoder;
-        var challenge = try a.alloc(u8, Base64.calcSize(public_key.challenge.len));
+        const challenge = try a.alloc(u8, Base64.calcSize(public_key.challenge.len));
         defer a.free(challenge);
         _ = Base64.encode(challenge, public_key.challenge);
 
@@ -304,7 +304,7 @@ pub const credentials = struct {
         }
 
         const cmd = 0x02;
-        var request = keylib.ctap.request.GetAssertion{
+        const request = keylib.ctap.request.GetAssertion{
             .rpId = try a.dupe(u8, public_key.rpId.?),
             .clientDataHash = client_data_hash,
             .pinUvAuthParam = param,
@@ -408,7 +408,7 @@ pub const client_pin = struct {
     ) !Encapsulation {
         var seed: [EcdhP256.secret_length]u8 = undefined;
         std.crypto.random.bytes(seed[0..]);
-        var k = try EcdhP256.KeyPair.create(seed);
+        const k = try EcdhP256.KeyPair.create(seed);
 
         const shared_point = try EcdhP256.scalarmultXY(
             k.secret_key,
@@ -418,7 +418,7 @@ pub const client_pin = struct {
 
         const z: [32]u8 = shared_point.toUncompressedSec1()[1..33].*;
 
-        var ss = switch (version) {
+        const ss = switch (version) {
             .V1 => try PinUvAuth.kdf_v1(z, a),
             .V2 => try PinUvAuth.kdf_v2(z, a),
         };
@@ -437,7 +437,7 @@ pub const client_pin = struct {
         a: std.mem.Allocator,
     ) !Encapsulation {
         const cmd = 0x06;
-        var request = ClientPin{
+        const request = ClientPin{
             .pinUvAuthProtocol = version,
             .subCommand = .getKeyAgreement,
         };
@@ -503,7 +503,7 @@ pub const client_pin = struct {
         var pinHashEnc: []u8 = undefined;
         switch (e.version) {
             .V1 => {
-                var iv: [16]u8 = .{0} ** 16;
+                const iv: [16]u8 = .{0} ** 16;
                 PinUvAuth._encrypt(
                     iv,
                     e.shared_secret[0..32].*,
@@ -593,7 +593,7 @@ pub const client_pin = struct {
         var pinHashEnc: []u8 = undefined;
         switch (e.version) {
             .V1 => {
-                var iv: [16]u8 = .{0} ** 16;
+                const iv: [16]u8 = .{0} ** 16;
                 PinUvAuth._encrypt(
                     iv,
                     e.shared_secret[0..32].*,

@@ -85,7 +85,7 @@ pub const CtapHidMessageIterator = struct {
                 self.seq += 1;
             }
 
-            std.mem.copy(u8, self.buffer[off..], self.data[self.cntr .. self.cntr + len]);
+            @memcpy(self.buffer[off .. off + len], self.data[self.cntr .. self.cntr + len]);
             self.cntr += len;
 
             if (self.data.len == 0) {

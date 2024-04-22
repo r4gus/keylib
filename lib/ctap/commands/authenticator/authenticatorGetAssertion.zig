@@ -9,7 +9,7 @@ pub fn authenticatorGetAssertion(
     request: []const u8,
     out: *std.ArrayList(u8),
 ) fido.ctap.StatusCodes {
-    var di = cbor.DataItem.new(request) catch {
+    const di = cbor.DataItem.new(request) catch {
         return .ctap2_err_invalid_cbor;
     };
     const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
@@ -23,7 +23,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var status = helper.verifyPinUvAuthParam(auth, gap);
+    const status = helper.verifyPinUvAuthParam(auth, gap);
     if (status != .ctap1_err_success) return status;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
@@ -35,7 +35,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 4. Validate options
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var uv_supported = auth.uvSupported();
+    const uv_supported = auth.uvSupported();
 
     var uv = gap.requestsUv();
     uv = if (gap.pinUvAuthParam != null) false else uv; // pin overwrites uv
@@ -141,7 +141,7 @@ pub fn authenticatorGetAssertion(
                 auth.token.setRpId(gap.rpId);
             }
         } else if (uv) {
-            var r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
+            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
                 std.log.err("getAssertion: unable to allocate memory for rpId", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
@@ -254,7 +254,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
+    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
         std.log.err("getAssertion: unable to allocate memory for rpId", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -354,9 +354,9 @@ pub fn authenticatorGetAssertion(
         write_back = true;
     }
 
-    var usageCnt = cred.sign_count;
+    const usageCnt = cred.sign_count;
 
-    var user: ?fido.common.User = if (uv_response) blk: {
+    const user: ?fido.common.User = if (uv_response) blk: {
         // User identifiable information (name, DisplayName, icon)
         // inside the publicKeyCredentialUserEntity MUST NOT be returned
         // if user verification is not done by the authenticator

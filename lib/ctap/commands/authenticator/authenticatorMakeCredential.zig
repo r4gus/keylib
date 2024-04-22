@@ -13,7 +13,7 @@ pub fn authenticatorMakeCredential(
     request: []const u8,
     out: *std.ArrayList(u8),
 ) fido.ctap.StatusCodes {
-    var di = cbor.DataItem.new(request) catch {
+    const di = cbor.DataItem.new(request) catch {
         return .ctap2_err_invalid_cbor;
     };
     const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{
@@ -46,8 +46,8 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 5. Validate options
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var uv_supported = auth.uvSupported();
-    var rk_supported = auth.rkSupported();
+    const uv_supported = auth.uvSupported();
+    const rk_supported = auth.rkSupported();
 
     var uv = mcp.requestsUv();
     uv = if (mcp.pinUvAuthParam != null) false else uv; // pin overwrites uv
@@ -199,7 +199,7 @@ pub fn authenticatorMakeCredential(
                 auth.token.setRpId(mcp.rp.id);
             }
         } else if (uv) {
-            var u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
+            const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
                 if (mcp.user.displayName) |dn| dn else "???",
                 if (mcp.user.name) |dn| dn else "???",
             }) catch {
@@ -208,7 +208,7 @@ pub fn authenticatorMakeCredential(
             };
             defer auth.allocator.free(u);
 
-            var r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id}) catch {
+            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id}) catch {
                 std.log.err("MakeCredential: allocPrintZ for rpId", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
@@ -254,13 +254,13 @@ pub fn authenticatorMakeCredential(
     // 12. Check exclude list
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
-    var settings = auth.loadSettings() catch |e| {
+    const settings = auth.loadSettings() catch |e| {
         std.log.err("authenticatorMakeCredential: Unable to fetch Settings ({any})", .{e});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
     _ = settings;
 
-    var u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
+    const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
         if (mcp.user.displayName) |dn| dn else "???",
         if (mcp.user.name) |dn| dn else "???",
     }) catch {
@@ -269,7 +269,7 @@ pub fn authenticatorMakeCredential(
     };
     defer auth.allocator.free(u);
 
-    var r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id}) catch {
+    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id}) catch {
         std.log.err("makeCredential: allocPrintZ for user", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -373,7 +373,7 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var id = auth.allocator.alloc(u8, 32) catch {
+    const id = auth.allocator.alloc(u8, 32) catch {
         std.log.err("makeCredential: unable to allocate memory for credId", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -420,7 +420,7 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (rk) {
         std.log.info("MakeCredential: creating resident key", .{});
-        var credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id) catch |err| blk: {
+        const credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id) catch |err| blk: {
             if (err == error.NoData) {
                 std.log.info(
                     "makeCredential: no credentials associated with rpId {s} found",

@@ -69,7 +69,7 @@ pub fn ctaphid_read(usb: *Usb, cmd: Cmd, cid: u32, tout_ms: i64, a: std.mem.Allo
         if (std.time.milliTimestamp() - start > tout_ms) return error.Timeout;
 
         var buffer: [64]u8 = undefined;
-        var l = try usb.read(&buffer, cid);
+        const l = try usb.read(&buffer, cid);
 
         if (l > 0) {
             if (seq == -1) {
@@ -123,7 +123,7 @@ pub fn ctaphid_read(usb: *Usb, cmd: Cmd, cid: u32, tout_ms: i64, a: std.mem.Allo
         }
 
         if (expected != null and total >= expected.?) {
-            var o = try a.alloc(u8, expected.?);
+            const o = try a.alloc(u8, expected.?);
             @memcpy(o, data[0..expected.?]);
             return o;
         }

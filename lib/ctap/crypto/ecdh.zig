@@ -28,7 +28,7 @@ pub fn Ecdh(comptime Curve: type) type {
             /// Create a new key pair using a RANDOMLY generated seed.
             pub fn create(seed: [secret_length]u8) !KeyPair {
                 var kp: KeyPair = undefined;
-                mem.copy(u8, &kp.secret_key, &seed);
+                @memcpy(&kp.secret_key, &seed);
                 kp.public_key = try recoverPublicKey(kp.secret_key);
                 return kp;
             }
@@ -46,14 +46,14 @@ pub fn Ecdh(comptime Curve: type) type {
 
         /// Compute the public key for a given private key.
         pub fn recoverPublicKey(secret_key: [secret_length]u8) IdentityElementError!Curve {
-            return try Curve.basePoint.mul(secret_key, .Little);
+            return try Curve.basePoint.mul(secret_key, .little);
         }
 
         pub fn scalarmultXY(secret_key: [secret_length]u8, pub_x: [public_length]u8, pub_y: [public_length]u8) !Curve {
-            const x = try Curve.Fe.fromBytes(pub_x[0..].*, .Big);
-            const y = try Curve.Fe.fromBytes(pub_y[0..].*, .Big);
+            const x = try Curve.Fe.fromBytes(pub_x[0..].*, .big);
+            const y = try Curve.Fe.fromBytes(pub_y[0..].*, .big);
             const c = try Curve.fromAffineCoordinates(.{ .x = x, .y = y });
-            const secret = try c.mul(secret_key, .Little);
+            const secret = try c.mul(secret_key, .little);
             return secret;
         }
     };

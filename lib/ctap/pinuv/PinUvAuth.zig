@@ -59,7 +59,7 @@ verify: *const fn (key: []const u8, message: []const u8, signature: []const u8, 
 /// as permission RP ID
 pub fn setRpId(self: *@This(), id: []const u8) void {
     const l = if (id.len > 128) 128 else id.len;
-    std.mem.copy(u8, self.rp_id_raw[0..l], id[0..l]);
+    @memcpy(self.rp_id_raw[0..l], id[0..l]);
     self.rp_id = self.rp_id_raw[0..l];
 }
 
@@ -296,7 +296,7 @@ pub fn encrypt_v1(
     demPlaintext: []const u8,
 ) void {
     _ = self;
-    var iv: [16]u8 = .{0} ** 16;
+    const iv: [16]u8 = .{0} ** 16;
     _encrypt(iv, key[0..32].*, out, demPlaintext);
 }
 
@@ -312,7 +312,7 @@ pub fn decrypt_v1(
     var i: usize = 0;
     while (i < demCiphertext.len) : (i += 16) {
         var block: [16]u8 = undefined;
-        std.mem.copy(u8, block[0..], demCiphertext[i .. i + 16]);
+        @memcpy(block[0..], demCiphertext[i .. i + 16]);
         var block2: [16]u8 = undefined;
 
         ctx.decrypt(&block2, &block);
@@ -323,8 +323,8 @@ pub fn decrypt_v1(
             block2[j] ^= iv[j];
         }
 
-        std.mem.copy(u8, out[i .. i + 16], block2[0..]);
-        std.mem.copy(u8, iv[0..], block[0..]);
+        @memcpy(out[i .. i + 16], block2[0..]);
+        @memcpy(iv[0..], block[0..]);
     }
 }
 
@@ -340,7 +340,7 @@ pub fn authenticate_v1(
         return error.AllocationError;
     };
     Hmac.create(buffer[0..32], message, key);
-    std.mem.copy(u8, signature[0..16], buffer[0..16]);
+    @memcpy(signature[0..16], buffer[0..16]);
     return signature;
 }
 
@@ -382,7 +382,7 @@ pub fn encrypt_v2(
 ) void {
     var iv: [16]u8 = undefined;
     self.rand.bytes(iv[0..]);
-    std.mem.copy(u8, out[0..16], iv[0..]);
+    @memcpy(out[0..16], iv[0..]);
     _encrypt(iv, key[32..64].*, out[16..], demPlaintext);
 }
 
@@ -400,7 +400,7 @@ pub fn _encrypt(
     var i: usize = 0;
     while (i < demPlaintext.len) : (i += 16) {
         var block: [16]u8 = undefined;
-        std.mem.copy(u8, block[0..], demPlaintext[i .. i + 16]);
+        @memcpy(block[0..], demPlaintext[i .. i + 16]);
 
         // block[i] xor iv
         var j: usize = 0;
@@ -410,8 +410,8 @@ pub fn _encrypt(
 
         var block2: [16]u8 = undefined;
         ctx.encrypt(&block2, &block);
-        std.mem.copy(u8, out[i .. i + 16], block2[0..]);
-        std.mem.copy(u8, _iv[0..], block2[0..]);
+        @memcpy(out[i .. i + 16], block2[0..]);
+        @memcpy(_iv[0..], block2[0..]);
     }
 }
 
@@ -428,7 +428,7 @@ pub fn decrypt_v2(
     var i: usize = 16;
     while (i < demCiphertext.len) : (i += 16) {
         var block: [16]u8 = undefined;
-        std.mem.copy(u8, block[0..], demCiphertext[i .. i + 16]);
+        @memcpy(block[0..], demCiphertext[i .. i + 16]);
         var block2: [16]u8 = undefined;
 
         ctx.decrypt(&block2, &block);
@@ -439,8 +439,8 @@ pub fn decrypt_v2(
             block2[j] ^= iv[j];
         }
 
-        std.mem.copy(u8, out[i - 16 .. i], block2[0..]);
-        std.mem.copy(u8, iv[0..], block[0..]);
+        @memcpy(out[i - 16 .. i], block2[0..]);
+        @memcpy(iv[0..], block[0..]);
     }
 }
 
@@ -515,7 +515,7 @@ test "aes cbc decryption 2" {
 }
 
 test "authenticate 1" {
-    var a = std.testing.allocator;
+    const a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
     const out = try authenticate_v2(key, "ctap2fido2webauthn", a);
     defer a.free(out);
@@ -524,14 +524,14 @@ test "authenticate 1" {
 }
 
 test "verify 1" {
-    var a = std.testing.allocator;
+    const a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
     const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", a);
     try std.testing.expectEqual(true, out);
 }
 
 test "verify 2" {
-    var a = std.testing.allocator;
+    const a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
     const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x09\x4e\x4c\xe8\x45\x7c", a);
     try std.testing.expectEqual(false, out);

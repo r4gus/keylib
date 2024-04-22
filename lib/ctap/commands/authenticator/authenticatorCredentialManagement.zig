@@ -19,7 +19,7 @@ fn validate(
         return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
     }
 
-    var prot = switch (cmReq.pinUvAuthProtocol.?) {
+    const prot = switch (cmReq.pinUvAuthProtocol.?) {
         .V1 => &auth.token.one.?,
         .V2 => &auth.token.two.?,
     };
@@ -82,7 +82,7 @@ pub fn getKeyInfo(
 
     const uid = std.mem.bytesToValue(uuid.Uuid, id[0..16]);
     const urn = uuid.urn.serialize(uid);
-    var entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
+    const entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
         std.log.err("getKeyInfo: unable to fetch credential with id {s} ({any})", .{
             std.fmt.fmtSliceHexUpper(id),
             err,
@@ -185,7 +185,7 @@ pub fn authenticatorCredentialManagement(
                 return r;
             }
 
-            var entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
+            const entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
                 std.log.err("getCredsMetadata: unable to fetch credentials ({any})", .{
                     err,
                 });
@@ -208,7 +208,7 @@ pub fn authenticatorCredentialManagement(
                 return r;
             }
 
-            var entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
+            const entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
                 std.log.err("enumerateRPsBegin: unable to fetch credentials ({any})", .{
                     err,
                 });
@@ -225,7 +225,7 @@ pub fn authenticatorCredentialManagement(
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
             if (auth.cred_mngmnt == null) {
-                var prot = switch (cmReq.pinUvAuthProtocol.?) {
+                const prot = switch (cmReq.pinUvAuthProtocol.?) {
                     .V1 => &auth.token.one.?,
                     .V2 => &auth.token.two.?,
                 };
@@ -280,7 +280,7 @@ pub fn authenticatorCredentialManagement(
 
             const rpIdHash = cmReq.subCommandParams.?.rpIDHash.?;
 
-            var entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
+            const entries = auth.callbacks.readCred(.{ .all = true }, auth.allocator) catch |err| {
                 std.log.err("enumerateRPsBegin: unable to fetch credentials ({any})", .{
                     err,
                 });
@@ -296,7 +296,7 @@ pub fn authenticatorCredentialManagement(
             if (entries.len == 0) return fido.ctap.StatusCodes.ctap2_err_no_credentials;
 
             if (auth.cred_mngmnt == null) {
-                var prot = switch (cmReq.pinUvAuthProtocol.?) {
+                const prot = switch (cmReq.pinUvAuthProtocol.?) {
                     .V1 => &auth.token.one.?,
                     .V2 => &auth.token.two.?,
                 };
@@ -358,7 +358,7 @@ pub fn authenticatorCredentialManagement(
                 cmReq.subCommandParams.?.credentialID.?.id[0..16],
             );
             const urn = uuid.urn.serialize(uid);
-            var entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
+            const entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
                 std.log.err("getCredsMetadata: unable to fetch credentials with id {s} ({any})", .{
                     std.fmt.fmtSliceHexUpper(cmReq.subCommandParams.?.credentialID.?.id),
                     err,
@@ -398,7 +398,7 @@ pub fn authenticatorCredentialManagement(
                 cmReq.subCommandParams.?.credentialID.?.id[0..16],
             );
             const urn = uuid.urn.serialize(uid);
-            var entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
+            const entries = auth.callbacks.readCred(.{ .id = urn[0..] }, auth.allocator) catch |err| {
                 std.log.err("getCredsMetadata: unable to fetch credentials with id {s} ({any})", .{
                     std.fmt.fmtSliceHexUpper(cmReq.subCommandParams.?.credentialID.?.id),
                     err,

@@ -1,4 +1,9 @@
-> We track the latest stable release of Zig (`0.11.0`)
+> We track the latest stable release of Zig (`0.12.0`)
+
+> [!IMPORTANT]
+> There seems to be an [issue](https://github.com/ziglang/zig/issues/17204) with the export of
+> header files that should be fixed for `0.12.0`. Still, I haven't figured out how to import
+> headers from another module in Zig `0.12.0`, meaning the `client-example` won't build.
 
 FIDO2 compatible authenticator library written in [Zig](https://ziglang.org/).
 
@@ -70,14 +75,7 @@ FIDO2 has a lot of advantages compared to passwords:
 <details>
 <summary><ins>Does this library work with all browsers?</ins></summary>
 
-Answering this question isn't straightforward. The library, by its nature, is designed to be independent of any particular platform, meaning that you have the responsibility of supplying it with data for processing. To put it differently, you're in charge of creating a functional interface for communicating with a client, typically a web browser. On Linux, we offer a wrapper for the uhid interface, simplifying the process of presenting an application as a USB HID device with a Usage Page of F1D0 on the bus. Regrettably, it appears that not all web browsers are capable of discovering uhid devices.
-
-| Browser | supported? |
-|:-------:|:----------:|
-| Chrome  |    yes     |
-| Brave   |    yes     |
-| Chromium | no |
-| Firefox  | no |
+Answering this question isn't straightforward. The library, by its nature, is designed to be independent of any particular platform, meaning that you have the responsibility of supplying it with data for processing. To put it differently, you're in charge of creating a functional interface for communicating with a client, typically a web browser. On Linux, we offer a wrapper for the uhid interface, simplifying the process of presenting an application as a USB HID device with a Usage Page of F1D0 on the bus.
 
 </details>
 

@@ -5,7 +5,7 @@
 const std = @import("std");
 
 const hidapi = @cImport({
-    @cInclude("hidapi/hidapi.h");
+    @cInclude("hidapi.h");
 });
 
 const Transport = @import("../Transport.zig");
@@ -37,7 +37,7 @@ pub const Usb = struct {
 
     /// Establish a USB connection with the device pointed to by `path`
     pub fn open(self: *@This()) Transport.Error!void {
-        var dev = hidapi.hid_open_path(self.path.ptr);
+        const dev = hidapi.hid_open_path(self.path.ptr);
         if (dev == null) return error.Open;
         self.device = dev;
         _ = hidapi.hid_set_nonblocking(self.device.?, 1);
@@ -109,7 +109,7 @@ inline fn init() Transport.Error!void {
 /// Make sure to handle error.Processing and error.UpNeeded as those MUST NOT end the transaction!
 pub fn read(self: *anyopaque, a: std.mem.Allocator) Transport.Error!?[]u8 {
     try init();
-    var usb: *Usb = @ptrCast(@alignCast(self));
+    const usb: *Usb = @ptrCast(@alignCast(self));
     return ctaphid.cbor_read(usb, a) catch |e| {
         if (e == error.Timeout) return null else return e;
     };
@@ -117,28 +117,28 @@ pub fn read(self: *anyopaque, a: std.mem.Allocator) Transport.Error!?[]u8 {
 
 pub fn write(self: *anyopaque, data: []const u8) Transport.Error!void {
     try init();
-    var usb: *Usb = @ptrCast(@alignCast(self));
+    const usb: *Usb = @ptrCast(@alignCast(self));
     try ctaphid.cbor_write(usb, data);
 }
 
 pub fn close(self: *anyopaque) void {
-    var usb: *Usb = @ptrCast(@alignCast(self));
+    const usb: *Usb = @ptrCast(@alignCast(self));
     usb.close();
 }
 
 pub fn open(self: *anyopaque) Transport.Error!void {
     try init();
-    var usb: *Usb = @ptrCast(@alignCast(self));
+    const usb: *Usb = @ptrCast(@alignCast(self));
     try usb.open();
 }
 
 pub fn deinit(self: *anyopaque) void {
-    var usb: *Usb = @ptrCast(@alignCast(self));
+    const usb: *Usb = @ptrCast(@alignCast(self));
     usb.deinit();
 }
 
 pub fn allocPrint(self: *anyopaque, a: std.mem.Allocator) Transport.Error![]const u8 {
-    var usb: *Usb = @ptrCast(@alignCast(self));
+    const usb: *Usb = @ptrCast(@alignCast(self));
     return try std.fmt.allocPrint(a, "{s}: {s} {s}", .{ usb.path, usb.manufacturer, usb.product });
 }
 
@@ -154,7 +154,7 @@ pub fn enumerate(a: std.mem.Allocator) Transports.Error!?[]Transport {
 
     while (true) {
         if (devices.*.usage_page == 0xf1d0 and devices.*.usage == 0x01) {
-            var u = try a.create(Usb);
+            const u = try a.create(Usb);
             u.* = Usb{
                 .path = try a.dupeZ(u8, to_str(devices.*.path)),
                 .manufacturer = try a.dupe(u8, wchar_t_to_str(devices.*.manufacturer_string)),
@@ -162,7 +162,7 @@ pub fn enumerate(a: std.mem.Allocator) Transports.Error!?[]Transport {
                 .allocator = a,
             };
 
-            var t = Transport{
+            const t = Transport{
                 .obj = @ptrCast(u),
                 ._read = read,
                 ._write = write,

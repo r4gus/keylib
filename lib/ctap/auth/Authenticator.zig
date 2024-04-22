@@ -130,7 +130,7 @@ pub const Auth = struct {
             }
 
             std.log.info("Auth.init: generating new settings...", .{});
-            var meta = fido.ctap.authenticator.Meta{};
+            const meta = fido.ctap.authenticator.Meta{};
             self.writeSettings(meta) catch {
                 std.log.err("Auth.init: unable to persist settings", .{});
                 return error.InitFail;
@@ -188,7 +188,7 @@ pub const Auth = struct {
 
         if (iter.next()) |s| {
             // Turn data hex string into a byte slice
-            var buffer: [1024]u8 = .{0} ** 256;
+            var buffer: [1024]u8 = .{0} ** 1024;
             const slice = try std.fmt.hexToBytes(&buffer, s);
 
             return try cbor.parse(
@@ -224,7 +224,7 @@ pub const Auth = struct {
         while (iter.next()) |s| {
             //std.log.err("{s}", .{s});
             // Turn data hex string into a byte slice
-            var buffer: [1024]u8 = .{0} ** 256;
+            var buffer: [1024]u8 = .{0} ** 1024;
             const slice = std.fmt.hexToBytes(&buffer, s) catch continue;
 
             try arr.append(cbor.parse(
@@ -338,7 +338,7 @@ pub const Auth = struct {
         }
 
         std.log.info("response({d}): {s}", .{ cmd, std.fmt.fmtSliceHexLower(res.items) });
-        std.mem.copy(u8, out[0..res.items.len], res.items);
+        @memcpy(out[0..res.items.len], res.items);
         return out[0..res.items.len];
     }
 

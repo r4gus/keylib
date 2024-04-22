@@ -37,7 +37,7 @@ pub fn main() !void {
         } else blk: {
             std.log.info("Please choose a device from the following list:", .{});
             for (transports.devices, 0..) |*device, i| {
-                var x = try device.allocPrint(allocator);
+                const x = try device.allocPrint(allocator);
                 defer allocator.free(x);
                 std.log.info("  {d} {s}", .{ i, x });
             }
@@ -144,7 +144,7 @@ pub fn main() !void {
         }
 
         // 4.b Fill the set with RPs present on the authenticator
-        var rp = try cred_management.enumerateRPsBegin(device, pinUvAuthProtocol, token, allocator, true);
+        const rp = try cred_management.enumerateRPsBegin(device, pinUvAuthProtocol, token, allocator, true);
         if (rp) |_rp| {
             defer _rp.deinit();
             try idps.append(try allocator.dupe(u8, _rp.rp.id));

@@ -19,12 +19,12 @@ export fn uhid_open() c_int {
         std.log.err("Can't open uhid-cdev {s}\n", .{PATH});
         return -1;
     };
-    const flags = std.os.fcntl(device.handle, 3, 0) catch {
+    const flags = std.posix.fcntl(device.handle, 3, 0) catch {
         std.log.err("Can't get file stats", .{});
         device.close();
         return -1;
     };
-    _ = std.os.fcntl(device.handle, 4, flags | 2048) catch {
+    _ = std.posix.fcntl(device.handle, 4, flags | 2048) catch {
         std.log.err("Can't set file to non-blocking", .{});
         device.close();
         return -1;
@@ -53,7 +53,7 @@ export fn uhid_read_packet(fd: c_int, out: [*c]u8) c_int {
 }
 
 export fn uhid_write_packet(fd: c_int, in: [*c]u8, len: usize) c_int {
-    var device = std.fs.File{ .handle = @intCast(fd) };
+    const device = std.fs.File{ .handle = @intCast(fd) };
     var rev = std.mem.zeroes(uhid.uhid_event);
     rev.type = uhid.UHID_INPUT;
     @memcpy(rev.u.input.data[0..len], in[0..len]);

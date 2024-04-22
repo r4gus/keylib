@@ -30,7 +30,7 @@ pub fn create_det(seed: []const u8, allocator: std.mem.Allocator) ?SigAlg.KeyPai
     } };
 
     // Serialize
-    var priv = allocator.alloc(u8, pk[0..].len) catch return null;
+    const priv = allocator.alloc(u8, pk[0..].len) catch return null;
     @memcpy(priv, pk[0..]);
 
     var serialized_cred = std.ArrayList(u8).init(allocator);
@@ -73,7 +73,7 @@ pub fn sign(
     const sig = signer.finalize() catch return null;
     var buffer: [EcdsaP256Sha256.Signature.der_encoded_max_length]u8 = undefined;
     const der = sig.toDer(&buffer);
-    var mem = allocator.alloc(u8, der.len) catch return null;
+    const mem = allocator.alloc(u8, der.len) catch return null;
     @memcpy(mem, der);
     return mem;
 }

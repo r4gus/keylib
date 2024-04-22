@@ -99,7 +99,7 @@ pub fn authenticatorClientPin(
                 return fido.ctap.StatusCodes.ctap2_err_not_allowed;
             }
 
-            var settings = auth.loadSettings() catch {
+            const settings = auth.loadSettings() catch {
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
 

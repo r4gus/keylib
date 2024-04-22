@@ -3,12 +3,23 @@
     .version = "0.4.0",
     .dependencies = .{
         .zbor = .{
-            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.12.3.tar.gz",
-            .hash = "1220bbea0285a5d555320b00dde5ced378254c8be144d155d8f886ab4a4e9a855881",
+            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.13.1.tar.gz",
+            .hash = "122051750f4d7ecc9b705f1bbea1d431956306c74dafa4e9b625b11a34fab4c06933",
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
-            .hash = "122056e386f60432792682bd40f93eceb6e14da3c57a8813d24191495744f5bc5d18",
+            .hash = "12207548a5f0765e04ac3da55b49e2ad34ac9f2ca34dd510f62d44cf48d472d57c87",
         },
+    },
+    .paths = .{
+        "bindings",
+        "example",
+        "lib",
+        "static",
+        "CITATION.cff",
+        "LICENSE",
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
     },
 }

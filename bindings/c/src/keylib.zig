@@ -119,7 +119,7 @@ export fn auth_handle(
         .cbor => {
             var out: [7609]u8 = undefined; // TODO: we have to make this configurable
             const r = auth.handle(&out, msg.getData());
-            std.mem.copy(u8, msg._data[0..r.len], r);
+            @memcpy(msg._data[0..r.len], r);
             msg.len = r.len;
         },
         else => {},
@@ -127,7 +127,7 @@ export fn auth_handle(
 }
 
 export fn ctaphid_init() ?*anyopaque {
-    var c = allocator.create(CtapHid) catch {
+    const c = allocator.create(CtapHid) catch {
         return null;
     };
 
@@ -151,7 +151,7 @@ export fn ctaphid_handle(
     const ctaphid = @as(*CtapHid, @ptrCast(@alignCast(ctap)));
 
     if (ctaphid.handle(packet[0..len])) |res| {
-        var msg = allocator.create(CtapHidMsg) catch {
+        const msg = allocator.create(CtapHidMsg) catch {
             return null;
         };
         msg.* = res;
@@ -163,7 +163,7 @@ export fn ctaphid_handle(
 
 export fn ctaphid_iterator(m: *anyopaque) ?*anyopaque {
     const msg = @as(*CtapHidMsg, @ptrCast(@alignCast(m)));
-    var iter = allocator.create(CtapHidMessageIterator) catch {
+    const iter = allocator.create(CtapHidMessageIterator) catch {
         return null;
     };
 

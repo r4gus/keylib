@@ -23,12 +23,12 @@ pub const Uhid = struct {
             return e;
         };
 
-        const flags = std.os.fcntl(device.handle, 3, 0) catch |e| {
+        const flags = std.posix.fcntl(device.handle, 3, 0) catch |e| {
             std.log.err("Can't get file stats", .{});
             device.close();
             return e;
         };
-        _ = std.os.fcntl(device.handle, 4, flags | 2048) catch |e| {
+        _ = std.posix.fcntl(device.handle, 4, flags | 2048) catch |e| {
             std.log.err("Can't set file to non-blocking", .{});
             device.close();
             return e;

@@ -10,7 +10,7 @@ pub fn create(fd: std.fs.File) !void {
 
     var event = std.mem.zeroes(uhid.uhid_event);
     event.type = uhid.UHID_CREATE2;
-    std.mem.copy(u8, event.u.create2.name[0..device_name.len], device_name);
+    @memcpy(event.u.create2.name[0..device_name.len], device_name);
     @memcpy(
         event.u.create2.rd_data[0..hid.ReportDescriptorFidoU2f[0..].len],
         hid.ReportDescriptorFidoU2f[0..],

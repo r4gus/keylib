@@ -263,7 +263,7 @@ pub const CtapHid = struct {
             self.bcnt_total = misc.sliceToInt(u16, packet[5..7]);
 
             const l = packet.len - 7;
-            std.mem.copy(u8, self.data[0..l], packet[7..]);
+            @memcpy(self.data[0..l], packet[7..]);
             self.bcnt = @as(u16, @intCast(l));
         } else { // continuation packet
             if (packet.len < 5) {
@@ -283,7 +283,7 @@ pub const CtapHid = struct {
 
             self.seq = packet[4];
             const l = packet.len - 5;
-            std.mem.copy(u8, self.data[self.bcnt .. self.bcnt + l], packet[5..]);
+            @memcpy(self.data[self.bcnt .. self.bcnt + l], packet[5..]);
             self.bcnt += @as(u16, @intCast(l));
         }
 
