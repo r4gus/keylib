@@ -53,6 +53,7 @@ pub fn build(b: *std.Build) !void {
         },
     });
     try b.modules.put(b.dupe("clientlib"), client_module);
+    client_module.linkLibrary(hidapi_dep.artifact("hidapi"));
 
     // Examples
     // ------------------------------------------------
@@ -64,7 +65,6 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     client_example.root_module.addImport("client", client_module);
-    client_example.linkLibrary(hidapi_dep.artifact("hidapi"));
 
     const client_example_step = b.step("client-example", "Build the client application example");
     client_example_step.dependOn(&b.addInstallArtifact(client_example, .{}).step);
@@ -95,7 +95,7 @@ pub fn build(b: *std.Build) !void {
     c_bindings.root_module.addImport("keylib", keylib_module);
     c_bindings.linkLibC();
     c_bindings.installHeadersDirectory(
-        std.Build.LazyPath{ .path = "bindings/c/include" },
+        b.path("bindings/c/include"),
         "keylib",
         .{
             .exclude_extensions = &.{},
@@ -112,7 +112,7 @@ pub fn build(b: *std.Build) !void {
     });
     uhid.linkLibC();
     uhid.installHeadersDirectory(
-        std.Build.LazyPath{ .path = "bindings/linux/include" },
+        b.path("bindings/linux/include"),
         "keylib",
         .{
             .exclude_extensions = &.{},

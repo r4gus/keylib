@@ -8,7 +8,7 @@
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
-            .hash = "12207548a5f0765e04ac3da55b49e2ad34ac9f2ca34dd510f62d44cf48d472d57c87",
+            .hash = "12205468b2476db0f5caca335aa448a51ced34dcfd645643522f0754c5edeb70edd2",
         },
     },
     .paths = .{
