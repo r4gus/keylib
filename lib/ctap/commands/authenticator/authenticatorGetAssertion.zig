@@ -321,8 +321,8 @@ pub fn authenticatorGetAssertion(
 
         for (credentials.items, 0..) |cred, index| {
             users[index] = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
-                if (cred.user.displayName) |name| name else "",
-                if (cred.user.name) |name| name else "",
+                if (cred.user.displayName) |name| name.get() else "",
+                if (cred.user.name) |name| name.get() else "",
             }) catch {
                 std.log.err("getAssertion: allocPrintZ for user data", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;

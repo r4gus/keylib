@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    _ = hidapi_dep;
 
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
@@ -46,28 +47,28 @@ pub fn build(b: *std.Build) !void {
     // Client Module
     // ------------------------------------------------
 
-    const client_module = b.addModule("clientlib", .{
-        .root_source_file = .{ .path = "lib/client.zig" },
-        .imports = &.{
-            .{ .name = "zbor", .module = zbor_module },
-        },
-    });
-    try b.modules.put(b.dupe("clientlib"), client_module);
-    client_module.linkLibrary(hidapi_dep.artifact("hidapi"));
+    //const client_module = b.addModule("clientlib", .{
+    //    .root_source_file = .{ .path = "lib/client.zig" },
+    //    .imports = &.{
+    //        .{ .name = "zbor", .module = zbor_module },
+    //    },
+    //});
+    //try b.modules.put(b.dupe("clientlib"), client_module);
+    //client_module.linkLibrary(hidapi_dep.artifact("hidapi"));
 
     // Examples
     // ------------------------------------------------
 
-    var client_example = b.addExecutable(.{
-        .name = "client",
-        .root_source_file = .{ .path = "example/client.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    client_example.root_module.addImport("client", client_module);
+    //var client_example = b.addExecutable(.{
+    //    .name = "client",
+    //    .root_source_file = .{ .path = "example/client.zig" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //client_example.root_module.addImport("client", client_module);
 
-    const client_example_step = b.step("client-example", "Build the client application example");
-    client_example_step.dependOn(&b.addInstallArtifact(client_example, .{}).step);
+    //const client_example_step = b.step("client-example", "Build the client application example");
+    //client_example_step.dependOn(&b.addInstallArtifact(client_example, .{}).step);
 
     var authenticator_example = b.addExecutable(.{
         .name = "authenticator",

@@ -80,7 +80,6 @@ pub fn setExtension(
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     allocator.free(self.id);
-    self.user.deinit(allocator);
     self.rp.deinit(allocator);
     allocator.free(self.private_key);
     if (self.extensions) |extensions| {

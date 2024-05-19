@@ -200,8 +200,8 @@ pub fn authenticatorMakeCredential(
             }
         } else if (uv) {
             const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
-                if (mcp.user.displayName) |dn| dn else "???",
-                if (mcp.user.name) |dn| dn else "???",
+                if (mcp.user.displayName) |dn| dn.get() else "???",
+                if (mcp.user.name) |dn| dn.get() else "???",
             }) catch {
                 std.log.err("MakeCredential: allocPrintZ for user", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
@@ -261,8 +261,8 @@ pub fn authenticatorMakeCredential(
     _ = settings;
 
     const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
-        if (mcp.user.displayName) |dn| dn else "???",
-        if (mcp.user.name) |dn| dn else "???",
+        if (mcp.user.displayName) |dn| dn.get() else "???",
+        if (mcp.user.name) |dn| dn.get() else "???",
     }) catch {
         std.log.err("makeCredential: allocPrintZ for user", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
@@ -446,7 +446,7 @@ pub fn authenticatorMakeCredential(
 
         if (credentials) |creds| {
             for (creds) |cred| {
-                if (std.mem.eql(u8, cred.user.id, entry.user.id)) {
+                if (std.mem.eql(u8, cred.user.id.get(), entry.user.id.get())) {
                     // If a credential for the same rp.id and account ID already exists
                     // on the authenticator, overwrite that credential.
                     std.log.warn("makeCredential: rk with the same user and rp id already exist", .{});
