@@ -1,31 +1,26 @@
 //! Representation of a relying party
 
 const cbor = @import("zbor");
+const dt = @import("data_types.zig");
 
 /// Relying party identifier
 ///
 /// A relying party identifier is a valid domain string identifying the WebAuthn
 /// Relying Party on whose behalf a given registration or authentication ceremony
 /// is being performed.
-id: []const u8,
+///
+/// TODO: 128 bytes should be enough but maybe we can also truncate the id as
+/// described by the CTAP2 spec.
+id: dt.ABS128T,
 /// Name of the relying party
-name: ?[]const u8 = null,
+name: ?dt.ABS64T = null,
 
-pub fn deinit(self: *const @This(), allocator: @import("std").mem.Allocator) void {
-    allocator.free(self.id);
-    if (self.name) |name| {
-        allocator.free(name);
-    }
-}
-
-pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
-    _ = options;
-
-    try cbor.stringify(self.*, .{
-        .field_settings = &.{
-            .{ .name = "id", .value_options = .{ .slice_serialization_type = .TextString } },
-            .{ .name = "name", .value_options = .{ .slice_serialization_type = .TextString } },
-        },
-        .from_callback = true,
-    }, out);
+pub fn new(
+    id: []const u8,
+    name: ?[]const u8,
+) !@This() {
+    return .{
+        .id = (try dt.ABS128T.fromSlice(id)).?,
+        .name = try dt.ABS64T.fromSlice(name),
+    };
 }

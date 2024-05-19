@@ -24,7 +24,7 @@ pub fn new(
     displayName: ?[]const u8,
 ) !@This() {
     return .{
-        .id = try dt.ABS64B.fromSlice(id),
+        .id = (try dt.ABS64B.fromSlice(id)).?,
         .name = try dt.ABS64T.fromSlice(name),
         .displayName = try dt.ABS64T.fromSlice(displayName),
     };

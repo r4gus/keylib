@@ -182,7 +182,7 @@ pub fn authenticatorMakeCredential(
 
             if (auth.token.rp_id) |rp_id| {
                 // Match rpIds if possible
-                if (!std.mem.eql(u8, mcp.rp.id, rp_id)) {
+                if (!std.mem.eql(u8, mcp.rp.id.get(), rp_id)) {
                     // Ids don't match
                     return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
                 }
@@ -196,7 +196,7 @@ pub fn authenticatorMakeCredential(
 
             // associate the rpId with the token
             if (auth.token.rp_id == null) {
-                auth.token.setRpId(mcp.rp.id);
+                auth.token.setRpId(mcp.rp.id.get());
             }
         } else if (uv) {
             const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
@@ -208,7 +208,7 @@ pub fn authenticatorMakeCredential(
             };
             defer auth.allocator.free(u);
 
-            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id}) catch {
+            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id.get()}) catch {
                 std.log.err("MakeCredential: allocPrintZ for rpId", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
@@ -269,7 +269,7 @@ pub fn authenticatorMakeCredential(
     };
     defer auth.allocator.free(u);
 
-    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id}) catch {
+    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id.get()}) catch {
         std.log.err("makeCredential: allocPrintZ for user", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -420,17 +420,17 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (rk) {
         std.log.info("MakeCredential: creating resident key", .{});
-        const credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id) catch |err| blk: {
+        const credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id.get()) catch |err| blk: {
             if (err == error.NoData) {
                 std.log.info(
                     "makeCredential: no credentials associated with rpId {s} found",
-                    .{std.fmt.fmtSliceHexLower(mcp.rp.id)},
+                    .{std.fmt.fmtSliceHexLower(mcp.rp.id.get())},
                 );
                 break :blk null;
             } else {
                 std.log.err(
                     "makeCredential: unable to fetch credentials associated with rpId {s}",
-                    .{mcp.rp.id},
+                    .{mcp.rp.id.get()},
                 );
                 return fido.ctap.StatusCodes.ctap1_err_other;
             }
@@ -465,7 +465,7 @@ pub fn authenticatorMakeCredential(
         entry.discoverable = true;
     }
 
-    auth.writeCredential(entry.id, mcp.rp.id, &entry) catch |err| {
+    auth.writeCredential(entry.id, mcp.rp.id.get(), &entry) catch |err| {
         std.log.err("makeCredential: unable to create credential ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -493,7 +493,7 @@ pub fn authenticatorMakeCredential(
         .extensions = extensions,
     };
     std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
-        mcp.rp.id,
+        mcp.rp.id.get(),
         &auth_data.rpIdHash,
         .{},
     );

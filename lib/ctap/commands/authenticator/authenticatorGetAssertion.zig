@@ -443,7 +443,7 @@ pub fn authenticatorGetAssertion(
         // If the sign count is not updated we don't need to update the
         // credentials DB entry, i.e. shared resident keys (passkeys)
         // are not at risk getting out of sync.
-        auth.writeCredential(cred.id, cred.rp.id, &cred) catch {
+        auth.writeCredential(cred.id, cred.rp.id.get(), &cred) catch {
             std.log.err("getAssertion: unable to update credential", .{});
             return fido.ctap.StatusCodes.ctap1_err_other;
         };

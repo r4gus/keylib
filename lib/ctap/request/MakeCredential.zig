@@ -35,7 +35,6 @@ pinUvAuthProtocol: ?PinProtocol = null,
 enterpriseAttestation: ?u64 = null,
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
-    self.rp.deinit(allocator);
     allocator.free(self.pubKeyCredParams);
     if (self.excludeList) |excludes| {
         for (excludes) |pkcd| {
@@ -109,8 +108,8 @@ test "make credential parse 1" {
     defer mcp.deinit(allocator);
 
     try std.testing.expectEqualSlices(u8, "\xc0\x39\x91\xac\x3d\xff\x02\xba\x1e\x52\x0f\xc5\x9b\x2d\x34\x77\x4a\x64\x1a\x4c\x42\x5a\xbd\x31\x3d\x93\x10\x61\xff\xbd\x1a\x5c", &mcp.clientDataHash);
-    try std.testing.expectEqualSlices(u8, "localhost", mcp.rp.id);
-    try std.testing.expectEqualSlices(u8, "sweet home localhost", mcp.rp.name.?);
+    try std.testing.expectEqualSlices(u8, "localhost", mcp.rp.id.get());
+    try std.testing.expectEqualSlices(u8, "sweet home localhost", mcp.rp.name.?.get());
     try std.testing.expectEqualSlices(u8, "\x78\x1c\x78\x60\xad\x88\xd2\x63\x32\x62\x2a\xf1\x74\x5d\xed\xb2\xe7\xa4\x2b\x44\x89\x29\x39\xc5\x56\x64\x01\x27\x0d\xbb\xc4\x49", mcp.user.id.get());
     try std.testing.expectEqualSlices(u8, "john smith", mcp.user.name.?.get());
     try std.testing.expectEqualSlices(u8, "jsmith", mcp.user.displayName.?.get());
@@ -127,10 +126,10 @@ test "make credential stringify 1" {
 
     const mcp = @This(){
         .clientDataHash = "\xc0\x39\x91\xac\x3d\xff\x02\xba\x1e\x52\x0f\xc5\x9b\x2d\x34\x77\x4a\x64\x1a\x4c\x42\x5a\xbd\x31\x3d\x93\x10\x61\xff\xbd\x1a\x5c".*,
-        .rp = .{
-            .id = "localhost",
-            .name = "sweet home localhost",
-        },
+        .rp = try RelyingParty.new(
+            "localhost",
+            "sweet home localhost",
+        ),
         .user = try User.new(
             "\x78\x1c\x78\x60\xad\x88\xd2\x63\x32\x62\x2a\xf1\x74\x5d\xed\xb2\xe7\xa4\x2b\x44\x89\x29\x39\xc5\x56\x64\x01\x27\x0d\xbb\xc4\x49",
             "john smith",
