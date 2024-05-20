@@ -37,9 +37,6 @@ enterpriseAttestation: ?u64 = null,
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
     allocator.free(self.pubKeyCredParams);
     if (self.excludeList) |excludes| {
-        for (excludes) |pkcd| {
-            pkcd.deinit(allocator);
-        }
         allocator.free(excludes);
     }
 }

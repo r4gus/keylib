@@ -277,7 +277,7 @@ pub fn authenticatorMakeCredential(
 
     if (mcp.excludeList) |ecllist| {
         for (ecllist) |item| {
-            var cred = auth.loadCredential(item.id) catch {
+            var cred = auth.loadCredential(item.id.get()) catch {
                 continue;
             };
             defer cred.deinit(auth.allocator);

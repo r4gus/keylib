@@ -201,7 +201,7 @@ pub fn authenticatorGetAssertion(
         if (gap.allowList) |allowList| {
             var found = false;
             for (allowList) |desc| {
-                if (std.mem.eql(u8, desc.id, credentials.items[i].id)) {
+                if (std.mem.eql(u8, desc.id.get(), credentials.items[i].id)) {
                     found = true;
                     break;
                 }
@@ -430,9 +430,8 @@ pub fn authenticatorGetAssertion(
     defer auth.allocator.free(sig);
 
     const gar = fido.ctap.response.GetAssertion{
-        .credential = .{
-            .type = .@"public-key",
-            .id = cred.id,
+        .credential = fido.common.PublicKeyCredentialDescriptor.new(cred.id, .@"public-key", null) catch {
+            return fido.ctap.StatusCodes.ctap1_err_other;
         },
         .authData = authData.items,
         .signature = sig,
