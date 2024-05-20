@@ -1,5 +1,6 @@
 const cbor = @import("zbor");
 const fido = @import("../../main.zig");
+const dt = fido.common.dt;
 
 pub const HmacSecretTag = enum { create, get, output };
 
@@ -12,14 +13,14 @@ pub const HmacSecret = union(HmacSecretTag) {
         /// using the shared secret as follows:
         ///     One salt case: encrypt(shared secret, salt1)
         ///     Two salt case: encrypt(shared secret, salt1 || salt2)
-        saltEnc: []const u8,
+        saltEnc: dt.ABS64B,
         /// authenticate(shared secret, saltEnc)
-        saltAuth: []const u8,
+        saltAuth: dt.ABS32B,
         /// As selected when getting the shared secret. CTAP2.1 platforms MUST include this
         /// parameter if the value of pinUvAuthProtocol is not 1.
         pinUvAuthProtocol: ?fido.ctap.pinuv.common.PinProtocol = null,
     },
-    output: []const u8,
+    output: dt.ABS64B,
 
     pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
         _ = options;

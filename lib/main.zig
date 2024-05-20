@@ -119,7 +119,7 @@ pub const ctap = struct {
         /// Used by multiple data types
         pub const common = struct {
             /// Result of calling authenticate(pinUvAuthToken, clientDataHash)
-            pub const PinUvAuthParam = []const u8;
+            pub const PinUvAuthParam = @import("common/data_types.zig").ABS32B;
 
             /// PIN protocol versions
             pub const PinProtocol = enum(u16) {

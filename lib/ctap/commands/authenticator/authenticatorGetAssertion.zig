@@ -18,7 +18,6 @@ pub fn authenticatorGetAssertion(
         std.log.err("unable to map request to `GetAssertion` data type", .{});
         return .ctap2_err_invalid_cbor;
     };
-    defer gap.deinit(auth.allocator);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
@@ -113,7 +112,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
-            if (!auth.token.verify_token(&gap.clientDataHash, puap, auth.allocator)) {
+            if (!auth.token.verify_token(&gap.clientDataHash, puap.get(), auth.allocator)) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 
@@ -124,7 +123,7 @@ pub fn authenticatorGetAssertion(
 
             if (auth.token.rp_id) |rp_id| {
                 // Match rpIds if possible
-                if (!std.mem.eql(u8, gap.rpId, rp_id)) {
+                if (!std.mem.eql(u8, gap.rpId.get(), rp_id)) {
                     // Ids don't match
                     return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
                 }
@@ -138,10 +137,10 @@ pub fn authenticatorGetAssertion(
 
             // associate the rpId with the token
             if (auth.token.rp_id == null) {
-                auth.token.setRpId(gap.rpId);
+                auth.token.setRpId(gap.rpId.get());
             }
         } else if (uv) {
-            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
+            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId.get()}) catch {
                 std.log.err("getAssertion: unable to allocate memory for rpId", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
@@ -181,7 +180,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var credentials = std.ArrayList(fido.ctap.authenticator.Credential).fromOwnedSlice(
         auth.allocator,
-        auth.loadCredentials(gap.rpId) catch {
+        auth.loadCredentials(gap.rpId.get()) catch {
             std.log.err("getAssertion: unable to fetch credentials", .{});
             return fido.ctap.StatusCodes.ctap2_err_no_credentials;
         },
@@ -200,7 +199,7 @@ pub fn authenticatorGetAssertion(
 
         if (gap.allowList) |allowList| {
             var found = false;
-            for (allowList) |desc| {
+            for (allowList.get()) |desc| {
                 if (std.mem.eql(u8, desc.id.get(), credentials.items[i].id)) {
                     found = true;
                     break;
@@ -254,7 +253,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId}) catch {
+    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId.get()}) catch {
         std.log.err("getAssertion: unable to allocate memory for rpId", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -330,7 +329,7 @@ pub fn authenticatorGetAssertion(
         }
         users[credentials.items.len] = null;
 
-        const rpId = auth.allocator.dupeZ(u8, gap.rpId) catch {
+        const rpId = auth.allocator.dupeZ(u8, gap.rpId.get()) catch {
             std.log.err("getAssertion: allocPrintZ for rpId", .{});
             return fido.ctap.StatusCodes.ctap1_err_other;
         };
@@ -398,7 +397,7 @@ pub fn authenticatorGetAssertion(
         .signCount = @intCast(usageCnt),
     };
     std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
-        gap.rpId,
+        gap.rpId.get(),
         &auth_data.rpIdHash,
         .{},
     );
