@@ -390,15 +390,10 @@ pub fn authenticatorMakeCredential(
 
     const key_pair = if (alg.create(
         auth.random,
-        auth.allocator,
     )) |kp| kp else {
         std.log.err("MakeCredential: unable to generate credential for alg = {any}", .{alg.alg});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-    defer {
-        auth.allocator.free(key_pair.cose_public_key);
-        auth.allocator.free(key_pair.raw_private_key);
-    }
 
     var entry = fido.ctap.authenticator.Credential{
         .id = id,
@@ -406,7 +401,7 @@ pub fn authenticatorMakeCredential(
         .rp = mcp.rp,
         .sign_count = 0, // the first signature will be included in the response
         .alg = alg.alg,
-        .private_key = key_pair.raw_private_key,
+        .private_key = key_pair.raw_private_key.get(),
         .created = auth.milliTimestamp(),
     };
     defer auth.allocator.free(entry.id);
@@ -487,7 +482,7 @@ pub fn authenticatorMakeCredential(
         .attestedCredentialData = fido.common.AttestedCredentialData.new(
             auth.settings.aaguid,
             entry.id,
-            key_pair.cose_public_key,
+            key_pair.cose_public_key.get(),
         ) catch {
             return fido.ctap.StatusCodes.ctap1_err_other;
         },
@@ -508,15 +503,15 @@ pub fn authenticatorMakeCredential(
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
 
+            var sig_buffer: [256]u8 = undefined;
             const sig = alg.sign(
-                key_pair.raw_private_key,
+                key_pair.raw_private_key.get(),
                 &.{
                     authData.items,
                     &mcp.clientDataHash,
                 },
-                auth.allocator,
+                &sig_buffer,
             ).?;
-            defer auth.allocator.free(sig);
 
             break :blk fido.common.AttestationStatement{ .@"packed" = .{
                 .alg = alg.alg,

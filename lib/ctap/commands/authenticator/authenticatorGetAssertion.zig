@@ -419,15 +419,15 @@ pub fn authenticatorGetAssertion(
     //                                    |
     //                                    v
     //                           ASSERTION SIGNATURE
+    var sig_buffer: [256]u8 = undefined;
     const sig = if (alg.?.sign(
         cred.private_key,
         &.{ authData.items, &gap.clientDataHash },
-        auth.allocator,
+        &sig_buffer,
     )) |signature| signature else {
         std.log.err("getAssertion: signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-    defer auth.allocator.free(sig);
 
     const gar = fido.ctap.response.GetAssertion{
         .credential = fido.common.PublicKeyCredentialDescriptor.new(cred.id, .@"public-key", null) catch {
