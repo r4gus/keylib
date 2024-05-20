@@ -7,6 +7,7 @@
 const std = @import("std");
 const cbor = @import("zbor");
 const fido = @import("../main.zig");
+const dt = @import("data_types.zig");
 
 pub const AttestationStatement = union(fido.common.AttestationStatementFormatIdentifiers) {
     /// This is a WebAuthn optimized attestation statement format. It uses a very compact
@@ -17,7 +18,10 @@ pub const AttestationStatement = union(fido.common.AttestationStatementFormatIde
         /// to generate the attestation signature.
         alg: cbor.cose.Algorithm,
         /// A byte string containing the attestation signature.
-        sig: []const u8,
+        ///
+        /// TODO: A ABS256B can hold signatures up to 2048 bytes, e.g., RSA-2048.
+        /// This has to be modified to accomodate larger signatures.
+        sig: dt.ABS256B,
         // The elements of this array contain attestnCert and its certificate chain (if any),
         // each encoded in X.509 format. The attestation certificate attestnCert MUST be
         // the first element in the array.
@@ -33,15 +37,6 @@ pub const AttestationStatement = union(fido.common.AttestationStatementFormatIde
     /// receive attestation information, see § 5.4.7 Attestation Conveyance Preference
     /// Enumeration (enum AttestationConveyancePreference).
     none: struct {}, // no attestation
-
-    pub fn deinit(self: *const @This(), a: std.mem.Allocator) void {
-        switch (self.*) {
-            .@"packed" => |x| {
-                a.free(x.sig);
-            },
-            else => {},
-        }
-    }
 
     pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
         return cbor.stringify(self, .{

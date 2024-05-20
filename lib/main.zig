@@ -31,6 +31,7 @@ pub const common = struct {
     pub const Certifications = @import("common/Certifications.zig");
     /// Type of attestation issued (None, Slef, ...)
     pub const AttestationType = @import("common/AttestationType.zig").AttestationType;
+    pub const dt = @import("common/data_types.zig");
 
     test "common tests" {
         _ = RelyingParty;

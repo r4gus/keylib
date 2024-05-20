@@ -515,10 +515,13 @@ pub fn authenticatorMakeCredential(
                 },
                 auth.allocator,
             ).?;
+            defer auth.allocator.free(sig);
 
             break :blk fido.common.AttestationStatement{ .@"packed" = .{
                 .alg = alg.alg,
-                .sig = sig,
+                .sig = (fido.common.dt.ABS256B.fromSlice(sig) catch {
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                }).?,
             } };
         },
         else => blk: {
@@ -527,7 +530,6 @@ pub fn authenticatorMakeCredential(
             };
         },
     };
-    defer stmt.deinit(auth.allocator);
 
     const ao = fido.ctap.response.MakeCredential{
         .fmt = fido.common.AttestationStatementFormatIdentifiers.@"packed",
