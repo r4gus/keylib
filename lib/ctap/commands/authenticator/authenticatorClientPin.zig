@@ -2,6 +2,7 @@ const std = @import("std");
 const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 const cbor = @import("zbor");
 const fido = @import("../../../main.zig");
+const dt = fido.common.dt;
 
 pub fn authenticatorClientPin(
     auth: *fido.ctap.authenticator.Auth,
@@ -18,13 +19,10 @@ pub fn authenticatorClientPin(
         cbor.DataItem.new(request) catch {
             return .ctap2_err_invalid_cbor;
         },
-        .{
-            .allocator = auth.allocator,
-        },
+        .{},
     ) catch {
         return .ctap2_err_invalid_cbor;
     };
-    defer client_pin_param.deinit(auth.allocator);
 
     var client_pin_response: ?fido.ctap.response.ClientPin = null;
 
@@ -132,7 +130,7 @@ pub fn authenticatorClientPin(
             // If the rpId parameter is present, associate the permissions RP ID
             // with the pinUvAuthToken.
             if (client_pin_param.rpId) |rpId| {
-                auth.token.setRpId(rpId);
+                auth.token.setRpId(rpId.get());
             }
 
             // Obtain the shared secret
@@ -146,7 +144,7 @@ pub fn authenticatorClientPin(
 
             // The authenticator returns the encrypted pinUvAuthToken for the
             // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
-            var enc_shared_secret = auth.allocator.alloc(u8, 48) catch unreachable;
+            var enc_shared_secret: [48]u8 = undefined;
             auth.token.encrypt(
                 &auth.token,
                 shared_secret,
@@ -156,7 +154,7 @@ pub fn authenticatorClientPin(
 
             // Response
             client_pin_response = .{
-                .pinUvAuthToken = enc_shared_secret,
+                .pinUvAuthToken = (dt.ABS48B.fromSlice(&enc_shared_secret) catch unreachable).?,
             };
         },
         else => {
@@ -169,7 +167,6 @@ pub fn authenticatorClientPin(
         cbor.stringify(resp, .{}, out.writer()) catch {
             return fido.ctap.StatusCodes.ctap1_err_other;
         };
-        defer resp.deinit(auth.allocator);
     }
 
     return fido.ctap.StatusCodes.ctap1_err_success;

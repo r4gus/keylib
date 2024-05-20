@@ -3,6 +3,8 @@
 const std = @import("std");
 
 const cbor = @import("zbor");
+const fido = @import("../../main.zig");
+const dt = fido.common.dt;
 
 /// Authenticator key agreement public key in COSE_Key format. This will
 /// be used to establish a sharedSecret between platform and the authenticator.
@@ -10,7 +12,7 @@ keyAgreement: ?cbor.cose.Key = null,
 /// Encrypted pinToken using sharedSecret to be used in
 /// subsequent authenticatorMakeCredential and
 /// authenticatorGetAssertion operations.
-pinUvAuthToken: ?[]const u8 = null,
+pinUvAuthToken: ?dt.ABS48B = null,
 /// Number of PIN attempts remaining before lockout. This
 /// is optionally used to show in UI when collecting the PIN in
 /// Setting a new PIN, Changing existing PIN and Getting pinToken
@@ -21,12 +23,6 @@ pinRetries: ?u8 = null,
 powerCycleState: ?bool = null,
 /// Number of uv attempts remaining before lockout.
 uvRetries: ?u8 = null,
-
-pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
-    if (self.pinUvAuthToken) |pinUvAuthToken| {
-        allocator.free(pinUvAuthToken);
-    }
-}
 
 pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;

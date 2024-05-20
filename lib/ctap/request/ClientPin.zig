@@ -5,6 +5,7 @@ const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
 
 const cbor = @import("zbor");
 const fido = @import("../../main.zig");
+const dt = fido.common.dt;
 
 /// pinUvAuthProtocol: PIN protocol version chosen by the client.
 pinUvAuthProtocol: ?fido.ctap.pinuv.common.PinProtocol = null,
@@ -19,34 +20,16 @@ keyAgreement: ?cbor.cose.Key = null,
 /// pinUvAuth: HMAC-SHA-256 of encrypted contents
 /// using sharedSecret. See Setting a new PIN, Changing existing
 /// PIN and Getting pinToken from the authenticator for more details.
-pinUvAuthParam: ?[]u8 = null,
+pinUvAuthParam: ?dt.ABS32B = null,
 /// newPinEnc: Encrypted new PIN using sharedSecret. Encryption is
 /// done over UTF-8 representation of new PIN.
-newPinEnc: ?[]const u8 = null, // TODO: this should always be 64 bytes
+newPinEnc: ?dt.ABS64B = null,
 /// pinHashEnc: Encrypted SHA-256 of PIN using sharedSecret.
-pinHashEnc: ?[]u8 = null,
+pinHashEnc: ?dt.ABS32B = null,
 /// permissions: Bitfield of permissions. If present, MUST NOT be 0.
 permissions: ?u32 = null,
 /// rpId: The RP ID to assign as the permissions RP ID.
-rpId: ?[]const u8 = null,
-
-pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
-    if (self.newPinEnc) |pin| {
-        allocator.free(pin);
-    }
-
-    if (self.pinUvAuthParam) |pin| {
-        allocator.free(pin);
-    }
-
-    if (self.pinHashEnc) |pin| {
-        allocator.free(pin);
-    }
-
-    if (self.rpId) |id| {
-        allocator.free(id);
-    }
-}
+rpId: ?dt.ABS128T = null,
 
 pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
