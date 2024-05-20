@@ -484,11 +484,12 @@ pub fn authenticatorMakeCredential(
             .ed = 0,
         },
         .signCount = 0,
-        .attestedCredentialData = .{
-            .aaguid = auth.settings.aaguid,
-            .credential_length = @intCast(entry.id.len),
-            .credential_id = entry.id,
-            .credential_public_key = key_pair.cose_public_key,
+        .attestedCredentialData = fido.common.AttestedCredentialData.new(
+            auth.settings.aaguid,
+            entry.id,
+            key_pair.cose_public_key,
+        ) catch {
+            return fido.ctap.StatusCodes.ctap1_err_other;
         },
         .extensions = extensions,
     };
