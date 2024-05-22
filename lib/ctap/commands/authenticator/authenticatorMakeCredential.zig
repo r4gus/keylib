@@ -16,13 +16,10 @@ pub fn authenticatorMakeCredential(
     const di = cbor.DataItem.new(request) catch {
         return .ctap2_err_invalid_cbor;
     };
-    const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{
-        .allocator = auth.allocator,
-    }) catch {
+    const mcp = cbor.parse(fido.ctap.request.MakeCredential, di, .{}) catch {
         std.log.err("unable to map request to `MakeCredential` data type", .{});
         return .ctap2_err_invalid_cbor;
     };
-    defer mcp.deinit(auth.allocator);
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 1. and 2. Verify pinUvAuthParam
@@ -33,7 +30,7 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 3. Validate pubKeyCredParams
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var alg = if (auth.selectSignatureAlgorithm(mcp.pubKeyCredParams)) |alg| alg else {
+    var alg = if (auth.selectSignatureAlgorithm(mcp.pubKeyCredParams.get())) |alg| alg else {
         return fido.ctap.StatusCodes.ctap2_err_unsupported_algorithm;
     };
 
@@ -276,7 +273,7 @@ pub fn authenticatorMakeCredential(
     defer auth.allocator.free(r);
 
     if (mcp.excludeList) |ecllist| {
-        for (ecllist) |item| {
+        for (ecllist.get()) |item| {
             var cred = auth.loadCredential(item.id.get()) catch {
                 continue;
             };
