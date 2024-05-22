@@ -168,7 +168,7 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (!skip_auth) {
         if (mcp.pinUvAuthParam) |puap| {
-            if (!auth.token.verify_token(&mcp.clientDataHash, puap.get(), auth.allocator)) {
+            if (!auth.token.verify_token(&mcp.clientDataHash, puap.get())) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 
@@ -179,7 +179,7 @@ pub fn authenticatorMakeCredential(
 
             if (auth.token.rp_id) |rp_id| {
                 // Match rpIds if possible
-                if (!std.mem.eql(u8, mcp.rp.id.get(), rp_id)) {
+                if (!std.mem.eql(u8, mcp.rp.id.get(), rp_id.get())) {
                     // Ids don't match
                     return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
                 }
@@ -193,7 +193,10 @@ pub fn authenticatorMakeCredential(
 
             // associate the rpId with the token
             if (auth.token.rp_id == null) {
-                auth.token.setRpId(mcp.rp.id.get());
+                auth.token.setRpId(mcp.rp.id.get()) catch {
+                    // rpId is unexpectedly long
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                };
             }
         } else if (uv) {
             const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{

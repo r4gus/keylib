@@ -112,7 +112,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     if (auth.isProtected()) {
         if (gap.pinUvAuthParam) |puap| {
-            if (!auth.token.verify_token(&gap.clientDataHash, puap.get(), auth.allocator)) {
+            if (!auth.token.verify_token(&gap.clientDataHash, puap.get())) {
                 return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
             }
 
@@ -123,7 +123,7 @@ pub fn authenticatorGetAssertion(
 
             if (auth.token.rp_id) |rp_id| {
                 // Match rpIds if possible
-                if (!std.mem.eql(u8, gap.rpId.get(), rp_id)) {
+                if (!std.mem.eql(u8, gap.rpId.get(), rp_id.get())) {
                     // Ids don't match
                     return fido.ctap.StatusCodes.ctap2_err_pin_auth_invalid;
                 }
@@ -137,7 +137,9 @@ pub fn authenticatorGetAssertion(
 
             // associate the rpId with the token
             if (auth.token.rp_id == null) {
-                auth.token.setRpId(gap.rpId.get());
+                auth.token.setRpId(gap.rpId.get()) catch {
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                };
             }
         } else if (uv) {
             const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId.get()}) catch {

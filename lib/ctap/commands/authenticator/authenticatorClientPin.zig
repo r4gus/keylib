@@ -130,24 +130,25 @@ pub fn authenticatorClientPin(
             // If the rpId parameter is present, associate the permissions RP ID
             // with the pinUvAuthToken.
             if (client_pin_param.rpId) |rpId| {
-                auth.token.setRpId(rpId.get());
+                auth.token.setRpId(rpId.get()) catch {
+                    // rpId is unexpectedly long
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                };
             }
 
             // Obtain the shared secret
             const shared_secret = auth.token.ecdh(
                 client_pin_param.keyAgreement.?,
-                auth.allocator,
             ) catch {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             };
-            defer auth.allocator.free(shared_secret);
 
             // The authenticator returns the encrypted pinUvAuthToken for the
             // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
             var enc_shared_secret: [48]u8 = undefined;
             auth.token.encrypt(
                 &auth.token,
-                shared_secret,
+                shared_secret.get(),
                 enc_shared_secret[0..],
                 auth.token.pin_token[0..],
             );
