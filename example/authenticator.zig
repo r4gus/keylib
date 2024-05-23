@@ -173,14 +173,20 @@ const Error = keylib.ctap.authenticator.callbacks.Error;
 pub fn my_uv(
     /// Information about the context (e.g., make credential)
     info: [*c]const u8,
+    info_len: usize,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
     user: [*c]const u8,
+    user_len: usize,
     /// Information about the relying party (e.g., `Github (github.com)`)
     rp: [*c]const u8,
+    rp_len: usize,
 ) callconv(.C) UvResult {
     _ = info;
+    _ = info_len;
     _ = user;
+    _ = user_len;
     _ = rp;
+    _ = rp_len;
     // The authenticator backend is only started if a correct password has been provided
     // so we return Accepted. As this state may last for multiple minutes it's important
     // that we ask for user presence, i.e. we DONT return AcceptedWithUp!
@@ -192,14 +198,20 @@ pub fn my_uv(
 pub fn my_up(
     /// Information about the context (e.g., make credential)
     info: [*c]const u8,
+    info_len: usize,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
     user: [*c]const u8,
+    user_len: usize,
     /// Information about the relying party (e.g., `Github (github.com)`)
     rp: [*c]const u8,
+    rp_len: usize,
 ) callconv(.C) UpResult {
     _ = info;
+    _ = info_len;
     _ = user;
+    _ = user_len;
     _ = rp;
+    _ = rp_len;
 
     return UpResult.Accepted;
 }

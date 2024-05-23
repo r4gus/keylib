@@ -87,10 +87,13 @@ inline fn strlen(s: [*c]const u8) usize {
 pub const UpCallback = *const fn (
     /// Information about the context (e.g., make credential)
     info: [*c]const u8,
+    info_len: usize,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
     user: [*c]const u8,
+    user_len: usize,
     /// Information about the relying party (e.g., `Github (github.com)`)
     rp: [*c]const u8,
+    rp_len: usize,
 ) callconv(.C) UpResult;
 
 /// Type of the User Verification (UV) callback
@@ -101,10 +104,13 @@ pub const UpCallback = *const fn (
 pub const UvCallback = ?*const fn (
     /// Information about the context (e.g., make credential)
     info: [*c]const u8,
+    info_len: usize,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
     user: [*c]const u8,
+    user_len: usize,
     /// Information about the relying party (e.g., `Github (github.com)`)
     rp: [*c]const u8,
+    rp_len: usize,
 ) callconv(.C) UvResult;
 
 /// Select a resident key for a user associated with the given RP ID

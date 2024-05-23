@@ -98,9 +98,9 @@ pub fn performBuiltInUv(
     self: *const @This(),
     internalRetry: bool,
     auth: *fido.ctap.authenticator.Auth,
-    info: ?[:0]const u8,
-    user: ?[:0]const u8,
-    rp: ?[:0]const u8,
+    info: ?[]const u8,
+    user: ?[]const u8,
+    rp: ?[]const u8,
 ) BuiltInUvResult {
     _ = self;
 
@@ -134,8 +134,11 @@ pub fn performBuiltInUv(
 
         const authenticated = auth.callbacks.uv.?(
             if (info) |i| i.ptr else null,
+            if (info) |i| i.len else 0,
             if (user) |u| u.ptr else null,
+            if (user) |u| u.len else 0,
             if (rp) |r| r.ptr else null,
+            if (rp) |r| r.len else 0,
         );
         if (authenticated == .Accepted or authenticated == .AcceptedWithUp) {
             settings.uvRetries = 8;

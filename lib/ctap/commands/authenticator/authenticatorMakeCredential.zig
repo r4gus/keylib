@@ -294,7 +294,14 @@ pub fn authenticatorMakeCredential(
                 }
 
                 if (!userPresentFlagValue) {
-                    _ = auth.callbacks.up("Make Credential", u, r);
+                    _ = auth.callbacks.up(
+                        "Registration Failed: Credential Excluded",
+                        "Registration Failed: Credential Excluded".len,
+                        mcp.user.getName().ptr,
+                        mcp.user.getName().len,
+                        mcp.rp.id.get().ptr,
+                        mcp.rp.id.get().len,
+                    );
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                 } else {
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
@@ -309,7 +316,14 @@ pub fn authenticatorMakeCredential(
                     }
 
                     if (!userPresentFlagValue) {
-                        _ = auth.callbacks.up("Make Credential", u, r);
+                        _ = auth.callbacks.up(
+                            "Registration Failed: Credential Excluded",
+                            "Registration Failed: Credential Excluded".len,
+                            mcp.user.getName().ptr,
+                            mcp.user.getName().len,
+                            mcp.rp.id.get().ptr,
+                            mcp.rp.id.get().len,
+                        );
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                     } else {
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
@@ -335,13 +349,27 @@ pub fn authenticatorMakeCredential(
     if (up) {
         if (mcp.pinUvAuthParam != null) {
             if (!auth.token.getUserPresentFlagValue()) {
-                if (auth.callbacks.up("Make Credential", u, r) != .Accepted) {
+                if (auth.callbacks.up(
+                    "Registration: Verification Failed",
+                    "Registration: Verification Failed".len,
+                    mcp.user.getName().ptr,
+                    mcp.user.getName().len,
+                    mcp.rp.id.get().ptr,
+                    mcp.rp.id.get().len,
+                ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (auth.callbacks.up("Make Credential", u, r) != .Accepted) {
+                if (auth.callbacks.up(
+                    "Registration: Verification Failed",
+                    "Registration: Verification Failed".len,
+                    mcp.user.getName().ptr,
+                    mcp.user.getName().len,
+                    mcp.rp.id.get().ptr,
+                    mcp.rp.id.get().len,
+                ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

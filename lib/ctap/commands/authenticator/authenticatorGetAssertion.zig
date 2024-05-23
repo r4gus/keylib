@@ -12,9 +12,7 @@ pub fn authenticatorGetAssertion(
     const di = cbor.DataItem.new(request) catch {
         return .ctap2_err_invalid_cbor;
     };
-    const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{
-        .allocator = auth.allocator,
-    }) catch {
+    const gap = cbor.parse(fido.ctap.request.GetAssertion, di, .{}) catch {
         std.log.err("unable to map request to `GetAssertion` data type", .{});
         return .ctap2_err_invalid_cbor;
     };
@@ -264,13 +262,27 @@ pub fn authenticatorGetAssertion(
     if (up and !up_response) {
         if (gap.pinUvAuthParam != null) {
             if (!auth.token.getUserPresentFlagValue()) {
-                if (auth.callbacks.up("Get Assertion", null, r) != .Accepted) {
+                if (auth.callbacks.up(
+                    "Authentication: Verification Failed",
+                    "Authentication: Verification Failed".len,
+                    null,
+                    0,
+                    gap.rpId.get().ptr,
+                    gap.rpId.get().len,
+                ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }
         } else {
             if (!up_response) {
-                if (auth.callbacks.up("Get Assertion", null, r) != .Accepted) {
+                if (auth.callbacks.up(
+                    "Authentication: Verification Failed",
+                    "Authentication: Verification Failed".len,
+                    null,
+                    0,
+                    gap.rpId.get().ptr,
+                    gap.rpId.get().len,
+                ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
             }

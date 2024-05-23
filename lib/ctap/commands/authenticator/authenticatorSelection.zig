@@ -9,7 +9,14 @@ pub fn authenticatorSelection(
     _ = request;
     _ = out;
 
-    const up = auth.callbacks.up("Authenticator Selection", null, null);
+    const up = auth.callbacks.up(
+        "Use this authenticator?",
+        "Use this authenticator?".len,
+        null,
+        0,
+        null,
+        0,
+    );
 
     return switch (up) {
         .Denied => fido.ctap.StatusCodes.ctap2_err_operation_denied,
