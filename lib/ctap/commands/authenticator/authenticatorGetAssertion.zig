@@ -140,18 +140,12 @@ pub fn authenticatorGetAssertion(
                 };
             }
         } else if (uv) {
-            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId.get()}) catch {
-                std.log.err("getAssertion: unable to allocate memory for rpId", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            defer auth.allocator.free(r);
-
             const uvState = auth.token.performBuiltInUv(
                 true,
                 auth,
                 "Get Assertion",
                 null,
-                r,
+                .{ .id = gap.rpId },
             );
             switch (uvState) {
                 .Blocked => return fido.ctap.StatusCodes.ctap2_err_pin_blocked,
@@ -178,56 +172,22 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 8. Locate credentials
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var credentials = std.ArrayList(fido.ctap.authenticator.Credential).fromOwnedSlice(
-        auth.allocator,
-        auth.loadCredentials(gap.rpId.get()) catch {
-            std.log.err("getAssertion: unable to fetch credentials", .{});
-            return fido.ctap.StatusCodes.ctap2_err_no_credentials;
-        },
-    );
-    defer {
-        for (credentials.items) |item| {
-            item.deinit(auth.allocator);
-        }
-        credentials.deinit();
-    }
+    var selected_credential: ?fido.ctap.authenticator.Credential = null;
+    var total_credentials: usize = 0;
+    var credential = auth.callbacks.read_first(null, gap.rpId.get()) catch {
+        return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+    };
 
-    var i: usize = 0;
     while (true) {
-        const l = credentials.items.len;
-        if (i >= l) break;
-
-        if (gap.allowList) |allowList| {
-            var found = false;
-            for (allowList.get()) |desc| {
-                if (std.mem.eql(u8, desc.id.get(), credentials.items[i].id)) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                const item = credentials.swapRemove(i);
-                item.deinit(auth.allocator);
-                // We don't increment i because we swap the last
-                // with the current element
-                continue;
-            }
-        }
-
-        const policy_ = fido.ctap.extensions.CredentialCreationPolicy.fromString(credentials.items[i].getExtensions("credProtect"));
-        const policy = if (policy_) |policy| policy else fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+        var skip = false;
+        const policy = credential.policy;
 
         // if credential protection for a credential is marked as
         // userVerificationRequired, and the "uv" bit is false in
         // the response, remove that credential from the applicable
         // credentials list
-        if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationRequired == policy and !uv_response) {
-            const item = credentials.swapRemove(i);
-            item.deinit(auth.allocator);
-            // We don't increment i because we swap the last
-            // with the current element
-            continue;
+        if (policy == .userVerificationRequired and !uv_response) {
+            skip = true;
         }
 
         // if credential protection for a credential is marked as
@@ -235,40 +195,36 @@ pub fn authenticatorGetAssertion(
         // is no allowList passed by the client and the "uv" bit is
         // false in the response, remove that credential from the
         // applicable credentials list
-        if (fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptionalWithCredentialIDList == policy and gap.allowList == null and !uv_response) {
-            const item = credentials.swapRemove(i);
-            item.deinit(auth.allocator);
-            // We don't increment i because we swap the last
-            // with the current element
-            continue;
+        if (policy == .userVerificationOptionalWithCredentialIDList and gap.allowList == null and !uv_response) {
+            skip = true;
         }
 
-        i += 1;
+        if (!skip) {
+            total_credentials += 1;
+            if (selected_credential == null) {
+                selected_credential = credential;
+            }
+        }
+
+        credential = auth.callbacks.read_next() catch {
+            break;
+        };
     }
 
-    if (credentials.items.len == 0) {
+    if (selected_credential == null) {
         return fido.ctap.StatusCodes.ctap2_err_no_credentials;
     }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 10. Check user presence
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{gap.rpId.get()}) catch {
-        std.log.err("getAssertion: unable to allocate memory for rpId", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    defer auth.allocator.free(r);
-
     if (up and !up_response) {
         if (gap.pinUvAuthParam != null) {
             if (!auth.token.getUserPresentFlagValue()) {
                 if (auth.callbacks.up(
                     "Authentication: Verification Failed",
-                    "Authentication: Verification Failed".len,
                     null,
-                    0,
-                    gap.rpId.get().ptr,
-                    gap.rpId.get().len,
+                    .{ .id = gap.rpId },
                 ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
@@ -277,11 +233,8 @@ pub fn authenticatorGetAssertion(
             if (!up_response) {
                 if (auth.callbacks.up(
                     "Authentication: Verification Failed",
-                    "Authentication: Verification Failed".len,
                     null,
-                    0,
-                    gap.rpId.get().ptr,
-                    gap.rpId.get().len,
+                    .{ .id = gap.rpId },
                 ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
@@ -302,98 +255,24 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 11. + 12. Finally select credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    // Sort credentials "newest" to "oldest"
-    std.mem.sort(
-        fido.ctap.authenticator.Credential,
-        credentials.items,
-        {},
-        comptime fido.ctap.authenticator.Credential.desc,
-    );
-
-    var cred = if (credentials.items.len == 1) blk: {
-        break :blk credentials.orderedRemove(0);
-    } else if (auth.callbacks.select == null or (!uv and !up)) blk: {
-        // TODO
-        break :blk credentials.orderedRemove(0);
-    } else if (auth.callbacks.select != null and (uv or up)) blk: {
-        // Let the user select one of the many credentials via
-        // device specific interface
-        var users = auth.allocator.alloc([*c]const u8, credentials.items.len + 1) catch {
-            std.log.err("getAssertion: unable to allocate memory for credentials", .{});
-            return fido.ctap.StatusCodes.ctap1_err_other;
-        };
-        defer {
-            var oi: usize = 0;
-            while (oi < credentials.items.len) : (oi += 1) {
-                var ii: usize = 0;
-                while (users[oi][ii] != 0) : (ii += 1) {}
-                auth.allocator.free(users[oi][0..ii]);
-            }
-            auth.allocator.free(users);
-        }
-
-        for (credentials.items, 0..) |cred, index| {
-            users[index] = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
-                if (cred.user.displayName) |name| name.get() else "",
-                if (cred.user.name) |name| name.get() else "",
-            }) catch {
-                std.log.err("getAssertion: allocPrintZ for user data", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-        }
-        users[credentials.items.len] = null;
-
-        const rpId = auth.allocator.dupeZ(u8, gap.rpId.get()) catch {
-            std.log.err("getAssertion: allocPrintZ for rpId", .{});
-            return fido.ctap.StatusCodes.ctap1_err_other;
-        };
-        defer auth.allocator.free(rpId);
-
-        var cred_index = auth.callbacks.select.?(rpId.ptr, users.ptr);
-        if (cred_index < 0) {
-            std.log.info("no credential selected by user. using default index 0...", .{});
-            cred_index = 0;
-        }
-
-        break :blk credentials.orderedRemove(@as(usize, @intCast(cred_index)));
-    } else blk: {
-        break :blk credentials.orderedRemove(0);
-    };
-    defer cred.deinit(auth.allocator);
+    // Fuck sorting the credentials ...
+    // ... credential has already been selected
 
     var write_back: bool = false;
     if (!auth.constSignCount) {
-        cred.sign_count += 1;
+        selected_credential.?.sign_count += 1;
         write_back = true;
     }
+    const usageCnt = selected_credential.?.sign_count;
 
-    const usageCnt = cred.sign_count;
-
-    const user: ?fido.common.User = if (uv_response) blk: {
+    const user = if (uv_response) blk: {
         // User identifiable information (name, DisplayName, icon)
         // inside the publicKeyCredentialUserEntity MUST NOT be returned
         // if user verification is not done by the authenticator
-        if (credentials.items.len > 0) {
-            break :blk cred.user;
-        } else {
-            break :blk fido.common.User{ .id = cred.user.id };
-        }
+        break :blk selected_credential.?.user;
     } else blk: {
-        break :blk fido.common.User{ .id = cred.user.id };
+        break :blk fido.common.User{ .id = selected_credential.?.user.id };
     };
-
-    var alg: ?fido.ctap.crypto.SigAlg = null;
-    for (auth.algorithms) |_alg| {
-        if (cred.alg == _alg.alg) {
-            alg = _alg;
-            break;
-        }
-    }
-
-    if (alg == null) {
-        std.log.err("getAssertion: Unsupported algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    }
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
@@ -433,17 +312,26 @@ pub fn authenticatorGetAssertion(
     //                                    v
     //                           ASSERTION SIGNATURE
     var sig_buffer: [256]u8 = undefined;
-    const sig = if (alg.?.sign(
-        cred.private_key,
+    var fba = std.heap.FixedBufferAllocator.init(&sig_buffer);
+    const allocator = fba.allocator();
+
+    const sig = selected_credential.?.key.sign(
         &.{ authData.items, &gap.clientDataHash },
-        &sig_buffer,
-    )) |signature| signature else {
-        std.log.err("getAssertion: signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred.id)});
+        allocator,
+    ) catch {
+        std.log.err(
+            "getAssertion: signature creation failed for credential with id: {s}",
+            .{std.fmt.fmtSliceHexLower(selected_credential.?.id.get())},
+        );
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
 
     const gar = fido.ctap.response.GetAssertion{
-        .credential = fido.common.PublicKeyCredentialDescriptor.new(cred.id, .@"public-key", null) catch {
+        .credential = fido.common.PublicKeyCredentialDescriptor.new(
+            selected_credential.?.id.get(),
+            .@"public-key",
+            null,
+        ) catch {
             return fido.ctap.StatusCodes.ctap1_err_other;
         },
         .authData = authData.items,
@@ -455,7 +343,7 @@ pub fn authenticatorGetAssertion(
         // If the sign count is not updated we don't need to update the
         // credentials DB entry, i.e. shared resident keys (passkeys)
         // are not at risk getting out of sync.
-        auth.writeCredential(cred.id, cred.rp.id.get(), &cred) catch {
+        auth.callbacks.write(selected_credential.?) catch {
             std.log.err("getAssertion: unable to update credential", .{});
             return fido.ctap.StatusCodes.ctap1_err_other;
         };

@@ -13,37 +13,16 @@ pub const Es256 = SigAlg{
     .from_priv = from_priv,
 };
 
-pub fn create(rand: std.rand.Random) ?SigAlg.KeyPair {
+pub fn create(rand: std.rand.Random) ?cbor.cose.Key {
     // Create key pair
     var seed: [32]u8 = undefined;
     rand.bytes(&seed);
     return create_det(&seed);
 }
 
-pub fn create_det(seed: []const u8) ?SigAlg.KeyPair {
+pub fn create_det(seed: []const u8) ?cbor.cose.Key {
     const kp = EcdsaP256Sha256.KeyPair.create(seed[0..32].*) catch return null;
-    const sec1 = kp.public_key.toUncompressedSec1();
-    const pk = kp.secret_key.toBytes();
-    const pubk = cbor.cose.Key{ .P256 = .{
-        .alg = .Es256,
-        .x = sec1[1..33].*,
-        .y = sec1[33..65].*,
-    } };
-
-    // Serialize
-    var buffer: [256]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const allocator = fba.allocator();
-
-    var serialized_cred = std.ArrayList(u8).init(allocator);
-    cbor.stringify(&pubk, .{ .enum_serialization_type = .Integer }, serialized_cred.writer()) catch {
-        return null;
-    };
-
-    return .{
-        .cose_public_key = (dt.ABS512B.fromSlice(serialized_cred.items) catch unreachable).?,
-        .raw_private_key = (dt.ABS256B.fromSlice(pk[0..]) catch unreachable).?,
-    };
+    return cbor.cose.Key.fromP256PrivPub(.Es256, kp.secret_key, kp.public_key);
 }
 
 pub fn sign(

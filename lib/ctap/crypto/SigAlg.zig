@@ -4,23 +4,12 @@ const Allocator = std.mem.Allocator;
 const fido = @import("../../main.zig");
 const dt = fido.common.dt;
 
-pub const KeyPair = struct {
-    /// Public key encoded in CBOR COSE format (without private key!)
-    ///
-    /// TODO: adujst the key size!!!
-    cose_public_key: dt.ABS512B,
-    /// The private key
-    ///
-    /// TODO: adujst the key size!!!
-    raw_private_key: dt.ABS256B,
-};
-
 /// The algorithm used
 alg: cbor.cose.Algorithm,
 /// Create a new random key-pair
-create: *const fn (rand: std.rand.Random) ?KeyPair,
+create: *const fn (rand: std.rand.Random) ?cbor.cose.Key,
 /// Deterministically creates a new key-pair using the given seed
-create_det: *const fn (seed: []const u8) ?KeyPair,
+create_det: *const fn (seed: []const u8) ?cbor.cose.Key,
 /// Sign the given data
 sign: *const fn (
     raw_private_key: []const u8,

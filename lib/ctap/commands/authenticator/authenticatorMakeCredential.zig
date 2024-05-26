@@ -4,6 +4,7 @@ const cks = @import("cks");
 const uuid = @import("uuid");
 const fido = @import("../../../main.zig");
 const helper = @import("helper.zig");
+const dt = fido.common.dt;
 
 const deriveMacKey = fido.ctap.crypto.master_secret.deriveMacKey;
 const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
@@ -199,27 +200,12 @@ pub fn authenticatorMakeCredential(
                 };
             }
         } else if (uv) {
-            const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
-                if (mcp.user.displayName) |dn| dn.get() else "???",
-                if (mcp.user.name) |dn| dn.get() else "???",
-            }) catch {
-                std.log.err("MakeCredential: allocPrintZ for user", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            defer auth.allocator.free(u);
-
-            const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id.get()}) catch {
-                std.log.err("MakeCredential: allocPrintZ for rpId", .{});
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
-            defer auth.allocator.free(r);
-
             const uvState = auth.token.performBuiltInUv(
                 true,
                 auth,
                 "Make Credential",
-                u,
-                r,
+                mcp.user,
+                mcp.rp,
             );
             switch (uvState) {
                 .Blocked => return fido.ctap.StatusCodes.ctap2_err_pin_blocked,
@@ -254,37 +240,14 @@ pub fn authenticatorMakeCredential(
     // 12. Check exclude list
     // ++++++++++++++++++++++++++++++++++++++++++++++++
 
-    const settings = auth.loadSettings() catch |e| {
-        std.log.err("authenticatorMakeCredential: Unable to fetch Settings ({any})", .{e});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    _ = settings;
-
-    const u = std.fmt.allocPrintZ(auth.allocator, "{s} ({s})", .{
-        if (mcp.user.displayName) |dn| dn.get() else "???",
-        if (mcp.user.name) |dn| dn.get() else "???",
-    }) catch {
-        std.log.err("makeCredential: allocPrintZ for user", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    defer auth.allocator.free(u);
-
-    const r = std.fmt.allocPrintZ(auth.allocator, "{s}", .{mcp.rp.id.get()}) catch {
-        std.log.err("makeCredential: allocPrintZ for user", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    defer auth.allocator.free(r);
-
     if (mcp.excludeList) |ecllist| {
         for (ecllist.get()) |item| {
-            var cred = auth.loadCredential(item.id.get()) catch {
+            const cred = auth.callbacks.read_first(item.id.get(), null) catch {
                 continue;
             };
-            defer cred.deinit(auth.allocator);
             // If the credential was created by this authenticator: Return.
 
-            const policy_ = fido.ctap.extensions.CredentialCreationPolicy.fromString(cred.getExtensions("credProtect"));
-            const policy = if (policy_) |policy| policy else fido.ctap.extensions.CredentialCreationPolicy.userVerificationOptional;
+            const policy = cred.policy;
             if (.userVerificationRequired != policy) {
                 var userPresentFlagValue = false;
                 if (mcp.pinUvAuthParam) |_| {
@@ -296,11 +259,8 @@ pub fn authenticatorMakeCredential(
                 if (!userPresentFlagValue) {
                     _ = auth.callbacks.up(
                         "Registration Failed: Credential Excluded",
-                        "Registration Failed: Credential Excluded".len,
-                        mcp.user.getName().ptr,
-                        mcp.user.getName().len,
-                        mcp.rp.id.get().ptr,
-                        mcp.rp.id.get().len,
+                        mcp.user,
+                        mcp.rp,
                     );
                     return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                 } else {
@@ -318,11 +278,8 @@ pub fn authenticatorMakeCredential(
                     if (!userPresentFlagValue) {
                         _ = auth.callbacks.up(
                             "Registration Failed: Credential Excluded",
-                            "Registration Failed: Credential Excluded".len,
-                            mcp.user.getName().ptr,
-                            mcp.user.getName().len,
-                            mcp.rp.id.get().ptr,
-                            mcp.rp.id.get().len,
+                            mcp.user,
+                            mcp.rp,
                         );
                         return fido.ctap.StatusCodes.ctap2_err_credential_excluded;
                     } else {
@@ -351,11 +308,8 @@ pub fn authenticatorMakeCredential(
             if (!auth.token.getUserPresentFlagValue()) {
                 if (auth.callbacks.up(
                     "Registration: Verification Failed",
-                    "Registration: Verification Failed".len,
-                    mcp.user.getName().ptr,
-                    mcp.user.getName().len,
-                    mcp.rp.id.get().ptr,
-                    mcp.rp.id.get().len,
+                    mcp.user,
+                    mcp.rp,
                 ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
@@ -364,11 +318,8 @@ pub fn authenticatorMakeCredential(
             if (!up_response) {
                 if (auth.callbacks.up(
                     "Registration: Verification Failed",
-                    "Registration: Verification Failed".len,
-                    mcp.user.getName().ptr,
-                    mcp.user.getName().len,
-                    mcp.rp.id.get().ptr,
-                    mcp.rp.id.get().len,
+                    mcp.user,
+                    mcp.rp,
                 ) != .Accepted) {
                     return fido.ctap.StatusCodes.ctap2_err_operation_denied;
                 }
@@ -401,12 +352,9 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    const id = auth.allocator.alloc(u8, 32) catch {
-        std.log.err("makeCredential: unable to allocate memory for credId", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
-    auth.random.bytes(id);
-    for (id) |*b| {
+    var id: [32]u8 = undefined;
+    auth.random.bytes(&id);
+    for (&id) |*b| {
         // disallow 0 bytes
         // -> The callbacks work with C strings and we don't pass a length, i.e.
         //    0 terminates a string. If we would allow 0 bytes then the id would
@@ -424,71 +372,45 @@ pub fn authenticatorMakeCredential(
     };
 
     var entry = fido.ctap.authenticator.Credential{
-        .id = id,
+        .id = (dt.ABS64B.fromSlice(&id) catch unreachable).?,
         .user = mcp.user,
         .rp = mcp.rp,
         .sign_count = 0, // the first signature will be included in the response
-        .alg = alg.alg,
-        .private_key = key_pair.raw_private_key.get(),
+        .key = key_pair,
         .created = auth.milliTimestamp(),
     };
-    defer auth.allocator.free(entry.id);
-    entry.setExtension("credProtect", fido.ctap.extensions.CredentialCreationPolicy.toString(policy), auth.allocator) catch {
-        std.log.err("MakeCredential: unable to set policy {any}", .{policy});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
+    entry.policy = policy;
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 17. + 18. Store credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    if (rk) {
+    if (rk) outer: {
         std.log.info("MakeCredential: creating resident key", .{});
-        const credentials: ?[]fido.ctap.authenticator.Credential = auth.loadCredentials(mcp.rp.id.get()) catch |err| blk: {
-            if (err == error.NoData) {
-                std.log.info(
-                    "makeCredential: no credentials associated with rpId {s} found",
-                    .{std.fmt.fmtSliceHexLower(mcp.rp.id.get())},
-                );
-                break :blk null;
-            } else {
-                std.log.err(
-                    "makeCredential: unable to fetch credentials associated with rpId {s}",
-                    .{mcp.rp.id.get()},
-                );
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            }
-        };
-        defer {
-            if (credentials) |creds| {
-                for (creds) |cred| {
-                    cred.deinit(auth.allocator);
-                }
-                auth.allocator.free(creds);
-            }
-        }
-
-        if (credentials) |creds| {
-            for (creds) |cred| {
-                if (std.mem.eql(u8, cred.user.id.get(), entry.user.id.get())) {
-                    // If a credential for the same rp.id and account ID already exists
-                    // on the authenticator, overwrite that credential.
-                    std.log.warn("makeCredential: rk with the same user and rp id already exist", .{});
-                    std.log.info("makeCredential: overwriting existing credentials with id {s}", .{
-                        cred.id,
-                    });
-                    auth.allocator.free(entry.id);
-                    entry.id = auth.allocator.dupe(u8, cred.id) catch {
-                        std.log.err("makeCredential: unable to dupe credId", .{});
-                        return fido.ctap.StatusCodes.ctap1_err_other;
-                    };
-                }
-            }
-        }
-
         entry.discoverable = true;
+
+        var credential = auth.callbacks.read_first(null, mcp.rp.id.get()) catch {
+            break :outer;
+        };
+
+        while (true) {
+            if (std.mem.eql(u8, credential.user.id.get(), entry.user.id.get())) {
+                // If a credential for the same rp.id and account ID already exists
+                // on the authenticator, overwrite that credential.
+                std.log.warn("makeCredential: rk with the same user and rp id already exist", .{});
+                std.log.info("makeCredential: overwriting existing credentials with id {s}", .{
+                    credential.id.get(),
+                });
+                entry.id = credential.id;
+                break :outer;
+            }
+
+            credential = auth.callbacks.read_next() catch {
+                break :outer;
+            };
+        }
     }
 
-    auth.writeCredential(entry.id, mcp.rp.id.get(), &entry) catch |err| {
+    auth.callbacks.write(entry) catch |err| {
         std.log.err("makeCredential: unable to create credential ({any})", .{err});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -496,6 +418,18 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 19. Create attestation statement
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    var buffer: [256]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    var allocator = fba.allocator();
+    var cose_public_key = std.ArrayList(u8).init(allocator);
+    cbor.stringify(
+        entry.key.copySecure(),
+        .{ .enum_serialization_type = .Integer },
+        cose_public_key.writer(),
+    ) catch {
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{
@@ -509,8 +443,8 @@ pub fn authenticatorMakeCredential(
         .signCount = 0,
         .attestedCredentialData = fido.common.AttestedCredentialData.new(
             auth.settings.aaguid,
-            entry.id,
-            key_pair.cose_public_key.get(),
+            entry.id.get(),
+            cose_public_key.items,
         ) catch {
             return fido.ctap.StatusCodes.ctap1_err_other;
         },
@@ -531,15 +465,17 @@ pub fn authenticatorMakeCredential(
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
 
-            var sig_buffer: [256]u8 = undefined;
-            const sig = alg.sign(
-                key_pair.raw_private_key.get(),
+            fba = std.heap.FixedBufferAllocator.init(&buffer);
+            allocator = fba.allocator();
+            const sig = entry.key.sign(
                 &.{
                     authData.items,
                     &mcp.clientDataHash,
                 },
-                &sig_buffer,
-            ).?;
+                allocator,
+            ) catch {
+                return fido.ctap.StatusCodes.ctap1_err_other;
+            };
 
             break :blk fido.common.AttestationStatement{ .@"packed" = .{
                 .alg = alg.alg,

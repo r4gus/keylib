@@ -11,11 +11,8 @@ pub fn authenticatorSelection(
 
     const up = auth.callbacks.up(
         "Use this authenticator?",
-        "Use this authenticator?".len,
         null,
-        0,
         null,
-        0,
     );
 
     return switch (up) {

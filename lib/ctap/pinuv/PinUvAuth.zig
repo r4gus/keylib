@@ -98,25 +98,20 @@ pub fn performBuiltInUv(
     self: *const @This(),
     internalRetry: bool,
     auth: *fido.ctap.authenticator.Auth,
-    info: ?[]const u8,
-    user: ?[]const u8,
-    rp: ?[]const u8,
+    info: []const u8,
+    user: ?fido.common.User,
+    rp: ?fido.common.RelyingParty,
 ) BuiltInUvResult {
     _ = self;
 
-    var settings = auth.loadSettings() catch {
-        std.log.err("performBuiltInUv: unable to load settings (required for counter)", .{});
-        return .Denied;
-    };
+    var settings = auth.callbacks.read_settings();
 
     var attemptsBeforeReturning: u8 = if (internalRetry) 3 else 1;
 
     if (auth.clientPinSupported()) |supported| {
         if (supported and settings.pinRetries == 0) {
             settings.uvRetries = 0;
-            auth.writeSettings(settings) catch {
-                std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
-            };
+            auth.callbacks.write_settings(settings);
         }
     }
 
@@ -126,25 +121,13 @@ pub fn performBuiltInUv(
 
     while (attemptsBeforeReturning > 0) {
         settings.uvRetries -= 1;
-        auth.writeSettings(settings) catch {
-            std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
-            return .Denied;
-        };
+        auth.callbacks.write_settings(settings);
         attemptsBeforeReturning -= 1;
 
-        const authenticated = auth.callbacks.uv.?(
-            if (info) |i| i.ptr else null,
-            if (info) |i| i.len else 0,
-            if (user) |u| u.ptr else null,
-            if (user) |u| u.len else 0,
-            if (rp) |r| r.ptr else null,
-            if (rp) |r| r.len else 0,
-        );
+        const authenticated = auth.callbacks.uv.?(info, user, rp);
         if (authenticated == .Accepted or authenticated == .AcceptedWithUp) {
             settings.uvRetries = 8;
-            auth.writeSettings(settings) catch {
-                std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
-            };
+            auth.callbacks.write_settings(settings);
 
             return if (authenticated == .Accepted) .Accepted else .AcceptedWithUp;
         } else if (authenticated == .Timeout) {

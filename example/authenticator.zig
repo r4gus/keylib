@@ -13,12 +13,12 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
 pub fn main() !void {
-    // a static credential to work with
-    try data_set.append(.{
-        .id = "\xb4\x40\xa4\xed\x80\x92\xe6\x9b\x19\x25\x2d\x25\x84\xc2\xa4\xce\x56\x38\x66\xd6\x4d\xb3\x13\x4e\x48\xd6\x1b\xc2\xb9\x32\xae\x23",
-        .rp = "trust-anchor.testbed.oidcfed.incubator.geant.org",
-        .data = "A96269645820B440A4ED8092E69B19252D2584C2A4CE563866D64DB3134E48D61BC2B932AE236475736572A26269644C0C430EFFFF5F5F5F44454D4F646E616D6565657277696E627270A1626964783074727573742D616E63686F722E746573746265642E6F6964636665642E696E63756261746F722E6765616E742E6F72676A7369676E5F636F756E740063616C676545733235366B707269766174655F6B657958201BA2453ED863B547C93AE1B2244459F2E403FC8E951B15F458335DFB3C80397467637265617465641B0000018D75C3FDC86C646973636F76657261626C65F56A657874656E73696F6E7382A26565787449644B6372656450726F746563746865787456616C7565581875736572566572696669636174696F6E4F7074696F6E616CA26565787449644569647049646865787456616C7565584168747470733A2F2F74727573742D616E63686F722E746573746265642E6F6964636665642E696E63756261746F722E6765616E742E6F72672F6F6964632F6F702F",
-    });
+    //// a static credential to work with
+    //try data_set.append(.{
+    //    .id = "\xb4\x40\xa4\xed\x80\x92\xe6\x9b\x19\x25\x2d\x25\x84\xc2\xa4\xce\x56\x38\x66\xd6\x4d\xb3\x13\x4e\x48\xd6\x1b\xc2\xb9\x32\xae\x23",
+    //    .rp = "trust-anchor.testbed.oidcfed.incubator.geant.org",
+    //    .data = "A96269645820B440A4ED8092E69B19252D2584C2A4CE563866D64DB3134E48D61BC2B932AE236475736572A26269644C0C430EFFFF5F5F5F44454D4F646E616D6565657277696E627270A1626964783074727573742D616E63686F722E746573746265642E6F6964636665642E696E63756261746F722E6765616E742E6F72676A7369676E5F636F756E740063616C676545733235366B707269766174655F6B657958201BA2453ED863B547C93AE1B2244459F2E403FC8E951B15F458335DFB3C80397467637265617465641B0000018D75C3FDC86C646973636F76657261626C65F56A657874656E73696F6E7382A26565787449644B6372656450726F746563746865787456616C7565581875736572566572696669636174696F6E4F7074696F6E616CA26565787449644569647049646865787456616C7565584168747470733A2F2F74727573742D616E63686F722E746573746265642E6F6964636665642E696E63756261746F722E6765616E742E6F72672F6F6964632F6F702F",
+    //});
 
     // The Auth struct is the most important part of your authenticator. It defines
     // its capabilities and behavior.
@@ -145,14 +145,11 @@ pub fn main() !void {
 // Data
 // /////////////////////////////////////////
 
-const Data = struct {
-    rp: []const u8,
-    id: []const u8,
-    data: []const u8,
-};
-
 // For this example we use a volatile storage solution for our credentials.
-var data_set = std.ArrayList(Data).init(allocator);
+var data_set = std.ArrayList(Credential).init(allocator);
+var fetch_index: ?usize = null;
+var fetch_id: ?[]const u8 = null;
+var fetch_rp: ?[]const u8 = null;
 
 // /////////////////////////////////////////
 // Auth
@@ -169,24 +166,21 @@ var data_set = std.ArrayList(Data).init(allocator);
 const UpResult = keylib.ctap.authenticator.callbacks.UpResult;
 const UvResult = keylib.ctap.authenticator.callbacks.UvResult;
 const Error = keylib.ctap.authenticator.callbacks.Error;
+const Credential = keylib.ctap.authenticator.Credential;
+const CallbackError = keylib.ctap.authenticator.callbacks.CallbackError;
+const Meta = keylib.ctap.authenticator.Meta;
 
 pub fn my_uv(
     /// Information about the context (e.g., make credential)
-    info: [*c]const u8,
-    info_len: usize,
+    info: []const u8,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
-    user: [*c]const u8,
-    user_len: usize,
+    user: ?keylib.common.User,
     /// Information about the relying party (e.g., `Github (github.com)`)
-    rp: [*c]const u8,
-    rp_len: usize,
-) callconv(.C) UvResult {
+    rp: ?keylib.common.RelyingParty,
+) UvResult {
     _ = info;
-    _ = info_len;
     _ = user;
-    _ = user_len;
     _ = rp;
-    _ = rp_len;
     // The authenticator backend is only started if a correct password has been provided
     // so we return Accepted. As this state may last for multiple minutes it's important
     // that we ask for user presence, i.e. we DONT return AcceptedWithUp!
@@ -197,163 +191,139 @@ pub fn my_uv(
 
 pub fn my_up(
     /// Information about the context (e.g., make credential)
-    info: [*c]const u8,
-    info_len: usize,
+    info: []const u8,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
-    user: [*c]const u8,
-    user_len: usize,
+    user: ?keylib.common.User,
     /// Information about the relying party (e.g., `Github (github.com)`)
-    rp: [*c]const u8,
-    rp_len: usize,
-) callconv(.C) UpResult {
+    rp: ?keylib.common.RelyingParty,
+) UpResult {
     _ = info;
-    _ = info_len;
     _ = user;
-    _ = user_len;
     _ = rp;
-    _ = rp_len;
 
     return UpResult.Accepted;
 }
 
-pub fn my_select(
-    rpId: [*c]const u8,
-    users: [*c][*c]const u8,
-) callconv(.C) i32 {
-    _ = rpId;
-    _ = users;
-
-    return 0;
-}
-
-pub fn my_read(
-    id: [*c]const u8,
-    rp: [*c]const u8,
-    out: *[*c][*c]u8,
-) callconv(.C) Error {
-    var entries = std.ArrayList([*c]u8).init(allocator);
+pub fn my_read_first(
+    id: ?[]const u8,
+    rp: ?[]const u8,
+) CallbackError!Credential {
+    std.log.info("my_first_read: {any}, {any}", .{ id, rp });
 
     if (id != null) {
-        // get the one with the id
-        const id_ = id[0..strlen(id)];
+        fetch_id = id;
+        fetch_index = 0;
 
-        for (data_set.items) |*entry| {
-            if (std.mem.eql(u8, entry.id, id_)) {
-                const d = allocator.dupeZ(u8, entry.data) catch {
-                    entries.deinit();
-                    return Error.OutOfMemory;
-                };
-
-                entries.append(d) catch unreachable;
-                entries.append(null) catch unreachable;
-                const o = entries.toOwnedSlice() catch unreachable;
-                out.* = o.ptr;
-                return Error.SUCCESS;
+        while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
+            if (std.mem.eql(u8, data_set.items[fetch_index.?].id.get(), id.?)) {
+                const v = data_set.items[fetch_index.?];
+                fetch_index.? += 1;
+                if (fetch_index.? >= data_set.items.len) {
+                    fetch_id = null;
+                    fetch_index = null;
+                }
+                return v;
             }
         }
 
-        entries.deinit();
-        return Error.DoesNotExist;
+        return error.DoesNotExist;
     } else if (rp != null) {
-        // get all associated with id
-        const rp_ = rp[0..strlen(rp)];
+        fetch_rp = rp;
+        fetch_index = 0;
 
-        for (data_set.items) |*entry| {
-            if (std.mem.eql(u8, entry.rp, rp_)) {
-                const d = allocator.dupeZ(u8, entry.data) catch {
-                    entries.deinit();
-                    return Error.OutOfMemory;
-                };
-
-                entries.append(d) catch unreachable;
+        while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
+            if (std.mem.eql(u8, data_set.items[fetch_index.?].rp.id.get(), rp.?)) {
+                const v = data_set.items[fetch_index.?];
+                fetch_index.? += 1;
+                if (fetch_index.? >= data_set.items.len) {
+                    fetch_rp = null;
+                    fetch_index = null;
+                }
+                return v;
             }
         }
 
-        if (entries.items.len > 0) {
-            entries.append(null) catch unreachable;
-            const o = entries.toOwnedSlice() catch unreachable;
-            out.* = o.ptr;
-            return Error.SUCCESS;
-        }
-
-        entries.deinit();
-        return Error.DoesNotExist;
+        return error.DoesNotExist;
     } else {
-        // get all
-        for (data_set.items) |*entry| {
-            if (!std.mem.eql(u8, entry.rp, "Root")) {
-                const d = allocator.dupeZ(u8, entry.data) catch {
-                    entries.deinit();
-                    return Error.OutOfMemory;
-                };
+        fetch_index = 0;
 
-                entries.append(d) catch unreachable;
+        if (fetch_index.? < data_set.items.len) {
+            const v = data_set.items[fetch_index.?];
+            fetch_index.? += 1;
+            if (fetch_index.? >= data_set.items.len) {
+                fetch_index = null;
             }
+            return v;
+        } else {
+            fetch_index = null;
         }
 
-        if (entries.items.len > 0) {
-            entries.append(null) catch unreachable;
-            const o = entries.toOwnedSlice() catch unreachable;
-            out.* = o.ptr;
-            return Error.SUCCESS;
-        }
-
-        entries.deinit();
-        return Error.DoesNotExist;
+        return error.DoesNotExist;
     }
 
-    return Error.DoesNotExist;
+    return error.DoesNotExist;
+}
+
+pub fn my_read_next() CallbackError!Credential {
+    std.log.info("my_read_next: {any}, {any}, {any}", .{ fetch_index, fetch_id, fetch_rp });
+
+    if (fetch_index != null) {
+        std.log.info("my_read_next: fetch index not null", .{});
+        if (fetch_index.? >= data_set.items.len) {
+            fetch_index = null;
+            fetch_id = null;
+            fetch_rp = null;
+            return error.DoesNotExist;
+        }
+
+        if (fetch_id) |id| {
+            while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
+                if (std.mem.eql(u8, data_set.items[fetch_index.?].id.get(), id)) {
+                    const v = data_set.items[fetch_index.?];
+                    fetch_index.? += 1;
+                    if (fetch_index.? >= data_set.items.len) {
+                        fetch_id = null;
+                        fetch_index = null;
+                    }
+                    return v;
+                }
+            }
+            return error.DoesNotExist;
+        }
+
+        if (fetch_rp) |id| {
+            while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
+                if (std.mem.eql(u8, data_set.items[fetch_index.?].rp.id.get(), id)) {
+                    const v = data_set.items[fetch_index.?];
+                    fetch_index.? += 1;
+                    if (fetch_index.? >= data_set.items.len) {
+                        fetch_rp = null;
+                        fetch_index = null;
+                    }
+                    return v;
+                }
+            }
+            return error.DoesNotExist;
+        }
+    }
+
+    std.log.info("my_read_next: throw error", .{});
+    return error.DoesNotExist;
 }
 
 pub fn my_write(
-    id: [*c]const u8,
-    rp: [*c]const u8,
-    data: [*c]const u8,
-) callconv(.C) Error {
-    if (id == null or rp == null or data == null) {
-        return Error.Other;
-    }
+    data: Credential,
+) CallbackError!void {
+    var i: usize = 0;
 
-    const id_ = id[0..strlen(id)];
-    const rp_ = rp[0..strlen(rp)];
-    const data_ = data[0..strlen(data)];
-
-    for (data_set.items) |*entry| {
-        if (std.mem.eql(u8, entry.id, id_)) {
-            allocator.free(entry.data);
-            entry.data = allocator.dupe(u8, data_) catch {
-                // TODO: here we should actually free the entry as the data is invalid
-                return Error.OutOfMemory;
-            };
-            return Error.SUCCESS;
+    while (i < data_set.items.len) : (i += 1) {
+        if (std.mem.eql(u8, data_set.items[i].id.get(), data.id.get())) {
+            data_set.items[i] = data;
+            return;
         }
     }
 
-    const id2 = allocator.dupe(u8, id_) catch {
-        return Error.OutOfMemory;
-    };
-    const rp2 = allocator.dupe(u8, rp_) catch {
-        allocator.free(id2);
-        return Error.OutOfMemory;
-    };
-    const data2 = allocator.dupe(u8, data_) catch {
-        allocator.free(id2);
-        allocator.free(rp2);
-        return Error.OutOfMemory;
-    };
-
-    data_set.append(Data{
-        .rp = rp2,
-        .id = id2,
-        .data = data2,
-    }) catch {
-        allocator.free(id2);
-        allocator.free(rp2);
-        allocator.free(data2);
-        return Error.OutOfMemory;
-    };
-
-    return Error.SUCCESS;
+    try data_set.append(data);
 }
 
 pub fn my_delete(
@@ -363,13 +333,23 @@ pub fn my_delete(
     return Error.Other;
 }
 
+pub fn my_read_settings() Meta {
+    return Meta{};
+}
+
+pub fn my_write_settings(data: Meta) void {
+    _ = data;
+}
+
 const callbacks = keylib.ctap.authenticator.callbacks.Callbacks{
     .up = my_up,
     .uv = my_uv,
-    .select = my_select,
-    .read = my_read,
+    .read_first = my_read_first,
+    .read_next = my_read_next,
     .write = my_write,
     .delete = my_delete,
+    .read_settings = my_read_settings,
+    .write_settings = my_write_settings,
 };
 
 // MISC

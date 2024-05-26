@@ -29,9 +29,7 @@ pub fn authenticatorClientPin(
     // Handle one of the sub-commands
     switch (client_pin_param.subCommand) {
         .getPinRetries => {
-            const settings = auth.loadSettings() catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            const settings = auth.callbacks.read_settings();
 
             client_pin_response = .{
                 .pinRetries = settings.pinRetries,
@@ -39,9 +37,7 @@ pub fn authenticatorClientPin(
             };
         },
         .getUVRetries => {
-            const settings = auth.loadSettings() catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            const settings = auth.callbacks.read_settings();
 
             client_pin_response = .{
                 .uvRetries = settings.uvRetries,
@@ -97,9 +93,7 @@ pub fn authenticatorClientPin(
                 return fido.ctap.StatusCodes.ctap2_err_not_allowed;
             }
 
-            const settings = auth.loadSettings() catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            const settings = auth.callbacks.read_settings();
 
             if (settings.uvRetries == 0) {
                 return fido.ctap.StatusCodes.ctap2_err_uv_blocked;
@@ -109,7 +103,7 @@ pub fn authenticatorClientPin(
             switch (auth.token.performBuiltInUv(
                 true,
                 auth,
-                null,
+                "User Verification",
                 null,
                 null,
             )) {

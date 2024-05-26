@@ -87,23 +87,23 @@ pub fn build(b: *std.Build) !void {
     // C bindings
     // ------------------------------------------------
 
-    const c_bindings = b.addStaticLibrary(.{
-        .name = "keylib",
-        .root_source_file = .{ .path = "bindings/c/src/keylib.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    c_bindings.root_module.addImport("keylib", keylib_module);
-    c_bindings.linkLibC();
-    c_bindings.installHeadersDirectory(
-        b.path("bindings/c/include"),
-        "keylib",
-        .{
-            .exclude_extensions = &.{},
-            .include_extensions = &.{".h"},
-        },
-    );
-    b.installArtifact(c_bindings);
+    //const c_bindings = b.addStaticLibrary(.{
+    //    .name = "keylib",
+    //    .root_source_file = .{ .path = "bindings/c/src/keylib.zig" },
+    //    .target = target,
+    //    .optimize = optimize,
+    //});
+    //c_bindings.root_module.addImport("keylib", keylib_module);
+    //c_bindings.linkLibC();
+    //c_bindings.installHeadersDirectory(
+    //    b.path("bindings/c/include"),
+    //    "keylib",
+    //    .{
+    //        .exclude_extensions = &.{},
+    //        .include_extensions = &.{".h"},
+    //    },
+    //);
+    //b.installArtifact(c_bindings);
 
     const uhid = b.addStaticLibrary(.{
         .name = "uhid",
