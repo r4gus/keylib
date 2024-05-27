@@ -74,6 +74,7 @@ pub fn authenticatorMakeCredential(
     // 6. Validate alwaysUv
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     const alwaysUv = auth.alwaysUv() catch {
+        std.log.err("MakeCredential: validate always uv", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
     var makeCredUvNotRqd = auth.makeCredUvNotRqd();
@@ -196,6 +197,7 @@ pub fn authenticatorMakeCredential(
             if (auth.token.rp_id == null) {
                 auth.token.setRpId(mcp.rp.id.get()) catch {
                     // rpId is unexpectedly long
+                    std.log.err("MakeCredential: unexpectedly long rpId", .{});
                     return fido.ctap.StatusCodes.ctap1_err_other;
                 };
             }
@@ -427,6 +429,7 @@ pub fn authenticatorMakeCredential(
         .{ .enum_serialization_type = .Integer },
         cose_public_key.writer(),
     ) catch {
+        std.log.err("MakeCredential: cose public key serialization error", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
 
@@ -438,7 +441,7 @@ pub fn authenticatorMakeCredential(
             .uv = if (uv_response) 1 else 0,
             .rfu2 = 0,
             .at = 1, // self attestation
-            .ed = 0,
+            .ed = 1, // auth data contains extensions = 1, no extensions = 0
         },
         .signCount = 0,
         .attestedCredentialData = fido.common.AttestedCredentialData.new(
@@ -446,6 +449,7 @@ pub fn authenticatorMakeCredential(
             entry.id.get(),
             cose_public_key.items,
         ) catch {
+            std.log.err("MakeCredential: attested credential data", .{});
             return fido.ctap.StatusCodes.ctap1_err_other;
         },
         .extensions = extensions,
@@ -458,9 +462,7 @@ pub fn authenticatorMakeCredential(
 
     const stmt = switch (auth.attestation) {
         .Self => blk: {
-            var authData = std.ArrayList(u8).init(auth.allocator);
-            defer authData.deinit();
-            auth_data.encode(authData.writer()) catch {
+            const ad = auth_data.encode() catch {
                 std.log.err("makeCredential: auth data encoding error", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
@@ -469,11 +471,12 @@ pub fn authenticatorMakeCredential(
             allocator = fba.allocator();
             const sig = entry.key.sign(
                 &.{
-                    authData.items,
+                    ad.get(),
                     &mcp.clientDataHash,
                 },
                 allocator,
             ) catch {
+                std.log.err("MakeCredential: self signature error", .{});
                 return fido.ctap.StatusCodes.ctap1_err_other;
             };
 
@@ -497,7 +500,8 @@ pub fn authenticatorMakeCredential(
         .attStmt = stmt,
     };
 
-    cbor.stringify(ao, .{ .allocator = auth.allocator }, out.writer()) catch {
+    cbor.stringify(ao, .{}, out.writer()) catch |e| {
+        std.log.err("MakeCredential: response serialization error ({any})", .{e});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
 

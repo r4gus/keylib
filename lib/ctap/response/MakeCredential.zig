@@ -55,22 +55,18 @@ epAtt: ?bool = null,
 /// extension
 largeBlobKey: ?[]const u8 = null,
 
-pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
+pub fn cborStringify(self: *const @This(), _: cbor.Options, out: anytype) !void {
     const AO = struct {
         fmt: AttestationStatementFormatIdentifiers,
         authData: []const u8,
         attStmt: AttestationStatement,
     };
 
-    const allocator = if (options.allocator) |a| a else return error.OutOfMemory;
-
     // Encode authData which is not CBOR
-    var ad = std.ArrayList(u8).init(allocator);
-    defer ad.deinit();
-    try self.authData.encode(ad.writer());
+    const ad = try self.authData.encode();
 
     try cbor.stringify(
-        AO{ .fmt = self.fmt, .authData = ad.items, .attStmt = self.attStmt },
+        AO{ .fmt = self.fmt, .authData = ad.get(), .attStmt = self.attStmt },
         .{
             .field_settings = &.{
                 .{ .name = "fmt", .field_options = .{ .alias = "1", .serialization_type = .Integer } },

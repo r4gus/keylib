@@ -65,28 +65,12 @@ pub const Auth = struct {
     /// * `true` - Increment the signature counter for each successful signature creation.
     constSignCount: bool = false,
 
-    allocator: Allocator,
-
     /// Cryptographic secure (P)RNG
     random: std.rand.Random,
 
     milliTimestamp: *const fn () i64,
 
-    /// A DataSet can be used by any command to keep sate beyond a
-    /// single request. The data must be stored in binary form, e.g.
-    /// by serializing it to cbor.
-    data_set: ?DataSet = null,
-
-    pub const DataSet = struct {
-        command: u8,
-        start: i64,
-        tout_ms: i64 = 15_000, // 15s default
-        key: []const u8,
-        // Depending on how much memory you have you should be carefull!
-        value: []const u8,
-    };
-
-    pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {
+    pub fn default(callbacks: Callbacks) @This() {
         return .{
             .callbacks = callbacks,
             .settings = .{
@@ -114,7 +98,6 @@ pub const Auth = struct {
             .algorithms = &.{
                 fido.ctap.crypto.algorithms.Es256,
             },
-            .allocator = allocator,
             .milliTimestamp = std.time.milliTimestamp,
             .random = std.crypto.random,
         };
@@ -130,9 +113,11 @@ pub const Auth = struct {
         out: *[fido.ctap.transports.ctaphid.authenticator.MAX_DATA_SIZE]u8,
         request: []const u8,
     ) []const u8 {
+        var buffer: [fido.ctap.transports.ctaphid.authenticator.MAX_DATA_SIZE]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+        const allocator = fba.allocator();
         // Buffer for the response message
-        var res = std.ArrayList(u8).init(self.allocator);
-        defer res.deinit();
+        var res = std.ArrayList(u8).init(allocator);
         var response = res.writer();
         response.writeByte(0x00) catch {
             std.log.err("Auth.handle: unable to initialize response", .{});
@@ -150,19 +135,6 @@ pub const Auth = struct {
         // Updates (and possibly invalidates) an existing pinUvAuth token. This has to
         // be done before handling any request.
         self.token.pinUvAuthTokenUsageTimerObserver(self.milliTimestamp());
-
-        // Check if data_set is invalid.
-        // This is the case if a) the data_set "timed out" or b) the
-        // command issued is not associated with the data set.
-        if (self.data_set != null) {
-            if (self.milliTimestamp() - self.data_set.?.start > self.data_set.?.tout_ms or
-                self.data_set.?.command != cmd)
-            {
-                self.allocator.free(self.data_set.?.key);
-                self.allocator.free(self.data_set.?.value);
-                self.data_set = null;
-            }
-        }
 
         if (request.len > 1) {
             std.log.info("request({d}): {s}", .{ cmd, std.fmt.fmtSliceHexLower(request[1..]) });

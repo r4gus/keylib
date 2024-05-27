@@ -82,9 +82,6 @@ pub fn main() !void {
         .algorithms = &.{
             keylib.ctap.crypto.algorithms.Es256,
         },
-        // This allocator is used to allocate memory and has to be the same
-        // used for the callbacks.
-        .allocator = allocator,
         // A function to get the epoch time as i64.
         .milliTimestamp = std.time.milliTimestamp,
         // A cryptographically secure random number generator

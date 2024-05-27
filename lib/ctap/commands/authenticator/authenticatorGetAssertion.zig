@@ -277,6 +277,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
     // ++++++++++++++++++++++++++++++++++++++++++++++++
+    std.log.info("size: {d}", .{@sizeOf(fido.common.AuthenticatorData)});
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{
@@ -294,9 +295,8 @@ pub fn authenticatorGetAssertion(
         &auth_data.rpIdHash,
         .{},
     );
-    var authData = std.ArrayList(u8).init(auth.allocator);
-    defer authData.deinit();
-    auth_data.encode(authData.writer()) catch {
+
+    const ad = auth_data.encode() catch {
         std.log.err("getAssertion: authData encode error", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
@@ -316,7 +316,7 @@ pub fn authenticatorGetAssertion(
     const allocator = fba.allocator();
 
     const sig = selected_credential.?.key.sign(
-        &.{ authData.items, &gap.clientDataHash },
+        &.{ ad.get(), &gap.clientDataHash },
         allocator,
     ) catch {
         std.log.err(
@@ -334,7 +334,7 @@ pub fn authenticatorGetAssertion(
         ) catch {
             return fido.ctap.StatusCodes.ctap1_err_other;
         },
-        .authData = authData.items,
+        .authData = ad.get(),
         .signature = sig,
         .user = user,
     };
@@ -349,7 +349,7 @@ pub fn authenticatorGetAssertion(
         };
     }
 
-    cbor.stringify(gar, .{ .allocator = auth.allocator }, out.writer()) catch {
+    cbor.stringify(gar, .{}, out.writer()) catch {
         std.log.err("getAssertion: cbor encoding error", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
