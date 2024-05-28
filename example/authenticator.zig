@@ -8,6 +8,7 @@ const std = @import("std");
 const keylib = @import("keylib");
 const cbor = @import("zbor");
 const uhid = @import("uhid");
+const dt = keylib.common.dt;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
@@ -145,8 +146,8 @@ pub fn main() !void {
 // For this example we use a volatile storage solution for our credentials.
 var data_set = std.ArrayList(Credential).init(allocator);
 var fetch_index: ?usize = null;
-var fetch_id: ?[]const u8 = null;
-var fetch_rp: ?[]const u8 = null;
+var fetch_id: ?dt.ABS64B = null;
+var fetch_rp: ?dt.ABS128T = null;
 
 // /////////////////////////////////////////
 // Auth
@@ -202,8 +203,8 @@ pub fn my_up(
 }
 
 pub fn my_read_first(
-    id: ?[]const u8,
-    rp: ?[]const u8,
+    id: ?dt.ABS64B,
+    rp: ?dt.ABS128T,
 ) CallbackError!Credential {
     std.log.info("my_first_read: {any}, {any}", .{ id, rp });
 
@@ -212,7 +213,7 @@ pub fn my_read_first(
         fetch_index = 0;
 
         while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
-            if (std.mem.eql(u8, data_set.items[fetch_index.?].id.get(), id.?)) {
+            if (std.mem.eql(u8, data_set.items[fetch_index.?].id.get(), id.?.get())) {
                 const v = data_set.items[fetch_index.?];
                 fetch_index.? += 1;
                 if (fetch_index.? >= data_set.items.len) {
@@ -229,7 +230,7 @@ pub fn my_read_first(
         fetch_index = 0;
 
         while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
-            if (std.mem.eql(u8, data_set.items[fetch_index.?].rp.id.get(), rp.?)) {
+            if (std.mem.eql(u8, data_set.items[fetch_index.?].rp.id.get(), rp.?.get())) {
                 const v = data_set.items[fetch_index.?];
                 fetch_index.? += 1;
                 if (fetch_index.? >= data_set.items.len) {
@@ -275,7 +276,7 @@ pub fn my_read_next() CallbackError!Credential {
 
         if (fetch_id) |id| {
             while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
-                if (std.mem.eql(u8, data_set.items[fetch_index.?].id.get(), id)) {
+                if (std.mem.eql(u8, data_set.items[fetch_index.?].id.get(), id.get())) {
                     const v = data_set.items[fetch_index.?];
                     fetch_index.? += 1;
                     if (fetch_index.? >= data_set.items.len) {
@@ -290,7 +291,7 @@ pub fn my_read_next() CallbackError!Credential {
 
         if (fetch_rp) |id| {
             while (fetch_index.? < data_set.items.len) : (fetch_index.? += 1) {
-                if (std.mem.eql(u8, data_set.items[fetch_index.?].rp.id.get(), id)) {
+                if (std.mem.eql(u8, data_set.items[fetch_index.?].rp.id.get(), id.get())) {
                     const v = data_set.items[fetch_index.?];
                     fetch_index.? += 1;
                     if (fetch_index.? >= data_set.items.len) {

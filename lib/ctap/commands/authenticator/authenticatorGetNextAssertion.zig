@@ -78,9 +78,11 @@ pub fn authenticatorGetNextAssertion(
     // Generate Assertion
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     if (selected_credential == null) {
+        std.log.err("getNextAssertion: no credential", .{});
         return fido.ctap.StatusCodes.ctap2_err_no_credentials;
     }
 
+    std.log.info("getNextAssertion: found credential\n    {s}", .{selected_credential.?.rp.id.get()});
     var write_back: bool = false;
     if (!auth.constSignCount) {
         selected_credential.?.sign_count += 1;

@@ -6,6 +6,7 @@
 const std = @import("std");
 const fido = @import("../../main.zig");
 const cks = @import("cks");
+const dt = fido.common.dt;
 
 pub const CallbackError = error{
     Success,
@@ -125,8 +126,8 @@ pub const UvCallback = ?*const fn (
 /// * `id != null` and `rp = null` - Return the entry with the specified `id`. This can be a credential or settings.
 /// * `id = null` and `rp != null` - Return all credentials associated with the given `rp` ID.
 pub const ReadFirstCallback = *const fn (
-    id: ?[]const u8,
-    rp: ?[]const u8,
+    id: ?dt.ABS64B,
+    rp: ?dt.ABS128T,
 ) CallbackError!fido.ctap.authenticator.Credential;
 
 /// This function can be called multiple times after calling the ReadFirstCallback to obtain the remaining credentials.

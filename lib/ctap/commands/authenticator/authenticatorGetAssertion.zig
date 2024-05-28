@@ -174,7 +174,7 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     var selected_credential: ?fido.ctap.authenticator.Credential = null;
     var total_credentials: usize = 0;
-    var credential = auth.callbacks.read_first(null, gap.rpId.get()) catch {
+    var credential = auth.callbacks.read_first(null, gap.rpId) catch {
         return fido.ctap.StatusCodes.ctap2_err_no_credentials;
     };
 
@@ -215,7 +215,7 @@ pub fn authenticatorGetAssertion(
 
     // We previously iterated over all credentials, now we have to get back to the
     // first one, so we can iterate over the remaining ones using getNextAssertion.
-    credential = auth.callbacks.read_first(null, gap.rpId.get()) catch {
+    credential = auth.callbacks.read_first(null, gap.rpId) catch {
         return fido.ctap.StatusCodes.ctap2_err_no_credentials;
     };
 
