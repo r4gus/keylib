@@ -20,6 +20,8 @@ const PublicKeyCredentialParameters = fido.common.PublicKeyCredentialParameters;
 const Response = fido.ctap.authenticator.Response;
 const StatusCodes = fido.ctap.StatusCodes;
 const Commands = fido.ctap.commands.Commands;
+const dt = fido.common.dt;
+const ClientDataHash = fido.ctap.crypto.ClientDataHash;
 
 pub const Auth = struct {
     const Self = @This();
@@ -38,6 +40,7 @@ pub const Auth = struct {
         .{ .cmd = 0x02, .cb = fido.ctap.commands.authenticator.authenticatorGetAssertion },
         .{ .cmd = 0x04, .cb = fido.ctap.commands.authenticator.authenticatorGetInfo },
         .{ .cmd = 0x06, .cb = fido.ctap.commands.authenticator.authenticatorClientPin },
+        .{ .cmd = 0x08, .cb = fido.ctap.commands.authenticator.authenticatorGetNextAssertion },
         .{ .cmd = 0x0b, .cb = fido.ctap.commands.authenticator.authenticatorSelection },
     },
 
@@ -64,6 +67,16 @@ pub const Auth = struct {
     /// resident keys (passkeys) where "clone detection" is not required.
     /// * `true` - Increment the signature counter for each successful signature creation.
     constSignCount: bool = false,
+
+    getAssertion: ?struct {
+        ts: i64,
+        count: usize,
+        total: usize,
+        uv: bool,
+        allowList: ?dt.ABSPublicKeyCredentialDescriptor = null,
+        rpId: dt.ABS128T,
+        cdh: ClientDataHash,
+    } = null,
 
     /// Cryptographic secure (P)RNG
     random: std.rand.Random,

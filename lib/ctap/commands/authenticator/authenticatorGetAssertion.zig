@@ -199,11 +199,51 @@ pub fn authenticatorGetAssertion(
             skip = true;
         }
 
+        // TODO: check allow list
+
         if (!skip) {
             total_credentials += 1;
             if (selected_credential == null) {
                 selected_credential = credential;
             }
+        }
+
+        credential = auth.callbacks.read_next() catch {
+            break;
+        };
+    }
+
+    // We previously iterated over all credentials, now we have to get back to the
+    // first one, so we can iterate over the remaining ones using getNextAssertion.
+    credential = auth.callbacks.read_first(null, gap.rpId.get()) catch {
+        return fido.ctap.StatusCodes.ctap2_err_no_credentials;
+    };
+
+    while (true) {
+        var skip = false;
+        const policy = credential.policy;
+
+        // if credential protection for a credential is marked as
+        // userVerificationRequired, and the "uv" bit is false in
+        // the response, remove that credential from the applicable
+        // credentials list
+        if (policy == .userVerificationRequired and !uv_response) {
+            skip = true;
+        }
+
+        // if credential protection for a credential is marked as
+        // userVerificationOptionalWithCredentialIDList and there
+        // is no allowList passed by the client and the "uv" bit is
+        // false in the response, remove that credential from the
+        // applicable credentials list
+        if (policy == .userVerificationOptionalWithCredentialIDList and gap.allowList == null and !uv_response) {
+            skip = true;
+        }
+
+        // TODO: check allow list
+
+        if (!skip) {
+            break;
         }
 
         credential = auth.callbacks.read_next() catch {
@@ -277,7 +317,6 @@ pub fn authenticatorGetAssertion(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 13. Sign data
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    std.log.info("size: {d}", .{@sizeOf(fido.common.AuthenticatorData)});
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{
@@ -337,7 +376,21 @@ pub fn authenticatorGetAssertion(
         .authData = ad.get(),
         .signature = sig,
         .user = user,
+        .numberOfCredentials = total_credentials,
     };
+
+    if (total_credentials > 1) {
+        // This is important for authenticatorGetNextAssertion
+        auth.getAssertion = .{
+            .ts = auth.milliTimestamp(),
+            .total = total_credentials,
+            .count = 1,
+            .uv = uv_response,
+            .allowList = gap.allowList,
+            .rpId = gap.rpId,
+            .cdh = gap.clientDataHash,
+        };
+    }
 
     if (write_back) {
         // If the sign count is not updated we don't need to update the
