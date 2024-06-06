@@ -107,8 +107,9 @@ We maintain two examples on how to use the library:
 
 ---
 
-- [Passkey test site](https://passkey.org/)
-- [FIDO2 test site](https://webauthn.io/)
+__FIDO2/Passkey test sites__:
+- [passkey.org](https://passkey.org/)
+- [webauthn.io](https://webauthn.io/)
 
 ## Random Ideas
 
