@@ -72,6 +72,7 @@ pub const Auth = struct {
         ts: i64,
         count: usize,
         total: usize,
+        up: bool,
         uv: bool,
         allowList: ?dt.ABSPublicKeyCredentialDescriptor = null,
         rpId: dt.ABS128T,

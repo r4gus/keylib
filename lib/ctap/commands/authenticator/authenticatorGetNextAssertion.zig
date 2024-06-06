@@ -102,7 +102,7 @@ pub fn authenticatorGetNextAssertion(
     var auth_data = fido.common.AuthenticatorData{
         .rpIdHash = undefined,
         .flags = .{
-            .up = 0,
+            .up = if (auth.getAssertion.?.up) 1 else 0,
             .rfu1 = 0,
             .uv = if (auth.getAssertion.?.uv) 1 else 0,
             .rfu2 = 0,

@@ -385,6 +385,7 @@ pub fn authenticatorGetAssertion(
             .ts = auth.milliTimestamp(),
             .total = total_credentials,
             .count = 1,
+            .up = up_response,
             .uv = uv_response,
             .allowList = gap.allowList,
             .rpId = gap.rpId,

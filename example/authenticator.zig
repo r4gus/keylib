@@ -206,7 +206,10 @@ pub fn my_read_first(
     id: ?dt.ABS64B,
     rp: ?dt.ABS128T,
 ) CallbackError!Credential {
-    std.log.info("my_first_read: {any}, {any}", .{ id, rp });
+    std.log.info("my_first_read: {s}, {s}", .{
+        if (id) |uid| uid.get() else "n.a.",
+        if (rp) |rpid| rpid.get() else "n.a.",
+    });
 
     if (id != null) {
         fetch_id = id;
@@ -263,7 +266,11 @@ pub fn my_read_first(
 }
 
 pub fn my_read_next() CallbackError!Credential {
-    std.log.info("my_read_next: {any}, {any}, {any}", .{ fetch_index, fetch_id, fetch_rp });
+    std.log.info("my_read_next: {any}, {s}, {s}", .{
+        fetch_index,
+        if (fetch_id) |uid| uid.get() else "n.a.",
+        if (fetch_rp) |rpid| rpid.get() else "n.a.",
+    });
 
     if (fetch_index != null) {
         std.log.info("my_read_next: fetch index not null", .{});
