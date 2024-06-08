@@ -1,22 +1,15 @@
+FIDO2 compatible authenticator library written in [Zig](https://ziglang.org/) with __zero dynamic allocations__.
+
 > We track the latest stable release of Zig (`0.12.0`)
 
-> [!IMPORTANT]
-> There seems to be an [issue](https://github.com/ziglang/zig/issues/17204) with the export of
-> header files that should be fixed for `0.12.0`. Still, I haven't figured out how to import
-> headers from another module in Zig `0.12.0`, meaning the `client-example` won't build.
-
-FIDO2 compatible authenticator library written in [Zig](https://ziglang.org/).
-
 If you want to see an example on how to use keylib, check out [PassKeeZ](https://github.com/r4gus/keypass).
-
-Also, check out the [Wiki](https://github.com/r4gus/keylib/wiki).
 
 ## QA
 
 <details>
 <summary><ins>What is FIDO2?</ins></summary>
 
-FIDO2 is a protocol designed for authentication purposes. It can be used as single factor (e.g., as a replacement for password based authentication) or as a second factor.
+FIDO2 is a protocol designed for authentication purposes. It can be used as single factor (e.g., as a replacement for password based authentication) or as a second factor (e.g., instead of OTPs).
 
 </details>
 
@@ -25,7 +18,7 @@ FIDO2 is a protocol designed for authentication purposes. It can be used as sing
 
 Passkey is a marketing term which is used to refer to a specific FIDO2 authenticator configuration. A authenticator can be configured to use so called discoverable credentials (also referred to as resident keys). Those credentials are stored somewhere on your device, e.g. in a encrypted database. Devices can also be protected by some form of user verification. This can be a PIN or a built in user verification method like a finger print scanner. Passkey refers to FIDO2 using discoverable credentials and some form of user verification. 
 
-Please note that this is only one interpretation of what PassKey means as the term itself is nowhere defined.
+Please note that this is only one interpretation of what PassKey means as the term itself is nowhere defined (see also [Passkeys's: A Shattered Dream](https://fy.blackhats.net.au/blog/2024-04-26-passkeys-a-shattered-dream/)).
 
 </details>
 
@@ -55,7 +48,7 @@ You might have noticed that FIDO2, PassKey and even WebAuthn are often used inte
 FIDO2 has a lot of advantages compared to passwords:
 
 1. No secret information is shared, i.e. the private key stays on the authenticator or is protected, e.g. using key wrapping.
-2. Each credential is bound to a relying party id (e.g. google.com), which makes social engineering attacks, like phishing websites, quite difficult (maybe impossible).
+2. Each credential is bound to a relying party id (e.g. google.com), which makes social engineering attacks, like phishing websites, quite difficult (as long as the client verifies the relying party id properly).
 3. Users don't have to be concerned with problems like password complexity.
 4. If well implemented, FIDO2 provides a better user experience (e.g., faster logins).
 5. A recent paper showed that with some adoptions, FIDO2 is ready for a post quantum world under certain conditions ([FIDO2, CTAP 2.1, and WebAuthn 2: Provable Security and Post-Quantum Instantiation, Cryptology ePrint Archive, Paper 2022/1029](https://eprint.iacr.org/2022/1029.pdf)).
@@ -63,12 +56,17 @@ FIDO2 has a lot of advantages compared to passwords:
 </details>
 
 <details>
-<summary><ins>Why shouldn't I use FIDO2?</ins></summary>
+<summary><ins>Are there problems with FIDO2?</ins></summary>
 
-1. The two FIDO2 subprotocols (CTAP2 and WebAuthn) are way more difficult to implement, compared to password authentication.
+Yes, there are:
+
+1. The two FIDO2 subprotocols (CTAP2 and WebAuthn) are way more difficult to implement, compared to password authentication. 
 2. There are more points of failure because you have three parties that are involved in the authentication process (authenticator, client, relying party).
 3. Currently not all browsers support the CTAP2 protocol well (especially on Linux).
-4. You don't want to spend money on an authenticator (you usually can't upgrade) and/or you don't trust platform authenticators.
+4. There is no way to verify that a client is trustworthy:
+    * Rogue clients may communicate with a authenticator without your consent
+    * Clients may display wrong information
+5. The 4th layer introduced for Android, IOS, and Windows to connect authenticators and clients internally could be used as a man in the middle.
 
 </details>
 
@@ -85,6 +83,24 @@ Answering this question isn't straightforward. The library, by its nature, is de
 No, we do not fully implement the entire [CTAP2](https://fidoalliance.org/specs/fido-v2.2-rd-20230321/fido-client-to-authenticator-protocol-v2.2-rd-20230321.html#intro) specification. In the initial version of this library, which can be found on GitHub, our aim was to remain completely platform-agnostic and cover most of the CTAP2 specification. However, this approach introduced complexities for both users and developers. The current version of this library strikes a balance between usability and feature completeness.
 
 We offer support for operations like __authenticatorMakeCredential__, __authenticatorGetAssertion__, __authenticatorGetInfo__, and __authenticatorClientPin__, with built-in support for __user verification__ and the __pinUvAuth protocol__ (versions 1 and 2). You are responsible for handling data management tasks (such as secure storage, updates, and deletions), verifying user presence, and conducting user verification. These responsibilities are fulfilled by implementing the necessary callbacks used to instantiate an authenticator (refer to the "Getting Started" section for details).
+
+</details>
+
+<details>
+<summary><ins>Zero dynamic allocations?</ins></summary>
+
+This library doesn't allocate any memory dynamically. This has some draw backs like a fixed
+size for strings (e.g., rpId, user name, etc.) but also reduces the complexity of the code,
+i.e., no memory bugs due to allocations.
+
+The authenticator example uses `88655` bytes of stack space when compiled with `-Doptimize=ReleaseSmall` on Linux (x86\_64).
+
+> The authenticator example has been profiled using valgrind. 
+> * `zig build auth-example -Doptimize=ReleaseSmall` 
+> * `valgrind --tool=drd --show-stack-usage=yes ./zig-out/bin/authenticator`
+> * Test page: [webauthn.io](https://webauthn.io/) - Register + Authentication
+> `thread 1 finished and used 88655 bytes out of 8388608 on its stack.`
+> `ThinkPad-X1-Yoga-3rd 6.5.0-35-generic #35~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC x86_64 GNU/Linux`
 
 </details>
 
