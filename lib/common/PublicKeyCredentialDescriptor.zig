@@ -4,35 +4,56 @@
 const std = @import("std");
 const cbor = @import("zbor");
 const fido = @import("../main.zig");
+const dt = @import("data_types.zig");
 
 const AuthenticatorTransports = fido.common.AuthenticatorTransports;
 const PublicKeyCredentialType = fido.common.PublicKeyCredentialType;
 
 /// The credential id
-id: []const u8,
+id: dt.ABS64B,
 /// Type of the credential
 type: PublicKeyCredentialType,
 /// Transport methods
-transports: ?[]const AuthenticatorTransports = null,
+transports: ?dt.ABSAuthenticatorTransports = null,
 
-/// Free all allocated memory of this data structure
-pub fn deinit(self: *const @This(), allocator: @import("std").mem.Allocator) void {
-    allocator.free(self.id);
-    if (self.transports) |trans| {
-        allocator.free(trans);
-    }
+pub fn new(
+    id: []const u8,
+    t: PublicKeyCredentialType,
+    transports: ?[]const AuthenticatorTransports,
+) !@This() {
+    return .{
+        .id = (try dt.ABS64B.fromSlice(id)).?,
+        .type = t,
+        .transports = try dt.ABSAuthenticatorTransports.fromSlice(transports),
+    };
 }
 
-test "serialize PublicKeyCredentialDescriptor" {
+test "PublicKeyCredentialDescriptor test #1" {
     const allocator = std.testing.allocator;
     var str = std.ArrayList(u8).init(allocator);
     defer str.deinit();
 
-    const d = @This(){
-        .type = .@"public-key",
-        .id = "\x5c\x7b\xc6\x57\x09\xed\xcd\xbc\x8a\x61\x2f\x1f\x5e\x97\xd0\x15\xbd\x0e\xc7\x33\x28\x0b\x5c\xb5\x78\x62\x6d\xba\x37\xa1\xe5\x10\xc3\x9e\x79\xf8\x20\x0e\x95\xf7\x9d\x50\x5c\x44\x35\x61\xac\x07\x1e\xa7\x14\x3a\xd0\x6e\xf4\x8b\x56\xdd\x5d\x71\x22\x79\x77\x51",
-    };
+    const d = try new("\x5c\x7b\xc6\x57\x09\xed\xcd\xbc\x8a\x61\x2f\x1f\x5e\x97\xd0\x15\xbd\x0e\xc7\x33\x28\x0b\x5c\xb5\x78\x62\x6d\xba\x37\xa1\xe5\x10\xc3\x9e\x79\xf8\x20\x0e\x95\xf7\x9d\x50\x5c\x44\x35\x61\xac\x07\x1e\xa7\x14\x3a\xd0\x6e\xf4\x8b\x56\xdd\x5d\x71\x22\x79\x77\x51", .@"public-key", null);
 
     try @import("zbor").stringify(d, .{}, str.writer());
     try std.testing.expectEqualSlices(u8, "\xa2\x62\x69\x64\x58\x40\x5c\x7b\xc6\x57\x09\xed\xcd\xbc\x8a\x61\x2f\x1f\x5e\x97\xd0\x15\xbd\x0e\xc7\x33\x28\x0b\x5c\xb5\x78\x62\x6d\xba\x37\xa1\xe5\x10\xc3\x9e\x79\xf8\x20\x0e\x95\xf7\x9d\x50\x5c\x44\x35\x61\xac\x07\x1e\xa7\x14\x3a\xd0\x6e\xf4\x8b\x56\xdd\x5d\x71\x22\x79\x77\x51\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79", str.items);
+}
+
+test "PublicKeyCredentialDescriptor test #2" {
+    const descriptor = try new("\x5c\x7b\xc6\x57\x09\xed\xcd\xbc\x8a\x61\x2f\x1f\x5e\x97\xd0\x15\xbd\x0e\xc7\x33\x28\x0b\x5c\xb5\x78\x62\x6d\xba\x37\xa1\xe5\x10\xc3\x9e\x79\xf8\x20\x0e\x95\xf7\x9d\x50\x5c\x44\x35\x61\xac\x07\x1e\xa7\x14\x3a\xd0\x6e\xf4\x8b\x56\xdd\x5d\x71\x22\x79\x77\x51", .@"public-key", &.{ .usb, .internal });
+    const expected = "\xa3\x62\x69\x64\x58\x40\x5c\x7b\xc6\x57\x09\xed\xcd\xbc\x8a\x61\x2f\x1f\x5e\x97\xd0\x15\xbd\x0e\xc7\x33\x28\x0b\x5c\xb5\x78\x62\x6d\xba\x37\xa1\xe5\x10\xc3\x9e\x79\xf8\x20\x0e\x95\xf7\x9d\x50\x5c\x44\x35\x61\xac\x07\x1e\xa7\x14\x3a\xd0\x6e\xf4\x8b\x56\xdd\x5d\x71\x22\x79\x77\x51\x64\x74\x79\x70\x65\x6a\x70\x75\x62\x6c\x69\x63\x2d\x6b\x65\x79\x6a\x74\x72\x61\x6e\x73\x70\x6f\x72\x74\x73\x82\x63\x75\x73\x62\x68\x69\x6e\x74\x65\x72\x6e\x61\x6c";
+
+    var arr = std.ArrayList(u8).init(std.testing.allocator);
+    defer arr.deinit();
+
+    try cbor.stringify(descriptor, .{}, arr.writer());
+
+    try std.testing.expectEqualSlices(u8, expected, arr.items);
+
+    const di = try cbor.DataItem.new(expected);
+    const descriptor2 = try cbor.parse(@This(), di, .{});
+
+    try std.testing.expectEqualStrings(descriptor.id.get(), descriptor2.id.get());
+    try std.testing.expectEqual(descriptor.type, descriptor2.type);
+    try std.testing.expectEqualSlices(AuthenticatorTransports, descriptor.transports.?.get(), descriptor2.transports.?.get());
 }

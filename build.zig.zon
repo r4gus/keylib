@@ -3,8 +3,9 @@
     .version = "0.4.0",
     .dependencies = .{
         .zbor = .{
-            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.13.1.tar.gz",
-            .hash = "122051750f4d7ecc9b705f1bbea1d431956306c74dafa4e9b625b11a34fab4c06933",
+            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.14.1.tar.gz",
+            .hash = "122075870879317c0823cb584b6a219160ddd46ec91d3311bc6ad086701afa914961",
+            //.path = "../zbor",
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",

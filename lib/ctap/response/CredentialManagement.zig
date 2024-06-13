@@ -67,18 +67,6 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
 }
 
 pub fn deinit(self: *const @This(), allocator: std.mem.Allocator) void {
-    if (self.rp) |rp| {
-        rp.deinit(allocator);
-    }
-
-    if (self.user) |user| {
-        user.deinit(allocator);
-    }
-
-    if (self.credentialID) |credId| {
-        credId.deinit(allocator);
-    }
-
     if (self.largeBlobKey) |lbk| {
         allocator.free(lbk);
     }

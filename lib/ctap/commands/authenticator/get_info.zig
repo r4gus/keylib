@@ -11,10 +11,7 @@ pub fn authenticatorGetInfo(
 ) fido.ctap.StatusCodes {
     _ = request;
 
-    const settings = auth.loadSettings() catch |e| {
-        std.log.err("authenticatorGetInfo: unable to load settings ({any})", .{e});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    };
+    const settings = auth.callbacks.read_settings();
 
     auth.settings.minPINLength = settings.min_pin_length;
     auth.settings.forcePINChange = settings.force_pin_change;

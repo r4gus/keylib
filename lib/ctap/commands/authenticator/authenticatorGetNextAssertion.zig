@@ -4,117 +4,165 @@ const cks = @import("cks");
 const fido = @import("../../../main.zig");
 const uuid = @import("uuid");
 const helper = @import("helper.zig");
-const deriveMacKey = fido.ctap.crypto.master_secret.deriveMacKey;
-const deriveEncKey = fido.ctap.crypto.master_secret.deriveEncKey;
 
 pub fn authenticatorGetNextAssertion(
-    auth: *fido.ctap.authenticator.Authenticator,
-    out: anytype,
-) !fido.ctap.StatusCodes {
-    if (auth.credential_list == null) {
-        return fido.ctap.StatusCodes.ctap2_err_not_allowed;
+    auth: *fido.ctap.authenticator.Auth,
+    request: []const u8,
+    out: *std.ArrayList(u8),
+) fido.ctap.StatusCodes {
+    _ = request;
+
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // Validate
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+    const seconds_30 = 30000;
+
+    if (auth.getAssertion == null) {
+        return .ctap2_err_not_allowed;
     }
 
-    if (auth.credential_list.?.credentialCounter >= auth.credential_list.?.list.len or
-        (auth.callbacks.millis() - auth.credential_list.?.time_stamp) >= 30000)
-    {
-        auth.credential_list.?.deinit(auth.allocator);
-        auth.credential_list = null;
-        return fido.ctap.StatusCodes.ctap2_err_not_allowed;
+    if (auth.getAssertion.?.count >= auth.getAssertion.?.total) {
+        auth.getAssertion = null;
+        return .ctap2_err_not_allowed;
     }
 
-    var settings = auth.callbacks.readSettings(auth.allocator) catch |err| {
-        std.log.err("authenticatorGetNextAssertion: Unable to fetch Settings ({any})", .{err});
-        return fido.ctap.StatusCodes.ctap1_err_other;
+    if (auth.milliTimestamp() - auth.getAssertion.?.ts > seconds_30) {
+        auth.getAssertion = null;
+        return .ctap2_err_not_allowed;
+    }
+
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // Get Credential
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    var selected_credential: ?fido.ctap.authenticator.Credential = null;
+    var credential = auth.callbacks.read_next() catch {
+        return fido.ctap.StatusCodes.ctap2_err_no_credentials;
     };
-    defer settings.deinit(auth.allocator);
-    if (!settings.verifyMac(&auth.secret.mac)) {
-        std.log.err("authenticatorGetNextAssertion: Settings MAC validation unsuccessful", .{});
-        return fido.ctap.StatusCodes.ctap1_err_other;
-    }
 
-    const ms = try settings.getSecret(auth.secret.enc);
+    while (true) {
+        var skip = false;
+        const policy = credential.policy;
 
-    // Fetch next credential id
-    var cred = auth.credential_list.?.list[auth.credential_list.?.credentialCounter];
-    auth.credential_list.?.credentialCounter += 1;
+        // if credential protection for a credential is marked as
+        // userVerificationRequired, and the "uv" bit is false in
+        // the response, remove that credential from the applicable
+        // credentials list
+        if (policy == .userVerificationRequired and !auth.getAssertion.?.uv) {
+            skip = true;
+        }
 
-    // Fetch the credential based on credential id and update the return data
-    var user: ?fido.common.User = null;
+        // if credential protection for a credential is marked as
+        // userVerificationOptionalWithCredentialIDList and there
+        // is no allowList passed by the client and the "uv" bit is
+        // false in the response, remove that credential from the
+        // applicable credentials list
+        if (policy == .userVerificationOptionalWithCredentialIDList and auth.getAssertion.?.allowList == null and !auth.getAssertion.?.uv) {
+            skip = true;
+        }
 
-    // Seems like this is a discoverable credential, because we
-    // just discovered it :)
-    auth.credential_list.?.authData.signCount = @as(u32, @intCast(cred.sign_count));
-    cred.sign_count += 1;
+        // TODO: check allow list
 
-    if (auth.credential_list.?.authData.flags.uv == 1) {
-        // publicKeyCredentialUserEntity MUST NOT be returned if user verification
-        // was not done by the authenticator in the original authenticatorGetAssertion call
+        if (!skip) {
+            selected_credential = credential;
+            auth.getAssertion.?.count += 1;
+            break;
+        }
 
-        // User identifiable information (name, DisplayName, icon)
-        // inside the publicKeyCredentialUserEntity MUST NOT be returned
-        // if user verification is not done by the authenticator
-        user = .{
-            .id = cred.user_id,
-            .name = cred.user_name,
-            .displayName = cred.user_display_name,
+        credential = auth.callbacks.read_next() catch {
+            break;
         };
     }
 
-    // select algorithm based on credential
-    var alg: ?fido.ctap.crypto.SigAlg = null;
-    for (auth.algorithms) |_alg| blk: {
-        if (cred.alg == _alg.alg) {
-            alg = _alg;
-            break :blk;
-        }
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // Generate Assertion
+    // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    if (selected_credential == null) {
+        std.log.err("getNextAssertion: no credential", .{});
+        return fido.ctap.StatusCodes.ctap2_err_no_credentials;
     }
 
-    if (alg == null) {
-        std.log.err("Unknown algorithm for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred._id)});
-        return fido.ctap.StatusCodes.ctap1_err_other;
+    std.log.info("getNextAssertion: found credential\n    {s}", .{selected_credential.?.rp.id.get()});
+    var write_back: bool = false;
+    if (!auth.constSignCount) {
+        selected_credential.?.sign_count += 1;
+        write_back = true;
     }
+    const usageCnt = selected_credential.?.sign_count;
 
-    const enc_key = deriveEncKey(ms);
-    const raw_key = try cred.getPrivateKey(enc_key, auth.allocator);
-    defer auth.allocator.free(raw_key);
+    const user = if (auth.getAssertion.?.uv) blk: {
+        // User identifiable information (name, DisplayName, icon)
+        // inside the publicKeyCredentialUserEntity MUST NOT be returned
+        // if user verification is not done by the authenticator
+        break :blk selected_credential.?.user;
+    } else blk: {
+        break :blk fido.common.User{ .id = selected_credential.?.user.id };
+    };
 
-    // Sign the data
-    var authData = std.ArrayList(u8).init(auth.allocator);
-    defer authData.deinit();
-    try auth.credential_list.?.authData.encode(authData.writer());
+    var auth_data = fido.common.AuthenticatorData{
+        .rpIdHash = undefined,
+        .flags = .{
+            .up = if (auth.getAssertion.?.up) 1 else 0,
+            .rfu1 = 0,
+            .uv = if (auth.getAssertion.?.uv) 1 else 0,
+            .rfu2 = 0,
+            .at = 0,
+            .ed = 0,
+        },
+        .signCount = @intCast(usageCnt),
+    };
+    std.crypto.hash.sha2.Sha256.hash( // calculate rpId hash
+        auth.getAssertion.?.rpId.get(),
+        &auth_data.rpIdHash,
+        .{},
+    );
 
-    const sig = if (alg.?.sign(
-        raw_key,
-        &.{ authData.items, &auth.credential_list.?.clientDataHash },
-        auth.allocator,
-    )) |signature| signature else {
-        std.log.err("signature creation failed for credential with id: {s}", .{std.fmt.fmtSliceHexLower(cred._id)});
+    const ad = auth_data.encode() catch {
+        std.log.err("getNextAssertion: authData encode error", .{});
         return fido.ctap.StatusCodes.ctap1_err_other;
     };
-    defer auth.allocator.free(sig);
 
-    const uid = try uuid.urn.deserialize(cred._id[0..]);
+    // --------------------        ----------------
+    // | authenticatorData |      | clientDataHash |
+    // --------------------        ----------------
+    //         |                          |
+    //         ------------------------- | |
+    //                                    |
+    //         PRIVATE KEY -----------> SIGN
+    //                                    |
+    //                                    v
+    //                           ASSERTION SIGNATURE
+    var sig_buffer: [256]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&sig_buffer);
+    const allocator = fba.allocator();
+
+    const sig = selected_credential.?.key.sign(
+        &.{ ad.get(), &auth.getAssertion.?.cdh },
+        allocator,
+    ) catch {
+        std.log.err(
+            "getAssertion: signature creation failed for credential with id: {s}",
+            .{std.fmt.fmtSliceHexLower(selected_credential.?.id.get())},
+        );
+        return fido.ctap.StatusCodes.ctap1_err_other;
+    };
+
     const gar = fido.ctap.response.GetAssertion{
-        .credential = .{
-            .type = .@"public-key",
-            .id = std.mem.asBytes(&uid),
+        .credential = fido.common.PublicKeyCredentialDescriptor.new(
+            selected_credential.?.id.get(),
+            .@"public-key",
+            null,
+        ) catch {
+            return fido.ctap.StatusCodes.ctap1_err_other;
         },
-        .authData = authData.items,
+        .authData = ad.get(),
         .signature = sig,
         .user = user,
     };
 
-    const mac_key = deriveMacKey(ms);
-    cred.updateMac(&mac_key);
-    auth.callbacks.updateCred(&cred, auth.allocator) catch |err| {
-        std.log.err("authenticatorGetAssertion: unable to update credential ({any})", .{err});
-        return err;
+    cbor.stringify(gar, .{}, out.writer()) catch {
+        std.log.err("getNextAssertion: cbor encoding error", .{});
+        return fido.ctap.StatusCodes.ctap1_err_other;
     };
-
-    try cbor.stringify(gar, .{ .allocator = auth.allocator }, out);
-
-    auth.credential_list.?.time_stamp = auth.callbacks.millis();
-
     return .ctap1_err_success;
 }

@@ -20,6 +20,8 @@ const PublicKeyCredentialParameters = fido.common.PublicKeyCredentialParameters;
 const Response = fido.ctap.authenticator.Response;
 const StatusCodes = fido.ctap.StatusCodes;
 const Commands = fido.ctap.commands.Commands;
+const dt = fido.common.dt;
+const ClientDataHash = fido.ctap.crypto.ClientDataHash;
 
 pub const Auth = struct {
     const Self = @This();
@@ -38,6 +40,7 @@ pub const Auth = struct {
         .{ .cmd = 0x02, .cb = fido.ctap.commands.authenticator.authenticatorGetAssertion },
         .{ .cmd = 0x04, .cb = fido.ctap.commands.authenticator.authenticatorGetInfo },
         .{ .cmd = 0x06, .cb = fido.ctap.commands.authenticator.authenticatorClientPin },
+        .{ .cmd = 0x08, .cb = fido.ctap.commands.authenticator.authenticatorGetNextAssertion },
         .{ .cmd = 0x0b, .cb = fido.ctap.commands.authenticator.authenticatorSelection },
     },
 
@@ -65,28 +68,23 @@ pub const Auth = struct {
     /// * `true` - Increment the signature counter for each successful signature creation.
     constSignCount: bool = false,
 
-    allocator: Allocator,
+    getAssertion: ?struct {
+        ts: i64,
+        count: usize,
+        total: usize,
+        up: bool,
+        uv: bool,
+        allowList: ?dt.ABSPublicKeyCredentialDescriptor = null,
+        rpId: dt.ABS128T,
+        cdh: ClientDataHash,
+    } = null,
 
     /// Cryptographic secure (P)RNG
     random: std.rand.Random,
 
     milliTimestamp: *const fn () i64,
 
-    /// A DataSet can be used by any command to keep sate beyond a
-    /// single request. The data must be stored in binary form, e.g.
-    /// by serializing it to cbor.
-    data_set: ?DataSet = null,
-
-    pub const DataSet = struct {
-        command: u8,
-        start: i64,
-        tout_ms: i64 = 15_000, // 15s default
-        key: []const u8,
-        // Depending on how much memory you have you should be carefull!
-        value: []const u8,
-    };
-
-    pub fn default(callbacks: Callbacks, allocator: Allocator) @This() {
+    pub fn default(callbacks: Callbacks) @This() {
         return .{
             .callbacks = callbacks,
             .settings = .{
@@ -114,163 +112,14 @@ pub const Auth = struct {
             .algorithms = &.{
                 fido.ctap.crypto.algorithms.Es256,
             },
-            .allocator = allocator,
             .milliTimestamp = std.time.milliTimestamp,
             .random = std.crypto.random,
         };
     }
 
     pub fn init(self: *@This()) !void {
-        // Check that settings are available and if not, create them
-        const meta = self.loadSettings() catch |e| blk: {
-            if (e == error.NoData) {
-                std.log.info("Auth.init: no settings found", .{});
-            } else {
-                std.log.err("Auth.init: malformed settings", .{});
-            }
-
-            std.log.info("Auth.init: generating new settings...", .{});
-            const meta = fido.ctap.authenticator.Meta{};
-            self.writeSettings(meta) catch {
-                std.log.err("Auth.init: unable to persist settings", .{});
-                return error.InitFail;
-            };
-
-            std.log.info("Auth.init: new settings persisted", .{});
-            break :blk meta;
-        };
-        _ = meta;
-
         // Initialize piNUv
         self.token.initialize();
-    }
-
-    /// Try to load settings
-    pub fn loadSettings(self: *@This()) !fido.ctap.authenticator.Meta {
-        const id: [:0]const u8 = "Settings";
-        const rp: [:0]const u8 = "Root";
-        var iter = DataIterator{
-            .allocator = self.allocator,
-        };
-        defer iter.deinit();
-
-        if (self.callbacks.read(id, rp, &iter.d) != Error.SUCCESS) {
-            return error.NoData;
-        }
-
-        if (iter.next()) |s| {
-            // Turn data hex string into a byte slice
-            var buffer: [256]u8 = .{0} ** 256;
-            const slice = try std.fmt.hexToBytes(&buffer, s);
-
-            return try cbor.parse(
-                fido.ctap.authenticator.Meta,
-                try cbor.DataItem.new(slice),
-                .{},
-            );
-        } else {
-            return error.NoData;
-        }
-    }
-
-    // Load the credential with the given id
-    pub fn loadCredential(self: *@This(), id: []const u8) !fido.ctap.authenticator.Credential {
-        const idZ: [:0]const u8 = try self.allocator.dupeZ(u8, id);
-        defer self.allocator.free(idZ);
-        var iter = DataIterator{
-            .allocator = self.allocator,
-        };
-        defer iter.deinit();
-
-        if (self.callbacks.read(idZ, null, &iter.d) != Error.SUCCESS) {
-            return error.NoData;
-        }
-
-        if (iter.next()) |s| {
-            // Turn data hex string into a byte slice
-            var buffer: [1024]u8 = .{0} ** 1024;
-            const slice = try std.fmt.hexToBytes(&buffer, s);
-
-            return try cbor.parse(
-                fido.ctap.authenticator.Credential,
-                try cbor.DataItem.new(slice),
-                .{ .allocator = self.allocator },
-            );
-        } else {
-            return error.NoData;
-        }
-    }
-
-    /// Load all credentials associated with the given relying party id
-    pub fn loadCredentials(self: *@This(), rpId: ?[]const u8) ![]fido.ctap.authenticator.Credential {
-        const rpIdZ: ?[:0]const u8 = if (rpId) |rpId_| try self.allocator.dupeZ(u8, rpId_) else null;
-        defer {
-            if (rpIdZ != null) {
-                self.allocator.free(rpIdZ.?);
-            }
-        }
-        var iter = DataIterator{
-            .allocator = self.allocator,
-        };
-        defer iter.deinit();
-
-        if (self.callbacks.read(null, if (rpIdZ != null) rpIdZ.? else null, &iter.d) != Error.SUCCESS) {
-            return error.NoData;
-        }
-
-        var arr = std.ArrayList(fido.ctap.authenticator.Credential).init(self.allocator);
-        errdefer arr.deinit();
-
-        while (iter.next()) |s| {
-            //std.log.err("{s}", .{s});
-            // Turn data hex string into a byte slice
-            var buffer: [1024]u8 = .{0} ** 1024;
-            const slice = std.fmt.hexToBytes(&buffer, s) catch continue;
-
-            try arr.append(cbor.parse(
-                fido.ctap.authenticator.Credential,
-                cbor.DataItem.new(slice) catch continue,
-                .{ .allocator = self.allocator },
-            ) catch continue);
-        }
-
-        if (arr.items.len == 0) {
-            return error.NoData;
-        } else {
-            return try arr.toOwnedSlice();
-        }
-    }
-
-    /// Write settings back into permanent storage
-    pub fn writeSettings(self: *@This(), meta: fido.ctap.authenticator.Meta) !void {
-        try self.writeCredential("Settings", "Root", meta);
-    }
-
-    pub fn writeCredential(self: *@This(), id: []const u8, rpId: []const u8, entry: anytype) !void {
-        const _id = try self.allocator.dupeZ(u8, id);
-        defer self.allocator.free(_id);
-        const _rpId = try self.allocator.dupeZ(u8, rpId);
-        defer self.allocator.free(_rpId);
-
-        var str = std.ArrayList(u8).init(self.allocator);
-        defer str.deinit();
-
-        try cbor.stringify(entry, .{}, str.writer());
-
-        std.log.info("writing ({s}, {s}): {s}", .{
-            std.fmt.fmtSliceHexLower(id),
-            rpId,
-            std.fmt.fmtSliceHexLower(str.items),
-        });
-
-        // Covert the data into a hex string
-        var str2 = std.ArrayList(u8).init(self.allocator);
-        defer str2.deinit();
-        try str2.writer().print("{s}\x00", .{std.fmt.fmtSliceHexLower(str.items)});
-
-        if (self.callbacks.write(_id, _rpId, str2.items.ptr) != Error.SUCCESS) {
-            return error.Write;
-        }
     }
 
     pub fn handle(
@@ -278,9 +127,11 @@ pub const Auth = struct {
         out: *[fido.ctap.transports.ctaphid.authenticator.MAX_DATA_SIZE]u8,
         request: []const u8,
     ) []const u8 {
+        var buffer: [fido.ctap.transports.ctaphid.authenticator.MAX_DATA_SIZE]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buffer);
+        const allocator = fba.allocator();
         // Buffer for the response message
-        var res = std.ArrayList(u8).init(self.allocator);
-        defer res.deinit();
+        var res = std.ArrayList(u8).init(allocator);
         var response = res.writer();
         response.writeByte(0x00) catch {
             std.log.err("Auth.handle: unable to initialize response", .{});
@@ -298,19 +149,6 @@ pub const Auth = struct {
         // Updates (and possibly invalidates) an existing pinUvAuth token. This has to
         // be done before handling any request.
         self.token.pinUvAuthTokenUsageTimerObserver(self.milliTimestamp());
-
-        // Check if data_set is invalid.
-        // This is the case if a) the data_set "timed out" or b) the
-        // command issued is not associated with the data set.
-        if (self.data_set != null) {
-            if (self.milliTimestamp() - self.data_set.?.start > self.data_set.?.tout_ms or
-                self.data_set.?.command != cmd)
-            {
-                self.allocator.free(self.data_set.?.key);
-                self.allocator.free(self.data_set.?.value);
-                self.data_set = null;
-            }
-        }
 
         if (request.len > 1) {
             std.log.info("request({d}): {s}", .{ cmd, std.fmt.fmtSliceHexLower(request[1..]) });
@@ -382,11 +220,7 @@ pub const Auth = struct {
 
     /// Returns true if always uv is enables, false otherwise
     pub fn alwaysUv(self: *@This()) !bool {
-        const settings = self.loadSettings() catch |e| {
-            std.log.err("Auth.alwaysUv: unable to load settings ({any})", .{e});
-            return e;
-        };
-
+        const settings = self.callbacks.read_settings();
         return settings.always_uv;
     }
 

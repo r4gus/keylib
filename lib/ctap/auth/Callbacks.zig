@@ -6,6 +6,17 @@
 const std = @import("std");
 const fido = @import("../../main.zig");
 const cks = @import("cks");
+const dt = fido.common.dt;
+
+pub const CallbackError = error{
+    Success,
+    DoesAlreadyExist,
+    DoesNotExist,
+    KeyStoreFull,
+    OutOfMemory,
+    Timeout,
+    Other,
+};
 
 pub const Error = enum(i32) {
     SUCCESS = 0,
@@ -86,12 +97,12 @@ inline fn strlen(s: [*c]const u8) usize {
 
 pub const UpCallback = *const fn (
     /// Information about the context (e.g., make credential)
-    info: [*c]const u8,
+    info: []const u8,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
-    user: [*c]const u8,
+    user: ?fido.common.User,
     /// Information about the relying party (e.g., `Github (github.com)`)
-    rp: [*c]const u8,
-) callconv(.C) UpResult;
+    rp: ?fido.common.RelyingParty,
+) UpResult;
 
 /// Type of the User Verification (UV) callback
 ///
@@ -100,50 +111,35 @@ pub const UpCallback = *const fn (
 /// print, ...
 pub const UvCallback = ?*const fn (
     /// Information about the context (e.g., make credential)
-    info: [*c]const u8,
+    info: []const u8,
     /// Information about the user (e.g., `David Sugar (david@example.com)`)
-    user: [*c]const u8,
+    user: ?fido.common.User,
     /// Information about the relying party (e.g., `Github (github.com)`)
-    rp: [*c]const u8,
-) callconv(.C) UvResult;
+    rp: ?fido.common.RelyingParty,
+) UvResult;
 
-/// Select a resident key for a user associated with the given RP ID
-///
-/// Returns either the index of the user (starting from 0) or `Error.Timeout`.
-pub const SelectDiscoverableCredentialCallback = ?*const fn (
-    rpId: [*c]const u8,
-    users: [*c][*c]const u8,
-) callconv(.C) i32;
-
-/// Read the data associated with `id` and `rp` into out
-///
-/// The callback MUST not copy more than `out_len` bytes into `out`.
+/// Read the first credential associated with `id` and `rp` into out
 ///
 /// ## Argument options
 ///
 /// * `id = null` and `rp = null` - Return all credential entries.
 /// * `id != null` and `rp = null` - Return the entry with the specified `id`. This can be a credential or settings.
 /// * `id = null` and `rp != null` - Return all credentials associated with the given `rp` ID.
-pub const ReadCallback = *const fn (
-    id: [*c]const u8,
-    rp: [*c]const u8,
-    out: *[*c][*c]u8,
-) callconv(.C) Error;
+pub const ReadFirstCallback = *const fn (
+    id: ?dt.ABS64B,
+    rp: ?dt.ABS128T,
+) CallbackError!fido.ctap.authenticator.Credential;
+
+/// This function can be called multiple times after calling the ReadFirstCallback to obtain the remaining credentials.
+pub const ReadNextCallback = *const fn () CallbackError!fido.ctap.authenticator.Credential;
+
+pub const ReadSettingsCallback = *const fn () fido.ctap.authenticator.Meta;
+pub const WriteSettingsCallback = *const fn (data: fido.ctap.authenticator.Meta) void;
 
 /// Write `data` to permanent storage (e.g., database, filesystem, ...)
-///
-/// Returns either Error.SUCCESS on success or an error.
-///
-/// ## Argument options
-///
-/// * `id = null` and `rp = null` - Return all credential entries.
-/// * `id != null` and `rp = null` - Return the entry with the specified `id`. This can be a credential or settings.
-/// * `id = null` and `rp != null` - Return all credentials associated with the given `rp` ID.
 pub const CreateCallback = *const fn (
-    id: [*c]const u8,
-    rp: [*c]const u8,
-    data: [*c]const u8,
-) callconv(.C) Error;
+    data: fido.ctap.authenticator.Credential,
+) CallbackError!void;
 
 /// Delete the entry with the given `id`
 ///
@@ -189,7 +185,7 @@ pub const ProcessPinHash = *const fn (ph: []const u8) void;
 // Callbacks
 // +++++++++++++++++++++++++++++++++++++++++++++++++++
 
-pub const Callbacks = extern struct {
+pub const Callbacks = struct {
     /// Request user presence
     up: UpCallback,
 
@@ -206,11 +202,11 @@ pub const Callbacks = extern struct {
     /// - Pattern
     uv: UvCallback,
 
-    /// Let the user select one of the given `users` credentials
-    select: SelectDiscoverableCredentialCallback = null,
-
-    read: ReadCallback,
+    read_first: ReadFirstCallback,
+    read_next: ReadNextCallback,
     write: CreateCallback,
     delete: DeleteCallback,
+    read_settings: ReadSettingsCallback,
+    write_settings: WriteSettingsCallback,
     processPinHash: ?ProcessPinHash = null,
 };

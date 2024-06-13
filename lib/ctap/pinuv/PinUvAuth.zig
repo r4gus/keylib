@@ -2,6 +2,7 @@ const std = @import("std");
 const cbor = @import("zbor");
 const cose = cbor.cose;
 const fido = @import("../../main.zig");
+const dt = fido.common.dt;
 
 const Aes256 = std.crypto.core.aes.Aes256;
 const Hmac = std.crypto.auth.hmac.sha2.HmacSha256;
@@ -9,10 +10,8 @@ const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 const EcdhP256 = fido.ctap.crypto.dh.EcdhP256;
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
-/// Buffer for a relying party id.
-rp_id_raw: [128]u8 = undefined,
-/// The relying party id, referencing rp_id_raw.
-rp_id: ?[]const u8 = null,
+/// The relying party id
+rp_id: ?dt.ABS128T = null,
 /// The permissions set for the given pin token (if set).
 permissions: u32 = 0,
 /// The pin token is in use
@@ -49,18 +48,16 @@ version: fido.ctap.pinuv.common.PinProtocol,
 // ++++++++++++++++++++++++++++++++++++++++
 
 /// Key derivation function to be used by ECDH
-kdf: *const fn (z: [32]u8, a: std.mem.Allocator) error{AllocationError}![]u8,
-encrypt: *const fn (self: *const @This(), key: []u8, out: []u8, demPlaintext: []const u8) void,
+kdf: *const fn (z: [32]u8) dt.ABS64B,
+encrypt: *const fn (self: *const @This(), key: []const u8, out: []u8, demPlaintext: []const u8) void,
 decrypt: *const fn (key: []u8, out: []u8, demCiphertext: []const u8) void,
-authenticate: *const fn (key: []u8, message: []const u8, a: std.mem.Allocator) error{AllocationError}![]u8,
-verify: *const fn (key: []const u8, message: []const u8, signature: []const u8, a: std.mem.Allocator) bool,
+authenticate: *const fn (key: []u8, message: []const u8) dt.ABS32B,
+verify: *const fn (key: []const u8, message: []const u8, signature: []const u8) bool,
 
 /// Associate the given relying party id with the pinUvAuthToken
 /// as permission RP ID
-pub fn setRpId(self: *@This(), id: []const u8) void {
-    const l = if (id.len > 128) 128 else id.len;
-    @memcpy(self.rp_id_raw[0..l], id[0..l]);
-    self.rp_id = self.rp_id_raw[0..l];
+pub fn setRpId(self: *@This(), id: []const u8) !void {
+    self.rp_id = (try dt.ABS128T.fromSlice(id)).?;
 }
 
 /// Create a new pinUvAuth token version 1 object
@@ -101,25 +98,20 @@ pub fn performBuiltInUv(
     self: *const @This(),
     internalRetry: bool,
     auth: *fido.ctap.authenticator.Auth,
-    info: ?[:0]const u8,
-    user: ?[:0]const u8,
-    rp: ?[:0]const u8,
+    info: []const u8,
+    user: ?fido.common.User,
+    rp: ?fido.common.RelyingParty,
 ) BuiltInUvResult {
     _ = self;
 
-    var settings = auth.loadSettings() catch {
-        std.log.err("performBuiltInUv: unable to load settings (required for counter)", .{});
-        return .Denied;
-    };
+    var settings = auth.callbacks.read_settings();
 
     var attemptsBeforeReturning: u8 = if (internalRetry) 3 else 1;
 
     if (auth.clientPinSupported()) |supported| {
         if (supported and settings.pinRetries == 0) {
             settings.uvRetries = 0;
-            auth.writeSettings(settings) catch {
-                std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
-            };
+            auth.callbacks.write_settings(settings);
         }
     }
 
@@ -129,22 +121,13 @@ pub fn performBuiltInUv(
 
     while (attemptsBeforeReturning > 0) {
         settings.uvRetries -= 1;
-        auth.writeSettings(settings) catch {
-            std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
-            return .Denied;
-        };
+        auth.callbacks.write_settings(settings);
         attemptsBeforeReturning -= 1;
 
-        const authenticated = auth.callbacks.uv.?(
-            if (info) |i| i.ptr else null,
-            if (user) |u| u.ptr else null,
-            if (rp) |r| r.ptr else null,
-        );
+        const authenticated = auth.callbacks.uv.?(info, user, rp);
         if (authenticated == .Accepted or authenticated == .AcceptedWithUp) {
             settings.uvRetries = 8;
-            auth.writeSettings(settings) catch {
-                std.log.err("performBuiltInUv: [FATAL!] unable to persist settings", .{});
-            };
+            auth.callbacks.write_settings(settings);
 
             return if (authenticated == .Accepted) .Accepted else .AcceptedWithUp;
         } else if (authenticated == .Timeout) {
@@ -252,8 +235,7 @@ pub fn getUserPresentFlagValue(self: *const @This()) bool {
 pub fn ecdh(
     self: *const @This(),
     peer_cose_key: cose.Key,
-    a: std.mem.Allocator,
-) ![]u8 {
+) !dt.ABS64B {
     const shared_point = try EcdhP256.scalarmultXY(
         self.authenticator_key_agreement_key.?.secret_key,
         peer_cose_key.P256.x,
@@ -262,17 +244,16 @@ pub fn ecdh(
     // let z be the 32-byte, big-endian encoding of the x-coordinate
     // of the shared point
     const z: [32]u8 = shared_point.toUncompressedSec1()[1..33].*;
-    return try self.kdf(z, a);
+    return self.kdf(z);
 }
 
 pub fn verify_token(
     self: *const @This(),
     message: []const u8,
     signature: []const u8,
-    a: std.mem.Allocator,
 ) bool {
     if (!self.in_use) return false;
-    return self.verify(&self.pin_token, message, signature, a);
+    return self.verify(&self.pin_token, message, signature);
 }
 
 // ++++++++++++++++++++++++++++++++++++
@@ -280,11 +261,10 @@ pub fn verify_token(
 // ++++++++++++++++++++++++++++++++++++
 
 /// Calculates SHA256(z)
-pub fn kdf_v1(z: [32]u8, a: std.mem.Allocator) error{AllocationError}![]u8 {
-    var shared = a.alloc(u8, 32) catch {
-        return error.AllocationError;
-    };
-    Sha256.hash(&z, shared[0..32], .{});
+pub fn kdf_v1(z: [32]u8) dt.ABS64B {
+    var shared = dt.ABS64B{};
+    Sha256.hash(&z, shared.buffer[0..32], .{});
+    shared.len = 32;
     return shared;
 }
 
@@ -333,43 +313,33 @@ pub fn decrypt_v1(
 pub fn authenticate_v1(
     key: []const u8,
     message: []const u8,
-    a: std.mem.Allocator,
-) error{AllocationError}![]u8 {
+) dt.ABS32B {
     var buffer: [32]u8 = undefined;
-    var signature = a.alloc(u8, 16) catch {
-        return error.AllocationError;
-    };
     Hmac.create(buffer[0..32], message, key);
-    @memcpy(signature[0..16], buffer[0..16]);
-    return signature;
+    return (dt.ABS32B.fromSlice(buffer[0..16]) catch unreachable).?;
 }
 
 pub fn verify_v1(
     key: []const u8,
     message: []const u8,
     signature: []const u8,
-    a: std.mem.Allocator,
 ) bool {
-    const signature2 = authenticate_v1(key[0..32], message, a) catch {
-        return false;
-    };
-    defer a.free(signature2);
-    return std.mem.eql(u8, signature2[0..], signature[0..]);
+    const signature2 = authenticate_v1(key[0..32], message);
+    return std.mem.eql(u8, signature2.get(), signature[0..]);
 }
 
 // ++++++++++++++++++++++++++++++++++++
 // Version 2
 // ++++++++++++++++++++++++++++++++++++
 
-pub fn kdf_v2(z: [32]u8, a: std.mem.Allocator) error{AllocationError}![]u8 {
-    var shared = a.alloc(u8, 64) catch {
-        return error.AllocationError;
-    };
+pub fn kdf_v2(z: [32]u8) dt.ABS64B {
+    var shared = dt.ABS64B{};
     const salt: [32]u8 = .{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
     const prk = Hkdf.extract(salt[0..], z[0..]);
-    Hkdf.expand(shared[0..32], "CTAP2 HMAC key", prk);
-    Hkdf.expand(shared[32..64], "CTAP2 AES key", prk);
+    Hkdf.expand(shared.buffer[0..32], "CTAP2 HMAC key", prk);
+    Hkdf.expand(shared.buffer[32..64], "CTAP2 AES key", prk);
+    shared.len = 64;
 
     return shared;
 }
@@ -448,12 +418,10 @@ pub fn decrypt_v2(
 pub fn authenticate_v2(
     key: []const u8,
     message: []const u8,
-    a: std.mem.Allocator,
-) error{AllocationError}![]u8 {
-    var signature = a.alloc(u8, 32) catch {
-        return error.AllocationError;
-    };
-    Hmac.create(signature[0..32], message, key[0..32]);
+) dt.ABS32B {
+    var signature = dt.ABS32B{};
+    Hmac.create(signature.buffer[0..32], message, key[0..32]);
+    signature.len = 32;
     return signature;
 }
 
@@ -463,13 +431,9 @@ pub fn verify_v2(
     key: []const u8,
     message: []const u8,
     signature: []const u8,
-    a: std.mem.Allocator,
 ) bool {
-    const signature2 = authenticate_v2(key[0..32], message, a) catch {
-        return false;
-    };
-    defer a.free(signature2);
-    return std.mem.eql(u8, signature2[0..], signature[0..]);
+    const signature2 = authenticate_v2(key[0..32], message);
+    return std.mem.eql(u8, signature2.get(), signature[0..]);
 }
 
 test "aes cbc encryption 1" {
@@ -515,24 +479,20 @@ test "aes cbc decryption 2" {
 }
 
 test "authenticate 1" {
-    const a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
-    const out = try authenticate_v2(key, "ctap2fido2webauthn", a);
-    defer a.free(out);
+    const out = authenticate_v2(key, "ctap2fido2webauthn");
 
-    try std.testing.expectEqualSlices(u8, "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", out[0..]);
+    try std.testing.expectEqualSlices(u8, "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", out.get());
 }
 
 test "verify 1" {
-    const a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
-    const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c", a);
+    const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x08\x4e\x4c\xe8\x45\x7c");
     try std.testing.expectEqual(true, out);
 }
 
 test "verify 2" {
-    const a = std.testing.allocator;
     const key = "\x0f\x76\xf0\x61\xf9\x88\x24\x0d\x19\xe5\x2e\x63\x8b\xdd\x12\x1e\x30\x1d\x03\xf0\x68\xae\xc1\xc3\x19\xd4\x76\x46\x6f\xff\xd0\x0e";
-    const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x09\x4e\x4c\xe8\x45\x7c", a);
+    const out = verify_v2(key, "ctap2fido2webauthn", "\xeb\xdc\x72\xe5\xf1\x78\xfd\x08\x3f\x11\xfa\x37\x75\x54\x6c\x60\x4d\x00\x02\x9d\x44\x5c\x4e\xd2\xd5\xbf\x09\x4e\x4c\xe8\x45\x7c");
     try std.testing.expectEqual(false, out);
 }

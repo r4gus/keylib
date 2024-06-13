@@ -3,6 +3,7 @@ const fido = @import("../../../main.zig");
 const cbor = @import("zbor");
 const SigAlg = fido.ctap.crypto.SigAlg;
 const EcdsaP256Sha256 = @import("../ecdsa.zig").EcdsaP256Sha256;
+const dt = fido.common.dt;
 
 pub const Es256 = SigAlg{
     .alg = .Es256,
@@ -12,50 +13,22 @@ pub const Es256 = SigAlg{
     .from_priv = from_priv,
 };
 
-pub fn create(rand: std.rand.Random, allocator: std.mem.Allocator) ?SigAlg.KeyPair {
+pub fn create(rand: std.rand.Random) ?cbor.cose.Key {
     // Create key pair
     var seed: [32]u8 = undefined;
     rand.bytes(&seed);
-    return create_det(&seed, allocator);
+    return create_det(&seed);
 }
 
-pub fn create_det(seed: []const u8, allocator: std.mem.Allocator) ?SigAlg.KeyPair {
+pub fn create_det(seed: []const u8) ?cbor.cose.Key {
     const kp = EcdsaP256Sha256.KeyPair.create(seed[0..32].*) catch return null;
-    const sec1 = kp.public_key.toUncompressedSec1();
-    const pk = kp.secret_key.toBytes();
-    const pubk = cbor.cose.Key{ .P256 = .{
-        .alg = .Es256,
-        .x = sec1[1..33].*,
-        .y = sec1[33..65].*,
-    } };
-
-    // Serialize
-    const priv = allocator.alloc(u8, pk[0..].len) catch return null;
-    @memcpy(priv, pk[0..]);
-
-    var serialized_cred = std.ArrayList(u8).init(allocator);
-    cbor.stringify(&pubk, .{ .enum_serialization_type = .Integer }, serialized_cred.writer()) catch {
-        allocator.free(priv);
-        serialized_cred.deinit();
-        return null;
-    };
-
-    const pubkey = serialized_cred.toOwnedSlice() catch {
-        allocator.free(priv);
-        serialized_cred.deinit();
-        return null;
-    };
-
-    return .{
-        .cose_public_key = pubkey,
-        .raw_private_key = priv,
-    };
+    return cbor.cose.Key.fromP256PrivPub(.Es256, kp.secret_key, kp.public_key);
 }
 
 pub fn sign(
     raw_private_key: []const u8,
     data_seq: []const []const u8,
-    allocator: std.mem.Allocator,
+    out: []u8,
 ) ?[]const u8 {
     if (raw_private_key.len != 32) return null;
 
@@ -73,9 +46,10 @@ pub fn sign(
     const sig = signer.finalize() catch return null;
     var buffer: [EcdsaP256Sha256.Signature.der_encoded_max_length]u8 = undefined;
     const der = sig.toDer(&buffer);
-    const mem = allocator.alloc(u8, der.len) catch return null;
-    @memcpy(mem, der);
-    return mem;
+
+    if (out.len < der.len) return null;
+    @memcpy(out[0..der.len], der);
+    return out[0..der.len];
 }
 
 pub fn from_priv(priv: []const u8) ?cbor.cose.Key {

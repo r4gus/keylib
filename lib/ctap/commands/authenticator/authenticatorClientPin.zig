@@ -2,6 +2,7 @@ const std = @import("std");
 const Hkdf = std.crypto.kdf.hkdf.HkdfSha256;
 const cbor = @import("zbor");
 const fido = @import("../../../main.zig");
+const dt = fido.common.dt;
 
 pub fn authenticatorClientPin(
     auth: *fido.ctap.authenticator.Auth,
@@ -18,22 +19,17 @@ pub fn authenticatorClientPin(
         cbor.DataItem.new(request) catch {
             return .ctap2_err_invalid_cbor;
         },
-        .{
-            .allocator = auth.allocator,
-        },
+        .{},
     ) catch {
         return .ctap2_err_invalid_cbor;
     };
-    defer client_pin_param.deinit(auth.allocator);
 
     var client_pin_response: ?fido.ctap.response.ClientPin = null;
 
     // Handle one of the sub-commands
     switch (client_pin_param.subCommand) {
         .getPinRetries => {
-            const settings = auth.loadSettings() catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            const settings = auth.callbacks.read_settings();
 
             client_pin_response = .{
                 .pinRetries = settings.pinRetries,
@@ -41,9 +37,7 @@ pub fn authenticatorClientPin(
             };
         },
         .getUVRetries => {
-            const settings = auth.loadSettings() catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            const settings = auth.callbacks.read_settings();
 
             client_pin_response = .{
                 .uvRetries = settings.uvRetries,
@@ -99,9 +93,7 @@ pub fn authenticatorClientPin(
                 return fido.ctap.StatusCodes.ctap2_err_not_allowed;
             }
 
-            const settings = auth.loadSettings() catch {
-                return fido.ctap.StatusCodes.ctap1_err_other;
-            };
+            const settings = auth.callbacks.read_settings();
 
             if (settings.uvRetries == 0) {
                 return fido.ctap.StatusCodes.ctap2_err_uv_blocked;
@@ -111,7 +103,7 @@ pub fn authenticatorClientPin(
             switch (auth.token.performBuiltInUv(
                 true,
                 auth,
-                null,
+                "User Verification",
                 null,
                 null,
             )) {
@@ -132,31 +124,32 @@ pub fn authenticatorClientPin(
             // If the rpId parameter is present, associate the permissions RP ID
             // with the pinUvAuthToken.
             if (client_pin_param.rpId) |rpId| {
-                auth.token.setRpId(rpId);
+                auth.token.setRpId(rpId.get()) catch {
+                    // rpId is unexpectedly long
+                    return fido.ctap.StatusCodes.ctap1_err_other;
+                };
             }
 
             // Obtain the shared secret
             const shared_secret = auth.token.ecdh(
                 client_pin_param.keyAgreement.?,
-                auth.allocator,
             ) catch {
                 return fido.ctap.StatusCodes.ctap1_err_invalid_parameter;
             };
-            defer auth.allocator.free(shared_secret);
 
             // The authenticator returns the encrypted pinUvAuthToken for the
             // specified pinUvAuthProtocol, i.e. encrypt(shared secret, pinUvAuthToken).
-            var enc_shared_secret = auth.allocator.alloc(u8, 48) catch unreachable;
+            var enc_shared_secret: [48]u8 = undefined;
             auth.token.encrypt(
                 &auth.token,
-                shared_secret,
+                shared_secret.get(),
                 enc_shared_secret[0..],
                 auth.token.pin_token[0..],
             );
 
             // Response
             client_pin_response = .{
-                .pinUvAuthToken = enc_shared_secret,
+                .pinUvAuthToken = (dt.ABS48B.fromSlice(&enc_shared_secret) catch unreachable).?,
             };
         },
         else => {
@@ -169,7 +162,6 @@ pub fn authenticatorClientPin(
         cbor.stringify(resp, .{}, out.writer()) catch {
             return fido.ctap.StatusCodes.ctap1_err_other;
         };
-        defer resp.deinit(auth.allocator);
     }
 
     return fido.ctap.StatusCodes.ctap1_err_success;

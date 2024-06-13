@@ -117,7 +117,6 @@ pub fn main() !void {
         const pinUvAuthProtocol = info.pinUvAuthProtocols.?[0];
 
         var enc = try client_pin.getKeyAgreement(device, pinUvAuthProtocol, allocator);
-        defer enc.deinit();
         std.log.info("shared secret: {any}", .{enc});
 
         // 3 Optain a pinUvAuthToken from the authenticator
@@ -146,14 +145,12 @@ pub fn main() !void {
         // 4.b Fill the set with RPs present on the authenticator
         const rp = try cred_management.enumerateRPsBegin(device, pinUvAuthProtocol, token, allocator, true);
         if (rp) |_rp| {
-            defer _rp.deinit();
-            try idps.append(try allocator.dupe(u8, _rp.rp.id));
+            try idps.append(try allocator.dupe(u8, _rp.rp.id.get()));
 
             var i: usize = 0;
             while (i < _rp.total.? - 1) : (i += 1) {
                 if (try cred_management.enumerateRPsGetNextRP(device, allocator, true)) |rp2| {
-                    defer rp2.deinit();
-                    try idps.append(try allocator.dupe(u8, rp2.rp.id));
+                    try idps.append(try allocator.dupe(u8, rp2.rp.id.get()));
                 }
             }
         } else {
