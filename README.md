@@ -1,8 +1,8 @@
-FIDO2 compatible authenticator library written in [Zig](https://ziglang.org/) with __zero dynamic allocations__.
+FIDO2 compatible authenticator and client library written in [Zig](https://ziglang.org/). The authenticator part requires __zero dynamic allocations__.
 
 > We track the latest stable release of Zig (`0.12.0`)
 
-If you want to see an example on how to use keylib, check out [PassKeeZ](https://github.com/r4gus/keypass).
+If you want to see an example on how the library could be used, check out [PassKeeZ](https://github.com/r4gus/keypass).
 
 ## QA
 
@@ -89,9 +89,8 @@ We offer support for operations like __authenticatorMakeCredential__, __authenti
 <details>
 <summary><ins>Zero dynamic allocations?</ins></summary>
 
-This library doesn't allocate any memory dynamically. This has some draw backs like a fixed
-size for strings (e.g., rpId, user name, etc.) but also reduces the complexity of the code,
-i.e., no memory bugs due to allocations.
+The authenticator part of this library doesn't allocate any memory dynamically. This has some draw backs like a fixed
+size for strings (e.g., rpId, user name, etc.) but also reduces the complexity of the code.
 
 The authenticator example uses `88655` bytes of stack space when compiled with `-Doptimize=ReleaseSmall` on Linux (x86\_64).
 
