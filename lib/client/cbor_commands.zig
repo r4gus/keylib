@@ -288,30 +288,24 @@ pub const credentials = struct {
         var client_data_hash: [Sha256.digest_length]u8 = undefined;
         Sha256.hash(client_data, client_data_hash[0..], .{});
 
-        const param: ?[]const u8 = if (options.param != null and options.protocol != null) blk: {
+        const param: ?keylib.common.dt.ABS32B = if (options.param != null and options.protocol != null) blk: {
             const param = switch (options.protocol.?) {
-                .V1 => try PinUvAuth.authenticate_v1(options.param.?, &client_data_hash, a),
-                .V2 => try PinUvAuth.authenticate_v2(options.param.?, &client_data_hash, a),
+                .V1 => PinUvAuth.authenticate_v1(options.param.?, &client_data_hash),
+                .V2 => PinUvAuth.authenticate_v2(options.param.?, &client_data_hash),
             };
             break :blk param;
         } else blk: {
             break :blk null;
         };
-        defer {
-            if (param) |p| {
-                a.free(p);
-            }
-        }
 
         const cmd = 0x02;
         const request = keylib.ctap.request.GetAssertion{
-            .rpId = try a.dupe(u8, public_key.rpId.?),
+            .rpId = (try keylib.common.dt.ABS128T.fromSlice(public_key.rpId.?)).?,
             .clientDataHash = client_data_hash,
             .pinUvAuthParam = param,
             .pinUvAuthProtocol = options.protocol,
-            .allowList = public_key.allowCredentials,
+            .allowList = try keylib.common.dt.ABSPublicKeyCredentialDescriptor.fromSlice(public_key.allowCredentials),
         };
-        defer a.free(request.rpId);
 
         var arr = std.ArrayList(u8).init(a);
         defer arr.deinit();
@@ -393,18 +387,12 @@ pub const client_pin = struct {
     pub const Encapsulation = struct {
         version: keylib.ctap.pinuv.common.PinProtocol,
         platform_key_agreement_key: keylib.ctap.crypto.dh.EcdhP256.KeyPair,
-        shared_secret: []const u8 = undefined,
-        allocator: std.mem.Allocator,
-
-        pub fn deinit(self: @This()) void {
-            self.allocator.free(self.shared_secret);
-        }
+        shared_secret: keylib.common.dt.ABS64B = undefined,
     };
 
     pub fn encapsulate(
         version: keylib.ctap.pinuv.common.PinProtocol,
         peer_cose_key: cbor.cose.Key,
-        a: std.mem.Allocator,
     ) !Encapsulation {
         var seed: [EcdhP256.secret_length]u8 = undefined;
         std.crypto.random.bytes(seed[0..]);
@@ -419,15 +407,14 @@ pub const client_pin = struct {
         const z: [32]u8 = shared_point.toUncompressedSec1()[1..33].*;
 
         const ss = switch (version) {
-            .V1 => try PinUvAuth.kdf_v1(z, a),
-            .V2 => try PinUvAuth.kdf_v2(z, a),
+            .V1 => PinUvAuth.kdf_v1(z),
+            .V2 => PinUvAuth.kdf_v2(z),
         };
 
         return .{
             .version = version,
             .platform_key_agreement_key = k,
             .shared_secret = ss,
-            .allocator = a,
         };
     }
 
@@ -457,12 +444,11 @@ pub const client_pin = struct {
                 return err.errorFromInt(response[0]);
             }
 
-            var cpr = try cbor.parse(ClientPinResponse, try cbor.DataItem.new(response[1..]), .{ .allocator = a });
-            defer cpr.deinit(a);
+            const cpr = try cbor.parse(ClientPinResponse, try cbor.DataItem.new(response[1..]), .{});
 
             if (cpr.keyAgreement == null) return error.MissingPar;
 
-            return try encapsulate(version, cpr.keyAgreement.?, a);
+            return try encapsulate(version, cpr.keyAgreement.?);
         } else {
             return error.MissingResponse;
         }
@@ -506,7 +492,7 @@ pub const client_pin = struct {
                 const iv: [16]u8 = .{0} ** 16;
                 PinUvAuth._encrypt(
                     iv,
-                    e.shared_secret[0..32].*,
+                    e.shared_secret.get()[0..32].*,
                     _pinHashEnc[0..16],
                     pin_hash_left,
                 );
@@ -516,14 +502,14 @@ pub const client_pin = struct {
                 std.crypto.random.bytes(_pinHashEnc[0..16]);
                 PinUvAuth._encrypt(
                     _pinHashEnc[0..16].*,
-                    e.shared_secret[32..64].*,
+                    e.shared_secret.get()[32..64].*,
                     _pinHashEnc[16..32],
                     pin_hash_left,
                 );
                 pinHashEnc = _pinHashEnc[0..32];
             },
         }
-        request.pinHashEnc = pinHashEnc;
+        request.pinHashEnc = try keylib.common.dt.ABS32B.fromSlice(pinHashEnc);
 
         var arr = std.ArrayList(u8).init(a);
         defer arr.deinit();
@@ -540,8 +526,7 @@ pub const client_pin = struct {
                 return err.errorFromInt(response[0]);
             }
 
-            var cpr = try cbor.parse(ClientPinResponse, try cbor.DataItem.new(response[1..]), .{ .allocator = a });
-            defer cpr.deinit(a);
+            const cpr = try cbor.parse(ClientPinResponse, try cbor.DataItem.new(response[1..]), .{});
 
             if (cpr.pinUvAuthToken == null) return error.MissingPar;
 
@@ -549,11 +534,11 @@ pub const client_pin = struct {
             switch (e.version) {
                 .V1 => {
                     token = try a.alloc(u8, cpr.pinUvAuthToken.?.len);
-                    PinUvAuth.decrypt_v1(e.shared_secret, token, cpr.pinUvAuthToken.?);
+                    PinUvAuth.decrypt_v1(e.shared_secret.get(), token, cpr.pinUvAuthToken.?.get());
                 },
                 .V2 => {
                     token = try a.alloc(u8, cpr.pinUvAuthToken.?.len - 16);
-                    PinUvAuth.decrypt_v2(e.shared_secret, token, cpr.pinUvAuthToken.?);
+                    PinUvAuth.decrypt_v2(e.shared_secret.get(), token, cpr.pinUvAuthToken.?.get());
                 },
             }
             return token;
@@ -725,12 +710,6 @@ pub const cred_management = struct {
         //rpIDHash: []const u8,
         total: ?u32 = null,
         a: std.mem.Allocator,
-
-        pub fn deinit(self: *const @This()) void {
-            self.a.free(self.rp.id);
-            if (self.rp.name != null) self.a.free(self.rp.name.?);
-            //self.a.free(self.rpIDHash);
-        }
     };
 
     pub fn enumerateRPsBegin(
@@ -741,15 +720,14 @@ pub const cred_management = struct {
         is_yubikey: bool,
     ) !?RpResponse {
         const _param = switch (protocol) {
-            .V1 => try PinUvAuth.authenticate_v1(param, "\x02", a),
-            .V2 => try PinUvAuth.authenticate_v2(param, "\x02", a),
+            .V1 => PinUvAuth.authenticate_v1(param, "\x02"),
+            .V2 => PinUvAuth.authenticate_v2(param, "\x02"),
         };
-        defer a.free(_param);
 
         const request = CredentialManagement{
             .subCommand = .enumerateRPsBegin,
             .pinUvAuthProtocol = protocol,
-            .pinUvAuthParam = _param,
+            .pinUvAuthParam = _param.get(),
         };
 
         var arr = std.ArrayList(u8).init(a);
@@ -781,8 +759,8 @@ pub const cred_management = struct {
 
             return .{
                 .rp = .{
-                    .id = try a.dupe(u8, r.rp.?.id),
-                    .name = if (r.rp.?.name != null) try a.dupe(u8, r.rp.?.name.?) else null,
+                    .id = r.rp.?.id,
+                    .name = r.rp.?.name,
                 },
                 //.rpIDHash = try a.dupe(u8, r.rpIDHash.?),
                 .total = r.totalRPs.?,
@@ -830,8 +808,8 @@ pub const cred_management = struct {
 
             return .{
                 .rp = .{
-                    .id = try a.dupe(u8, r.rp.?.id),
-                    .name = if (r.rp.?.name != null) try a.dupe(u8, r.rp.?.name.?) else null,
+                    .id = r.rp.?.id,
+                    .name = r.rp.?.name,
                 },
                 //.rpIDHash = try a.dupe(u8, r.rpIDHash.?),
                 .a = a,
