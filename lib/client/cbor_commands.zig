@@ -82,7 +82,7 @@ pub const Promise = struct {
 
         if (resp) |response| {
             if (response[0] != 0) {
-                allocator.free(response);
+                defer allocator.free(response);
                 return .{ .rejected = err.errorFromInt(response[0]) };
             }
 
