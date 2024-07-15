@@ -1,5 +1,20 @@
 //! This is a template for implementing your own FIDO2 authenticator based on keylib.
 //!
+//! Because of Uhid, this example works only under Linux.
+//!
+//! Please run the following script for Uhid to work properly:
+//! ```bash
+//! # Create a new group called fido
+//! getent group fido || (groupadd fido && usermod -a -G fido $SUDO_USER)
+//!
+//! # Add uhid to the list of modules to load during boot
+//! echo "uhid" > /etc/modules-load.d/fido.conf
+//!
+//! # Create a udev rule that allows all users that belong to the group fido to access /dev/uhid
+//! echo 'KERNEL=="uhid", GROUP="fido", MODE="0660"' > /etc/udev/rules.d/90-uinput.rules
+//! udevadm control --reload-rules && udevadm trigger
+//! ```
+//!
 //! While this library allows you to implement a authenticator quite
 //! easily as seen below you can also just use the data structures and build one
 //! from scratch yourself.
@@ -100,7 +115,10 @@ pub fn main() !void {
 
     // We use the uhid module on linux to simulate a USB device. If you use
     // tinyusb or something similar you have to adapt the code.
-    var u = try uhid.Uhid.open();
+    var u = uhid.Uhid.open() catch {
+        std.log.err("{s}", .{uhid_error_message});
+        return;
+    };
     defer u.close();
 
     // This is the main loop
@@ -364,3 +382,19 @@ pub fn strlen(s: [*c]const u8) usize {
     while (s[i] != 0) : (i += 1) {}
     return i;
 }
+
+const uhid_error_message =
+    \\Unable to open the file '/dev/uhid'!
+    \\Please make sure to setup uhid correctly by running the following script:
+    \\```
+    \\# Create a new group called fido
+    \\getent group fido || (groupadd fido && usermod -a -G fido $SUDO_USER)
+    \\
+    \\# Add uhid to the list of modules to load during boot
+    \\echo "uhid" > /etc/modules-load.d/fido.conf
+    \\
+    \\# Create a udev rule that allows all users that belong to the group fido to access /dev/uhid
+    \\echo 'KERNEL=="uhid", GROUP="fido", MODE="0660"' > /etc/udev/rules.d/90-uinput.rules
+    \\udevadm control --reload-rules && udevadm trigger
+    \\```
+;

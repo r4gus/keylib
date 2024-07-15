@@ -75,6 +75,17 @@ Yes, there are:
 
 Answering this question isn't straightforward. The library, by its nature, is designed to be independent of any particular platform, meaning that you have the responsibility of supplying it with data for processing. To put it differently, you're in charge of creating a functional interface for communicating with a client, typically a web browser. On Linux, we offer a wrapper for the uhid interface, simplifying the process of presenting an application as a USB HID device with a Usage Page of F1D0 on the bus.
 
+**There are known issues with older browsers (including Firefox)**. Newer browser versions should work fine. Tested with:
+
+| Browser | Supported? | Tested version| Notes |
+|:-------:|:----------:|:-------------:|:-----:|
+| Cromium   | &#9989;    | 119.0.6045.159 (Official Build) Arch Linux (64-bit) | |
+| Brave | &#9989; | Version 1.62.153 Chromium: 121.0.6167.85 (Official Build) (64-bit) | |
+| Firefox | &#9989; | 122.0 (64-bit) |  |
+| Opera | &#9989; | version: 105.0.4970.16 chromium: 119.0.6045.159 | |
+
+**Please let me know if you run into issues!**
+
 </details>
 
 <details>
@@ -112,6 +123,7 @@ The authenticator example uses `88655` bytes of stack space when compiled with `
 We maintain two examples on how to use the library:
 
 * `authenticator` - [https://github.com/r4gus/keylib/blob/master/example/authenticator.zig](https://github.com/r4gus/keylib/blob/master/example/authenticator.zig)
+    * **Please read the description at the top of the source code for instructions on how to setup uhid correctly**
 * `client` - [https://github.com/r4gus/keylib/blob/master/example/client.zig](https://github.com/r4gus/keylib/blob/master/example/client.zig)
 
 ## Resources

@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) !void {
     // ------------------------------------------------
 
     const keylib_module = b.addModule("keylib", .{
-        .root_source_file = .{ .path = "lib/main.zig" },
+        .root_source_file = b.path("lib/main.zig"),
         .imports = &.{
             .{ .name = "zbor", .module = zbor_module },
         },
@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) !void {
     try b.modules.put(b.dupe("keylib"), keylib_module);
 
     const uhid_module = b.addModule("uhid", .{
-        .root_source_file = .{ .path = "bindings/linux/src/uhid.zig" },
+        .root_source_file = b.path("bindings/linux/src/uhid.zig"),
         .imports = &.{},
     });
     try b.modules.put(b.dupe("uhid"), uhid_module);
@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) !void {
     // ------------------------------------------------
 
     const client_module = b.addModule("clientlib", .{
-        .root_source_file = .{ .path = "lib/client.zig" },
+        .root_source_file = b.path("lib/client.zig"),
         .imports = &.{
             .{ .name = "zbor", .module = zbor_module },
         },
@@ -60,7 +60,7 @@ pub fn build(b: *std.Build) !void {
 
     var client_example = b.addExecutable(.{
         .name = "client",
-        .root_source_file = .{ .path = "example/client.zig" },
+        .root_source_file = b.path("example/client.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -71,7 +71,7 @@ pub fn build(b: *std.Build) !void {
 
     var authenticator_example = b.addExecutable(.{
         .name = "authenticator",
-        .root_source_file = .{ .path = "example/authenticator.zig" },
+        .root_source_file = b.path("example/authenticator.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -106,7 +106,7 @@ pub fn build(b: *std.Build) !void {
 
     const uhid = b.addStaticLibrary(.{
         .name = "uhid",
-        .root_source_file = .{ .path = "bindings/linux/src/uhid-c.zig" },
+        .root_source_file = b.path("bindings/linux/src/uhid-c.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -151,7 +151,7 @@ pub fn build(b: *std.Build) !void {
 
     // Creates a step for unit testing.
     const lib_tests = b.addTest(.{
-        .root_source_file = .{ .path = "lib/main.zig" },
+        .root_source_file = b.path("lib/main.zig"),
         .target = target,
         .optimize = optimize,
     });
