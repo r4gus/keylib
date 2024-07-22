@@ -19,6 +19,12 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
 
+    const uuid_dep = b.dependency("uuid", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const uuid_module = uuid_dep.module("uuid");
+
     // ++++++++++++++++++++++++++++++++++++++++++++
     // Module
     // ++++++++++++++++++++++++++++++++++++++++++++
@@ -30,6 +36,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("lib/main.zig"),
         .imports = &.{
             .{ .name = "zbor", .module = zbor_module },
+            .{ .name = "uuid", .module = uuid_module },
         },
     });
     try b.modules.put(b.dupe("keylib"), keylib_module);

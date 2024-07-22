@@ -354,17 +354,19 @@ pub fn authenticatorMakeCredential(
     // ++++++++++++++++++++++++++++++++++++++++++++++++
     // 16. Create a new credential
     // ++++++++++++++++++++++++++++++++++++++++++++++++
-    var id: [32]u8 = undefined;
-    auth.random.bytes(&id);
-    for (&id) |*b| {
-        // disallow 0 bytes
-        // -> The callbacks work with C strings and we don't pass a length, i.e.
-        //    0 terminates a string. If we would allow 0 bytes then the id would
-        //    get cut off.
-        while (b.* == 0) {
-            b.* = auth.random.int(u8);
-        }
-    }
+    //var id: [32]u8 = undefined;
+    //auth.random.bytes(&id);
+    //for (&id) |*b| {
+    //    // disallow 0 bytes
+    //    // -> The callbacks work with C strings and we don't pass a length, i.e.
+    //    //    0 terminates a string. If we would allow 0 bytes then the id would
+    //    //    get cut off.
+    //    while (b.* == 0) {
+    //        b.* = auth.random.int(u8);
+    //    }
+    //}
+    const id = uuid.v7.new2(auth.random, auth.milliTimestamp);
+    const urn = uuid.urn.serialize(id);
 
     const key_pair = if (alg.create(
         auth.random,
@@ -374,7 +376,7 @@ pub fn authenticatorMakeCredential(
     };
 
     var entry = fido.ctap.authenticator.Credential{
-        .id = (dt.ABS64B.fromSlice(&id) catch unreachable).?,
+        .id = (dt.ABS64B.fromSlice(&urn) catch unreachable).?,
         .user = mcp.user,
         .rp = mcp.rp,
         .sign_count = 0, // the first signature will be included in the response
