@@ -247,10 +247,7 @@ pub const ctap = struct {
     }
 };
 
-pub const client = @import("client.zig");
-
 test "library tests" {
     _ = common;
     _ = ctap;
-    _ = client;
 }

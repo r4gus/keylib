@@ -1,5 +1,5 @@
 const std = @import("std");
-const keylib = @import("../main.zig");
+const keylib = @import("keylib");
 const cbor = @import("zbor");
 const Transport = @import("Transport.zig");
 const err = @import("error.zig");

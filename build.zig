@@ -57,6 +57,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("lib/client.zig"),
         .imports = &.{
             .{ .name = "zbor", .module = zbor_module },
+            .{ .name = "keylib", .module = keylib_module },
         },
     });
     try b.modules.put(b.dupe("clientlib"), client_module);

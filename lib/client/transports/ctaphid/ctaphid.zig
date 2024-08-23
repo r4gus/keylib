@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const keylib = @import("../../../main.zig");
+const keylib = @import("keylib");
 const ctaphid = keylib.ctap.transports.ctaphid;
 const Cmd = ctaphid.Cmd;
 const ErrorCodes = ctaphid.authenticator.ErrorCodes;
