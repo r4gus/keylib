@@ -128,6 +128,7 @@ pub const UvCallback = ?*const fn (
 pub const ReadFirstCallback = *const fn (
     id: ?dt.ABS64B,
     rp: ?dt.ABS128T,
+    hash: ?[32]u8,
 ) CallbackError!fido.ctap.authenticator.Credential;
 
 /// This function can be called multiple times after calling the ReadFirstCallback to obtain the remaining credentials.

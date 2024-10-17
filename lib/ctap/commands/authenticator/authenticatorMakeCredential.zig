@@ -244,7 +244,7 @@ pub fn authenticatorMakeCredential(
 
     if (mcp.excludeList) |ecllist| {
         for (ecllist.get()) |item| {
-            const cred = auth.callbacks.read_first(item.id, null) catch {
+            const cred = auth.callbacks.read_first(item.id, null, null) catch {
                 continue;
             };
             // If the credential was created by this authenticator: Return.
@@ -392,7 +392,7 @@ pub fn authenticatorMakeCredential(
         std.log.info("MakeCredential: creating resident key", .{});
         entry.discoverable = true;
 
-        var credential = auth.callbacks.read_first(null, mcp.rp.id) catch {
+        var credential = auth.callbacks.read_first(null, mcp.rp.id, null) catch {
             break :outer;
         };
 

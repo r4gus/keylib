@@ -223,7 +223,12 @@ pub fn my_up(
 pub fn my_read_first(
     id: ?dt.ABS64B,
     rp: ?dt.ABS128T,
+    hash: ?[32]u8,
 ) CallbackError!Credential {
+    // The hash is mostly relevant for credential management
+    // because the client will only send a SHA256(rpId).
+    _ = hash;
+
     std.log.info("my_first_read: {s}, {s}", .{
         if (id) |uid| uid.get() else "n.a.",
         if (rp) |rpid| rpid.get() else "n.a.",
