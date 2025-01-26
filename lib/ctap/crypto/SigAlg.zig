@@ -7,7 +7,7 @@ const dt = fido.common.dt;
 /// The algorithm used
 alg: cbor.cose.Algorithm,
 /// Create a new random key-pair
-create: *const fn (rand: std.rand.Random) ?cbor.cose.Key,
+create: *const fn (rand: std.Random) ?cbor.cose.Key,
 /// Deterministically creates a new key-pair using the given seed
 create_det: *const fn (seed: []const u8) ?cbor.cose.Key,
 /// Sign the given data

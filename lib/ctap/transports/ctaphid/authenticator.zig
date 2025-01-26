@@ -195,13 +195,13 @@ pub const CtapHid = struct {
     channels: std.ArrayList(Cid),
 
     /// CSPRNG
-    random: std.rand.Random,
+    random: std.Random,
 
     milliTimestamp: *const fn () i64 = std.time.milliTimestamp,
 
     const timeout: u64 = 250; // 250 milli second timeout
 
-    pub fn init(a: std.mem.Allocator, random: std.rand.Random) @This() {
+    pub fn init(a: std.mem.Allocator, random: std.Random) @This() {
         return .{
             .channels = std.ArrayList(Cid).init(a),
             .random = random,

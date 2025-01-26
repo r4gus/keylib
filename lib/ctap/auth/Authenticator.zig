@@ -80,7 +80,7 @@ pub const Auth = struct {
     } = null,
 
     /// Cryptographic secure (P)RNG
-    random: std.rand.Random,
+    random: std.Random,
 
     milliTimestamp: *const fn () i64,
 

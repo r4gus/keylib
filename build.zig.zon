@@ -3,17 +3,17 @@
     .version = "0.5.1",
     .dependencies = .{
         .zbor = .{
-            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.15.0.tar.gz",
-            .hash = "12209a78f8c31b6d65d2249082dc824da4a191f6f7be6a1c1740fc093b765c5ebeea",
+            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.16.0.tar.gz",
+            .hash = "12204e296dfd96db337f0b59dbde2bfb9c5e5107be64ef1067087398d4985c8ffc3d",
             //.path = "../zbor",
         },
         .hidapi = .{
             .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
-            .hash = "1220e65a0ac25c2f68a5024986bd73a2be7ea269c9ea83d5e624df74683194a38a35",
+            .hash = "1220a5a850b61777811c0f0c5231e38f25af21fb795719085e2af69fe2488fa84b61",
         },
         .uuid = .{
-            .url = "https://github.com/r4gus/uuid-zig/archive/refs/tags/0.2.1.tar.gz",
-            .hash = "1220b4deeb4ec1ec3493ea934905356384561b725dba69d1fbf6a25cb398716dd05b",
+            .url = "https://github.com/r4gus/uuid-zig/archive/refs/tags/0.3.0.tar.gz",
+            .hash = "12207920ff3fce69398afc959b252b8cd72ab55a6dbb251d71fa046a43d9a85bffe6",
         },
     },
     .paths = .{

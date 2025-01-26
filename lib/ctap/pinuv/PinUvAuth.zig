@@ -40,7 +40,7 @@ authenticator_key_agreement_key: ?fido.ctap.crypto.dh.EcdhP256.KeyPair = null,
 /// (AES block length).
 pin_token: [32]u8 = undefined,
 
-rand: std.rand.Random,
+rand: std.Random,
 
 version: fido.ctap.pinuv.common.PinProtocol,
 // ++++++++++++++++++++++++++++++++++++++++
@@ -61,7 +61,7 @@ pub fn setRpId(self: *@This(), id: []const u8) !void {
 }
 
 /// Create a new pinUvAuth token version 1 object
-pub fn v1(rand: std.rand.Random) @This() {
+pub fn v1(rand: std.Random) @This() {
     return @This(){
         .version = .V1,
         .rand = rand,
@@ -74,7 +74,7 @@ pub fn v1(rand: std.rand.Random) @This() {
 }
 
 /// Create a new pinUvAuth token version 2 object
-pub fn v2(rand: std.rand.Random) @This() {
+pub fn v2(rand: std.Random) @This() {
     return @This(){
         .version = .V2,
         .rand = rand,

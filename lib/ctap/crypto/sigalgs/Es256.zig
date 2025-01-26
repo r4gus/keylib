@@ -13,7 +13,7 @@ pub const Es256 = SigAlg{
     .from_priv = from_priv,
 };
 
-pub fn create(rand: std.rand.Random) ?cbor.cose.Key {
+pub fn create(rand: std.Random) ?cbor.cose.Key {
     // Create key pair
     var seed: [32]u8 = undefined;
     rand.bytes(&seed);

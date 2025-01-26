@@ -164,6 +164,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     lib_tests.root_module.addImport("zbor", zbor_module);
+    lib_tests.root_module.addImport("uuid", uuid_module);
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&b.addRunArtifact(lib_tests).step);
