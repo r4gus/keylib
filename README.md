@@ -4,6 +4,11 @@ FIDO2 compatible authenticator and client library written in [Zig](https://zigla
 
 If you want to see an example on how the library could be used, check out [PassKeeZ](https://github.com/r4gus/keypass).
 
+| Zig version | keylib version |
+|:-----------:|:--------------:|
+| 0.13.0      | 0.5.0, 0.5.1, 0.5.2, 0.5.3 |
+| 0.14.0      | 0.6.0 |
+
 ## QA
 
 <details>

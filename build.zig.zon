@@ -1,6 +1,6 @@
 .{
     .name = "keylib",
-    .version = "0.5.1",
+    .version = "0.6.0",
     .dependencies = .{
         .zbor = .{
             .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.16.0.tar.gz",
