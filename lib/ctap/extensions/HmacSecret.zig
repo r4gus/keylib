@@ -32,7 +32,7 @@ pub const HmacSecret = union(HmacSecretTag) {
                 .{ .name = "saltAuth", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
                 .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             },
-            .from_callback = true,
+            .ignore_override = true,
         }, out);
     }
 
@@ -45,7 +45,7 @@ pub const HmacSecret = union(HmacSecretTag) {
                 .{ .name = "saltAuth", .field_options = .{ .alias = "3", .serialization_type = .Integer } },
                 .{ .name = "pinUvAuthProtocol", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             },
-            .from_callback = true,
+            .ignore_override = true,
         });
     }
 };

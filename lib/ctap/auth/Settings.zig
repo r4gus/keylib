@@ -146,14 +146,14 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
             .{ .name = "remainingDiscoverableCredentials", .field_options = .{ .alias = "20", .serialization_type = .Integer } },
             .{ .name = "vendorPrototypeConfigCommands", .field_options = .{ .alias = "21", .serialization_type = .Integer } },
         },
-        .from_callback = true,
+        .ignore_override = true,
     }, out);
 }
 
 pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_callback = true, // prevent infinite loops
+        .ignore_override = true, // prevent infinite loops
         .field_settings = &.{
             .{ .name = "versions", .field_options = .{ .alias = "1", .serialization_type = .Integer } },
             .{ .name = "extensions", .field_options = .{ .alias = "2", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },

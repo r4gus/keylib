@@ -17,7 +17,7 @@ credProtect: ?fido.ctap.extensions.CredentialCreationPolicy = null,
 pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     return cbor.stringify(self, .{
         .allocator = options.allocator,
-        .from_callback = true,
+        .ignore_override = true,
         .field_settings = &.{
             .{ .name = "credProtect", .value_options = .{ .enum_serialization_type = .Integer } },
         },
@@ -27,7 +27,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
 pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_callback = true, // prevent infinite loops
+        .ignore_override = true, // prevent infinite loops
         .field_settings = &.{
             .{ .name = "credProtect", .value_options = .{ .enum_serialization_type = .Integer } },
         },

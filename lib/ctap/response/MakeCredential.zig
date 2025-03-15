@@ -75,7 +75,7 @@ pub fn cborStringify(self: *const @This(), _: cbor.Options, out: anytype) !void 
                 .{ .name = "eppAtt", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
                 .{ .name = "largeBlobKey", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
             },
-            .from_callback = true,
+            .ignore_override = true,
         },
         out,
     );

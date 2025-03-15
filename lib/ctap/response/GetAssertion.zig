@@ -56,7 +56,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
                 .{ .name = "userSelected", .field_options = .{ .alias = "6", .serialization_type = .Integer } },
                 .{ .name = "largeBlobKey", .field_options = .{ .alias = "7", .serialization_type = .Integer } },
             },
-            .from_callback = true,
+            .ignore_override = true,
         },
         out,
     );

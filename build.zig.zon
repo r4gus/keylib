@@ -1,19 +1,20 @@
 .{
-    .name = "keylib",
+    .name = .keylib,
     .version = "0.6.0",
+    .fingerprint = 0xc25aabcf9323b699,
     .dependencies = .{
         .zbor = .{
-            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.16.0.tar.gz",
-            .hash = "12204e296dfd96db337f0b59dbde2bfb9c5e5107be64ef1067087398d4985c8ffc3d",
+            .url = "https://github.com/r4gus/zbor/archive/refs/tags/0.17.0.tar.gz",
+            .hash = "12207f356790fb95b783d053464660a501d0cb8f1a7ad04ceeb862fccc02b982d752",
             //.path = "../zbor",
         },
         .hidapi = .{
-            .url = "https://github.com/r4gus/hidapi/archive/master.tar.gz",
-            .hash = "1220a5a850b61777811c0f0c5231e38f25af21fb795719085e2af69fe2488fa84b61",
+            .url = "https://github.com/r4gus/hidapi/archive/refs/tags/0.15.0.tar.gz",
+            .hash = "1220fcaee19f1bf69764c808ea7292062ebf4ec55f585ef298667c993e54bfbc8cb0",
         },
         .uuid = .{
             .url = "https://github.com/r4gus/uuid-zig/archive/refs/tags/0.3.0.tar.gz",
-            .hash = "12207920ff3fce69398afc959b252b8cd72ab55a6dbb251d71fa046a43d9a85bffe6",
+            .hash = "12207f6a93a8f73155d1af391980124feb6bab344931e11f62e42e6ac825c8d59ff1",
         },
     },
     .paths = .{

@@ -35,14 +35,14 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
             .{ .name = "powerCycleState", .field_options = .{ .alias = "4", .serialization_type = .Integer } },
             .{ .name = "uvRetries", .field_options = .{ .alias = "5", .serialization_type = .Integer } },
         },
-        .from_callback = true,
+        .ignore_override = true,
     }, out);
 }
 
 pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_callback = true, // prevent infinite loops
+        .ignore_override = true, // prevent infinite loops
         .field_settings = &.{
             .{ .name = "keyAgreement", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .enum_serialization_type = .Integer } },
             .{ .name = "pinUvAuthToken", .field_options = .{ .alias = "2", .serialization_type = .Integer } },

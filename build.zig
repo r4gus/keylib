@@ -38,12 +38,16 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "zbor", .module = zbor_module },
             .{ .name = "uuid", .module = uuid_module },
         },
+        .target = target,
+        .optimize = optimize,
     });
     try b.modules.put(b.dupe("keylib"), keylib_module);
 
     const uhid_module = b.addModule("uhid", .{
         .root_source_file = b.path("bindings/linux/src/uhid.zig"),
         .imports = &.{},
+        .target = target,
+        .optimize = optimize,
     });
     try b.modules.put(b.dupe("uhid"), uhid_module);
 
@@ -59,6 +63,8 @@ pub fn build(b: *std.Build) !void {
             .{ .name = "zbor", .module = zbor_module },
             .{ .name = "keylib", .module = keylib_module },
         },
+        .target = target,
+        .optimize = optimize,
     });
     try b.modules.put(b.dupe("clientlib"), client_module);
     client_module.linkLibrary(hidapi_dep.artifact("hidapi"));
@@ -66,22 +72,30 @@ pub fn build(b: *std.Build) !void {
     // Examples
     // ------------------------------------------------
 
-    var client_example = b.addExecutable(.{
-        .name = "client",
+    const client_example_mod = b.createModule(.{
         .root_source_file = b.path("example/client.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    var client_example = b.addExecutable(.{
+        .name = "client",
+        .root_module = client_example_mod,
     });
     client_example.root_module.addImport("client", client_module);
 
     const client_example_step = b.step("client-example", "Build the client application example");
     client_example_step.dependOn(&b.addInstallArtifact(client_example, .{}).step);
 
-    var authenticator_example = b.addExecutable(.{
-        .name = "authenticator",
+    const authenticator_example_mod = b.createModule(.{
         .root_source_file = b.path("example/authenticator.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    var authenticator_example = b.addExecutable(.{
+        .name = "authenticator",
+        .root_module = authenticator_example_mod,
     });
     authenticator_example.root_module.addImport("keylib", keylib_module);
     authenticator_example.root_module.addImport("uhid", uhid_module);
@@ -112,11 +126,16 @@ pub fn build(b: *std.Build) !void {
     //);
     //b.installArtifact(c_bindings);
 
-    const uhid = b.addStaticLibrary(.{
-        .name = "uhid",
+    const uhid_mod = b.createModule(.{
         .root_source_file = b.path("bindings/linux/src/uhid-c.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    const uhid = b.addLibrary(.{
+        .linkage = .static,
+        .name = "uhid",
+        .root_module = uhid_mod,
     });
     uhid.linkLibC();
     uhid.installHeadersDirectory(
@@ -159,12 +178,8 @@ pub fn build(b: *std.Build) !void {
 
     // Creates a step for unit testing.
     const lib_tests = b.addTest(.{
-        .root_source_file = b.path("lib/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = keylib_module,
     });
-    lib_tests.root_module.addImport("zbor", zbor_module);
-    lib_tests.root_module.addImport("uuid", uuid_module);
 
     const test_step = b.step("test", "Run library tests");
     test_step.dependOn(&b.addRunArtifact(lib_tests).step);

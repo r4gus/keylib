@@ -45,7 +45,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
             .{ .name = "permissions", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
             .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
         },
-        .from_callback = true,
+        .ignore_override = true,
     }, out);
 }
 
@@ -62,7 +62,7 @@ pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
             .{ .name = "permissions", .field_options = .{ .alias = "9", .serialization_type = .Integer } },
             .{ .name = "rpId", .field_options = .{ .alias = "10", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
         },
-        .from_callback = true,
+        .ignore_override = true,
     });
 }
 

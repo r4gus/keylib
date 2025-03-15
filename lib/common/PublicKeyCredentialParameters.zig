@@ -14,7 +14,7 @@ type: PublicKeyCredentialType = .@"public-key",
 pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     _ = options;
     return cbor.stringify(self, .{
-        .from_callback = true,
+        .ignore_override = true,
         .field_settings = &.{
             .{ .name = "alg", .value_options = .{ .enum_serialization_type = .Integer } },
         },

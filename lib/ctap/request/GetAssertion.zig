@@ -43,7 +43,7 @@ pub fn requestsUp(self: *const @This()) bool {
 pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) !void {
     return cbor.stringify(self, .{
         .allocator = options.allocator,
-        .from_callback = true,
+        .ignore_override = true,
         .field_settings = &.{
             .{ .name = "rpId", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
             .{ .name = "clientDataHash", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
@@ -60,7 +60,7 @@ pub fn cborStringify(self: *const @This(), options: cbor.Options, out: anytype) 
 pub fn cborParse(item: cbor.DataItem, options: cbor.Options) !@This() {
     return try cbor.parse(@This(), item, .{
         .allocator = options.allocator,
-        .from_callback = true,
+        .ignore_override = true,
         .field_settings = &.{
             .{ .name = "rpId", .field_options = .{ .alias = "1", .serialization_type = .Integer }, .value_options = .{ .slice_serialization_type = .TextString } },
             .{ .name = "clientDataHash", .field_options = .{ .alias = "2", .serialization_type = .Integer } },
